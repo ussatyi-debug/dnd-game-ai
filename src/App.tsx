@@ -216,12 +216,13 @@ export default function App() {
     abortRef.current = controller;
     const tierName = CLAUDE_TIERS.find((t) => t.id === tier)?.name ?? "Claude";
     const reply: ChatMessage = { id: nextId.current++, author: "master", text: "", time: now(), model: tierName };
-    let shown = false;
+    // Ответ приходит потоком: первая часть добавляет сообщение, следующие обновляют его.
     const show = (text: string) => {
       setMessages((prev) =>
-        shown ? prev.map((m) => (m.id === reply.id ? { ...m, text } : m)) : [...prev, { ...reply, text }],
+        prev.some((m) => m.id === reply.id)
+          ? prev.map((m) => (m.id === reply.id ? { ...m, text } : m))
+          : [...prev, { ...reply, text }],
       );
-      shown = true;
     };
     setThinking(true);
     masterContext()
