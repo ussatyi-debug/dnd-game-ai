@@ -79,6 +79,8 @@ export function SpellText({ paragraphs }: { paragraphs: string[] }) {
 interface CastOption {
   key: string;
   label: string;
+  /** Применения кончились: вариант виден, но недоступен. */
+  disabled?: boolean;
   method: CastMethod | null;
   slotLevel: number | null;
 }
@@ -102,6 +104,7 @@ function castOptions(book: SpellbookView, spellId: string, level: number): CastO
       label: `${g.source}: без ячейки, ${g.cast_level} круг (${uses})`,
       method: "granted",
       slotLevel: null,
+      disabled: g.uses?.current === 0,
     });
   }
   if (ready || featSlots) {
@@ -154,7 +157,7 @@ export default function SpellCard({ spellId, book, onClose, onCast }: SpellCardP
     () => (book && spell ? castOptions(book, spellId, spell.level) : []),
     [book, spellId, spell],
   );
-  const [choice, setChoice] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -167,7 +170,9 @@ export default function SpellCard({ spellId, book, onClose, onCast }: SpellCardP
     );
   }
 
-  const option = options[Math.min(choice, options.length - 1)];
+  // Выбранный вариант, если он ещё доступен, иначе первый доступный.
+  const option =
+    options.find((o) => o.key === picked && !o.disabled) ?? options.find((o) => !o.disabled) ?? null;
 
   function cast() {
     if (!book || !option) return;
@@ -176,7 +181,7 @@ export default function SpellCard({ spellId, book, onClose, onCast }: SpellCardP
     castSpell(book.character_id, spellId, option.method, option.slotLevel)
       .then((outcome) => {
         setResult(outcome.summary);
-        setChoice(0);
+        setPicked(null);
         onCast?.(outcome);
       })
       .catch((e: unknown) => setError(errorText(e)))
@@ -236,19 +241,19 @@ export default function SpellCard({ spellId, book, onClose, onCast }: SpellCardP
                 </label>
                 <select
                   id="cast-option"
-                  value={Math.min(choice, options.length - 1)}
-                  onChange={(e) => setChoice(Number(e.target.value))}
+                  value={option?.key ?? ""}
+                  onChange={(e) => setPicked(e.target.value)}
                   className="w-full rounded-md border border-edge bg-ink px-3 py-2 text-sm"
                 >
-                  {options.map((o, i) => (
-                    <option key={o.key} value={i}>
+                  {options.map((o) => (
+                    <option key={o.key} value={o.key} disabled={o.disabled}>
                       {o.label}
                     </option>
                   ))}
                 </select>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || !option}
                   onClick={cast}
                   className="w-full rounded-md bg-blood px-4 py-2.5 font-medium text-parchment hover:bg-blood/80 disabled:opacity-40"
                 >
