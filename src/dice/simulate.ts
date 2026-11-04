@@ -117,7 +117,7 @@ function runOnce(kinds: DieKind[], bounds: TrayBounds): Simulation {
       Math.random() * Math.PI * 2,
       Math.random() * Math.PI * 2,
     );
-    body.velocity.set(14 + Math.random() * 8, -4 - Math.random() * 4, (Math.random() - 0.5) * 12);
+    body.velocity.set(7 + Math.random() * 6, -3 - Math.random() * 3, (Math.random() - 0.5) * 10);
     body.angularVelocity.set(
       (Math.random() - 0.5) * 40,
       (Math.random() - 0.5) * 40,
