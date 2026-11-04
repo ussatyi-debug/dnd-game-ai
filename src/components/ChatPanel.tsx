@@ -72,6 +72,8 @@ export default function ChatPanel({
   const lastId = messages.at(-1)?.id;
   const lastAuthor = messages.at(-1)?.author;
   const seenLast = useRef<number | undefined>(undefined);
+  // Сообщения пришли, пока окно диалога было скрыто (вкладка на телефоне): прокрутить при показе.
+  const pendingScroll = useRef(false);
 
   /** Элемент последнего сообщения в ленте. */
   const lastElement = useCallback((): HTMLElement | null => {
@@ -109,6 +111,10 @@ export default function ChatPanel({
     }
     const firstRender = seenLast.current === undefined;
     seenLast.current = lastId;
+    if (list.clientHeight === 0) {
+      pendingScroll.current = true;
+      return;
+    }
     const last = lastElement();
     const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < list.clientHeight;
     if (firstRender || lastAuthor === "player") {
@@ -118,6 +124,23 @@ export default function ChatPanel({
     }
     updateJump();
   }, [lastId, lastAuthor, messages, lastElement, updateJump]);
+
+  // Окно диалога стало видимым или изменило размер — пересчитать кнопку и, если нужно,
+  // показать последние сообщения.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (list.clientHeight === 0) return;
+      if (pendingScroll.current) {
+        pendingScroll.current = false;
+        list.scrollTop = list.scrollHeight;
+      }
+      updateJump();
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [updateJump]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -249,7 +272,8 @@ export default function ChatPanel({
             }
           }}
           rows={2}
-          placeholder="Заявка мастеру… (Enter — новая строка)"
+          placeholder="Заявка мастеру…"
+          title="Enter — новая строка, Ctrl+Enter — отправить"
           aria-label="Сообщение мастеру"
           className="max-h-40 min-h-11 flex-1 resize-none rounded-md border border-edge bg-ink px-3 py-2 text-parchment [field-sizing:content] placeholder:text-muted/70 focus:border-gold focus:outline-none"
         />
