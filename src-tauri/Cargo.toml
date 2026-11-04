@@ -1,0 +1,20 @@
+[package]
+name = "dnd-game-ai"
+description = "Текстовая D&D-игра с ИИ-мастером"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "dnd_game_ai_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dnd-engine = { path = "../crates/engine", features = ["serde"] }

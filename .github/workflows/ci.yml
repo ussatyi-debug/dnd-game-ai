@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  engine:
+    name: Движок — формат, линтер, тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Форматирование
+        run: cargo fmt --all --check
+      - name: Линтер
+        run: cargo clippy -p dnd-engine --all-targets --all-features -- -D warnings
+      - name: Тесты
+        run: cargo test -p dnd-engine --all-features
+
+  frontend:
+    name: Интерфейс — типы и сборка
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Проверка типов и сборка
+        run: npm run build
+
+  windows:
+    name: Сборка Windows (.exe)
+    needs: [engine, frontend]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Сборка интерфейса
+        run: npm run build
+      - name: Линтер приложения
+        run: cargo clippy -p dnd-game-ai -- -D warnings
+      - name: Сборка установщика
+        run: npx tauri build
+      - name: Установщик
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnd-game-ai-windows-${{ github.ref_name }}
+          path: target/release/bundle/nsis/*.exe
+          if-no-files-found: error

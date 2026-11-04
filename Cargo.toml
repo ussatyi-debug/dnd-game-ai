@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/engine", "src-tauri"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "UNLICENSED"
+repository = "https://github.com/ussatyi-debug/dnd-game-ai"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

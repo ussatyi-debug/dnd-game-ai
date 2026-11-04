@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Базовые права главного окна",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

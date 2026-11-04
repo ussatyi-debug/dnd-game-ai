@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #141118;
+  --color-panel: #1e1924;
+  --color-edge: #3a2f42;
+  --color-parchment: #efe3c6;
+  --color-muted: #a99f8c;
+  --color-gold: #d6aa5a;
+  --color-blood: #8c1c26;
+  --color-crit: #e8c56a;
+  --color-fumble: #c9505a;
+  --font-serif: "Georgia", "Times New Roman", serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink);
+  color: var(--color-parchment);
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+}

@@ -1,0 +1,15 @@
+[package]
+name = "dnd-engine"
+description = "Игровой движок: броски кубов, проверки d20, ресурсы персонажа (D&D 5e)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# Сериализация структур для передачи в интерфейс (включается приложением Tauri).
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }

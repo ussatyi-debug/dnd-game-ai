@@ -1,0 +1,26 @@
+//! Игровой движок D&D 5e.
+//!
+//! Принцип: **ИИ рассказывает, движок считает.** Все значения кубов, модификаторы,
+//! расход ресурсов и проверки выполняет этот крейт; ИИ-мастер только запрашивает
+//! действия и описывает результат.
+//!
+//! Модули:
+//! - [`rng`] — генератор случайных чисел для кубов;
+//! - [`expr`] — выражения бросков (`2d6+3`, `8d6`, `1d8+5+2d8`), в т.ч. критический урон;
+//! - [`check`] — броски d20 с преимуществом/помехой, модификаторами и критами;
+//! - [`notation`] — разбор заявок игрока вида «16 - везунчик»;
+//! - [`resource`] — пулы ресурсов (Везунчик, ячейки, Ци) и восстановление на отдыхе.
+
+pub mod check;
+pub mod error;
+pub mod expr;
+pub mod notation;
+pub mod resource;
+pub mod rng;
+
+pub use check::{player_d20, roll_d20, AttackResult, D20Roll, Modifier, RollMode, RollSource};
+pub use error::EngineError;
+pub use expr::{DiceExpr, DiceGroupRoll, ExprRoll, Term};
+pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
+pub use resource::{Recovery, ResourcePool, RestKind};
+pub use rng::{DiceRng, Xoshiro256};
