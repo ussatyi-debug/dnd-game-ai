@@ -155,7 +155,7 @@ fn ai_set_key(
     ai: State<'_, AiState>,
 ) -> Result<AiSettingsView, String> {
     let mut settings = lock(&ai.settings)?;
-    settings.set_key(provider, &key);
+    settings.set_key(provider, &key)?;
     ai.store.save(&settings)?;
     Ok(settings.view())
 }
@@ -166,6 +166,9 @@ fn ai_select_model(
     model: String,
     ai: State<'_, AiState>,
 ) -> Result<AiSettingsView, String> {
+    if !provider.ready() {
+        return Err(ai::LOCAL_NOT_READY.into());
+    }
     let mut settings = lock(&ai.settings)?;
     settings.provider = provider;
     settings.model = Some(model);

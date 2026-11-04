@@ -5,6 +5,7 @@
 //! можно сменить посреди сцены — следующий ответ даст новая модель с тем же контекстом.
 
 pub mod gemini;
+pub mod openai;
 
 use std::fs;
 use std::path::PathBuf;
@@ -17,13 +18,30 @@ use serde::{Deserialize, Serialize};
 pub enum Provider {
     #[default]
     Gemini,
+    #[serde(rename = "openai")]
+    OpenAi,
+    /// Локальная модель на ПК (Ollama) — ещё не подключена.
+    Local,
 }
 
+/// Сообщение-заглушка для локальной модели.
+pub const LOCAL_NOT_READY: &str =
+    "Локальная модель (Ollama на этом ПК) появится в следующей версии — пока выберите Gemini или ChatGPT";
+
 impl Provider {
+    pub const ALL: [Provider; 3] = [Provider::Gemini, Provider::OpenAi, Provider::Local];
+
     pub fn label(self) -> &'static str {
         match self {
             Provider::Gemini => "Google Gemini",
+            Provider::OpenAi => "OpenAI (ChatGPT)",
+            Provider::Local => "Локальная модель",
         }
+    }
+
+    /// Подключён ли провайдер в этой версии.
+    pub fn ready(self) -> bool {
+        !matches!(self, Provider::Local)
     }
 }
 
@@ -66,6 +84,18 @@ pub struct AiSettings {
     pub provider: Provider,
     pub model: Option<String>,
     pub gemini_api_key: Option<String>,
+    #[serde(default)]
+    pub openai_api_key: Option<String>,
+}
+
+/// Состояние одного провайдера для интерфейса.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderView {
+    pub provider: Provider,
+    pub label: &'static str,
+    pub ready: bool,
+    pub has_key: bool,
+    pub key_hint: Option<String>,
 }
 
 /// Настройки для интерфейса: ключ никогда не передаётся, только признак и подсказка.
@@ -77,6 +107,13 @@ pub struct AiSettingsView {
     pub has_key: bool,
     /// Последние 4 символа ключа.
     pub key_hint: Option<String>,
+    /// Все провайдеры: подключён ли, есть ли ключ.
+    pub providers: Vec<ProviderView>,
+}
+
+fn hint(key: &str) -> String {
+    let tail: String = key.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
+    format!("…{tail}")
 }
 
 impl AiSettings {
@@ -87,27 +124,47 @@ impl AiSettings {
             provider_label: self.provider.label(),
             model: self.model.clone(),
             has_key: key.is_some(),
-            key_hint: key.map(|k| {
-                let tail: String =
-                    k.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
-                format!("…{tail}")
-            }),
+            key_hint: key.map(hint),
+            providers: Provider::ALL
+                .into_iter()
+                .map(|p| {
+                    let key = self.key_for(p);
+                    ProviderView {
+                        provider: p,
+                        label: p.label(),
+                        ready: p.ready(),
+                        has_key: key.is_some(),
+                        key_hint: key.map(hint),
+                    }
+                })
+                .collect(),
         }
+    }
+
+    /// Ключ провайдера.
+    pub fn key_for(&self, provider: Provider) -> Option<&str> {
+        let key = match provider {
+            Provider::Gemini => self.gemini_api_key.as_deref(),
+            Provider::OpenAi => self.openai_api_key.as_deref(),
+            Provider::Local => None,
+        };
+        key.filter(|k| !k.is_empty())
     }
 
     /// Ключ активного провайдера.
     pub fn key(&self) -> Option<&str> {
-        match self.provider {
-            Provider::Gemini => self.gemini_api_key.as_deref().filter(|k| !k.is_empty()),
-        }
+        self.key_for(self.provider)
     }
 
-    pub fn set_key(&mut self, provider: Provider, key: &str) {
+    pub fn set_key(&mut self, provider: Provider, key: &str) -> Result<(), String> {
         let key = key.trim();
         let value = (!key.is_empty()).then(|| key.to_string());
         match provider {
             Provider::Gemini => self.gemini_api_key = value,
+            Provider::OpenAi => self.openai_api_key = value,
+            Provider::Local => return Err(LOCAL_NOT_READY.into()),
         }
+        Ok(())
     }
 }
 
@@ -147,15 +204,16 @@ pub async fn list_models(
     settings: &AiSettings,
     provider: Provider,
 ) -> Result<Vec<ModelInfo>, String> {
+    if !provider.ready() {
+        return Err(LOCAL_NOT_READY.into());
+    }
+    let key = settings
+        .key_for(provider)
+        .ok_or_else(|| format!("Сначала введите API-ключ: {}", provider.label()))?;
     match provider {
-        Provider::Gemini => {
-            let key = settings
-                .gemini_api_key
-                .as_deref()
-                .filter(|k| !k.is_empty())
-                .ok_or("Сначала введите API-ключ Gemini")?;
-            gemini::list_models(client, key).await
-        }
+        Provider::Gemini => gemini::list_models(client, key).await,
+        Provider::OpenAi => openai::list_models(client, key).await,
+        Provider::Local => Err(LOCAL_NOT_READY.into()),
     }
 }
 
@@ -166,10 +224,15 @@ pub async fn chat(
     system: &str,
     history: &[ChatMessage],
 ) -> Result<MasterReply, String> {
+    if !settings.provider.ready() {
+        return Err(LOCAL_NOT_READY.into());
+    }
     let model = settings.model.clone().ok_or("Выберите модель в меню «Модели ИИ»")?;
     let key = settings.key().ok_or("Введите API-ключ в меню «Модели ИИ»")?;
     let text = match settings.provider {
         Provider::Gemini => gemini::generate(client, key, &model, system, history).await?,
+        Provider::OpenAi => openai::generate(client, key, &model, system, history).await?,
+        Provider::Local => return Err(LOCAL_NOT_READY.into()),
     };
     Ok(MasterReply { text, provider: settings.provider, model, actions: Vec::new() })
 }
@@ -182,14 +245,36 @@ mod tests {
     fn view_hides_key() {
         let mut s = AiSettings::default();
         assert!(!s.view().has_key);
-        s.set_key(Provider::Gemini, "  AIzaSecretKey1234 ");
+        s.set_key(Provider::Gemini, "  AIzaSecretKey1234 ").unwrap();
         let view = s.view();
         assert!(view.has_key);
         assert_eq!(view.key_hint.as_deref(), Some("…1234"));
         let json = serde_json::to_string(&view).unwrap();
         assert!(!json.contains("Secret"));
-        s.set_key(Provider::Gemini, "");
+        s.set_key(Provider::Gemini, "").unwrap();
         assert!(s.key().is_none());
+    }
+
+    #[test]
+    fn keys_are_per_provider_and_local_is_a_stub() {
+        let mut s = AiSettings::default();
+        s.set_key(Provider::OpenAi, "sk-proj-Secret9876").unwrap();
+        assert!(s.key().is_none(), "активен Gemini без ключа");
+        s.provider = Provider::OpenAi;
+        assert_eq!(s.key(), Some("sk-proj-Secret9876"));
+        let view = s.view();
+        assert_eq!(view.key_hint.as_deref(), Some("…9876"));
+        assert_eq!(view.providers.len(), 3);
+        assert!(!view.providers[2].ready);
+        assert!(view.providers[1].has_key);
+        assert!(!serde_json::to_string(&view).unwrap().contains("Secret"));
+        assert!(s.set_key(Provider::Local, "x").is_err());
+        assert_eq!(serde_json::to_string(&Provider::OpenAi).unwrap(), "\"openai\"");
+        // Старые настройки без ключа OpenAI читаются.
+        let old: AiSettings =
+            serde_json::from_str(r#"{"provider":"gemini","model":null,"gemini_api_key":"k"}"#)
+                .unwrap();
+        assert!(old.openai_api_key.is_none());
     }
 
     #[test]
@@ -197,7 +282,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("dnd-ai-test-{}", std::process::id()));
         let store = SettingsStore::new(Some(dir.join("ai-settings.json")));
         let mut s = AiSettings::default();
-        s.set_key(Provider::Gemini, "key-1");
+        s.set_key(Provider::Gemini, "key-1").unwrap();
         s.model = Some("model-a".into());
         store.save(&s).unwrap();
         let loaded = store.load();

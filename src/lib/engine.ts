@@ -397,13 +397,23 @@ export function stripEngineBlocks(text: string): string {
 
 // ИИ-мастер работает только в приложении: запросы к провайдерам и ключи — на стороне Rust.
 
-export type Provider = "gemini";
+export type Provider = "gemini" | "openai" | "local";
 export type ChatRole = "player" | "master";
 
 export interface AiSettingsView {
   provider: Provider;
   provider_label: string;
   model: string | null;
+  has_key: boolean;
+  key_hint: string | null;
+  providers: ProviderView[];
+}
+
+export interface ProviderView {
+  provider: Provider;
+  label: string;
+  /** Подключён ли провайдер в этой версии (локальная модель — пока нет). */
+  ready: boolean;
   has_key: boolean;
   key_hint: string | null;
 }

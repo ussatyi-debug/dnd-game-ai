@@ -137,9 +137,11 @@ pub(crate) fn api_error(status: u16, body: &Value) -> String {
         }
         401 | 403 => format!("Нет доступа к Gemini: {message}"),
         404 => format!("Модель не найдена — выберите другую в меню «Модели ИИ» ({message})"),
-        429 => "Превышен лимит запросов Gemini. Подождите минуту или переключитесь на другую \
-                модель"
-            .into(),
+        429 => format!(
+            "Gemini отказал по квоте: {message}. Если квота бесплатного тарифа равна нулю, \
+             он недоступен для вашего аккаунта или региона — включите оплату в Google AI Studio \
+             или выберите ChatGPT"
+        ),
         500..=599 => format!("Сервис Gemini временно недоступен ({status}): {message}"),
         _ => format!("Ошибка Gemini ({status}): {message}"),
     }
@@ -216,7 +218,7 @@ mod tests {
         let key =
             json!({ "error": { "message": "API key not valid. Please pass a valid API key." } });
         assert!(api_error(400, &key).contains("Ключ Gemini не принят"));
-        assert!(api_error(429, &json!({})).contains("лимит"));
+        assert!(api_error(429, &json!({})).contains("квоте"));
         assert!(api_error(404, &json!({ "error": { "message": "not found" } })).contains("Модель"));
     }
 }
