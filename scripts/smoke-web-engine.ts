@@ -7,35 +7,30 @@ import { createWebEngine, type WebEngineModule } from "../src/lib/webBridge.ts";
 
 const engine = createWebEngine(generated as unknown as WebEngineModule, [7, 42]);
 
-const expr = engine.call<{ total: number; groups: { values: number[] }[] }>({
+const roll = engine.call<{ total: number; groups: { values: number[] }[] }>({
   cmd: "roll_expression",
-  expression: "2к6+3",
-  critical: true,
+  expression: "8d6",
+  critical: false,
 });
-assert.ok(expr.total >= 7 && expr.total <= 27, `крит 2d6+3: ${expr.total}`);
-assert.equal(expr.groups[0]?.values.length, 4);
+assert.equal(roll.groups[0]?.values.length, 8);
+assert.ok(roll.total >= 8 && roll.total <= 48, `8d6: ${roll.total}`);
 
-const check = engine.call<{ dice: number[]; natural: number }>({
-  cmd: "roll_check",
-  mode: "advantage",
-  modifiers: [{ label: "ЛОВ", value: 2 }],
-  critThreshold: 19,
+const sheet = engine.call<{ name: string; level: number; resources: { id: string; current: number }[] }>({
+  cmd: "character_sheet",
 });
-assert.equal(check.dice.length, 2);
-assert.equal(check.natural, Math.max(...check.dice));
+assert.equal(sheet.name, "Сэр Никис Стрэндж");
+assert.equal(sheet.level, 10);
+assert.equal(sheet.resources[0]?.id, "feat.lucky");
 
-const player = engine.call<{ total: number; lucky_used: boolean }>({
-  cmd: "submit_player_roll",
-  input: "12 - везунчик",
-  mode: "normal",
-  modifiers: [{ label: "Скрытность", value: 6 }],
-  critThreshold: 20,
+const reroll = engine.call<{ value: number; lucky: { current: number } }>({ cmd: "lucky_reroll" });
+assert.ok(reroll.value >= 1 && reroll.value <= 20);
+assert.equal(reroll.lucky.current, 2);
+
+const rested = engine.call<{ sheet: { resources: { current: number }[] } }>({
+  cmd: "take_rest",
+  kind: "long",
 });
-assert.equal(player.total, 18);
-assert.equal(player.lucky_used, true);
-
-const lucky = engine.call<{ current: number; max: number }>({ cmd: "lucky_status" });
-assert.deepEqual([lucky.current, lucky.max], [2, 3]);
+assert.equal(rested.sheet.resources[0]?.current, 3);
 
 assert.throws(
   () => engine.call({ cmd: "roll_expression", expression: "2d7", critical: false }),
@@ -45,13 +40,13 @@ assert.throws(
 // Распределение d20 через полный путь JS → движок → JS.
 const counts = new Array<number>(20).fill(0);
 for (let i = 0; i < 4000; i++) {
-  const r = engine.call<{ natural: number }>({
-    cmd: "roll_check",
-    mode: "normal",
-    modifiers: [],
-    critThreshold: 20,
+  const r = engine.call<{ groups: { values: number[] }[] }>({
+    cmd: "roll_expression",
+    expression: "1d20",
+    critical: false,
   });
-  counts[r.natural - 1] = (counts[r.natural - 1] ?? 0) + 1;
+  const v = r.groups[0]?.values[0] ?? 0;
+  counts[v - 1] = (counts[v - 1] ?? 0) + 1;
 }
 assert.ok(counts.every((c) => c > 100), `грани d20: ${counts.join(",")}`);
 

@@ -1,51 +1,53 @@
-export type LogTone = "normal" | "crit" | "fumble" | "error" | "info";
+import { rollCopyText, rollDetail, rollTitle, rollTone, type RollTone, type TrayRoll } from "../lib/rolls";
+import CopyButton from "./CopyButton";
 
-export interface LogEntry {
-  id: number;
-  time: string;
-  title: string;
-  detail: string;
-  tone: LogTone;
-}
-
-export const toneClass: Record<LogTone, string> = {
+const toneClass: Record<RollTone, string> = {
   normal: "border-edge",
   crit: "border-crit bg-crit/10",
   fumble: "border-fumble bg-fumble/10",
-  error: "border-fumble/60 text-fumble",
-  info: "border-gold/40 text-muted",
 };
 
 interface RollLogProps {
-  entries: LogEntry[];
+  rolls: TrayRoll[];
   onClear: () => void;
+  onSendToChat: (text: string) => void;
 }
 
-export default function RollLog({ entries, onClear }: RollLogProps) {
+export default function RollLog({ rolls, onClear, onSendToChat }: RollLogProps) {
   return (
-    <section className="flex min-h-0 flex-col rounded-xl border border-edge bg-panel">
-      <header className="flex items-center justify-between border-b border-edge px-4 py-3">
+    <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-edge bg-panel">
+      <header className="flex items-center justify-between border-b border-edge px-4 py-2.5">
         <h2 className="font-serif text-lg text-gold">Лог бросков</h2>
         <button
           type="button"
           onClick={onClear}
-          disabled={entries.length === 0}
+          disabled={rolls.length === 0}
           className="rounded-md px-2 py-1 text-sm text-muted hover:text-parchment disabled:opacity-40"
         >
           Очистить
         </button>
       </header>
-      <ol className="flex-1 space-y-2 overflow-y-auto p-3" aria-live="polite">
-        {entries.length === 0 ? (
+      <ol className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3" aria-live="polite">
+        {rolls.length === 0 ? (
           <li className="p-4 text-center text-sm text-muted">Бросков пока не было</li>
         ) : (
-          entries.map((e) => (
-            <li key={e.id} className={`rounded-lg border-l-4 px-3 py-2 ${toneClass[e.tone]}`}>
+          rolls.map((roll) => (
+            <li key={roll.id} className={`rounded-lg border-l-4 px-3 py-2 ${toneClass[rollTone(roll)]}`}>
               <div className="flex items-baseline justify-between gap-2">
-                <span className="font-medium">{e.title}</span>
-                <time className="shrink-0 text-xs text-muted">{e.time}</time>
+                <span className="font-medium">{rollTitle(roll)}</span>
+                <time className="shrink-0 text-xs text-muted">{roll.time}</time>
               </div>
-              <p className="mt-1 font-mono text-sm break-words">{e.detail}</p>
+              <p className="mt-0.5 font-mono text-lg break-words">{rollDetail(roll)}</p>
+              <div className="mt-1.5 flex gap-2">
+                <CopyButton text={rollCopyText(roll)} />
+                <button
+                  type="button"
+                  onClick={() => onSendToChat(rollCopyText(roll))}
+                  className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-gold hover:text-parchment"
+                >
+                  В чат
+                </button>
+              </div>
             </li>
           ))
         )}

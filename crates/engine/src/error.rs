@@ -27,6 +27,8 @@ pub enum EngineError {
     ResourceOverMax { name: String, current: u32, max: u32 },
     /// Попытка потратить или восстановить ноль единиц ресурса.
     ZeroAmount,
+    /// У персонажа нет ресурса с таким ID.
+    ResourceNotFound(String),
 }
 
 impl fmt::Display for EngineError {
@@ -61,6 +63,7 @@ impl fmt::Display for EngineError {
                 write!(f, "Значение ресурса «{name}» ({current}) больше максимума ({max})")
             }
             Self::ZeroAmount => write!(f, "Количество должно быть больше нуля"),
+            Self::ResourceNotFound(id) => write!(f, "У персонажа нет ресурса «{id}»"),
         }
     }
 }

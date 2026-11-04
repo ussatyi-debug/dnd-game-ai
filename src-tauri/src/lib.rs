@@ -4,7 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
-use dnd_engine::{D20Roll, ExprRoll, Modifier, ResourcePool, RestKind, RollMode, Session};
+use dnd_engine::{CharacterSheet, ExprRoll, LuckyReroll, RestKind, RestResult, Session};
 use tauri::State;
 
 type SessionState = Mutex<Session>;
@@ -13,6 +13,7 @@ fn lock<'a>(state: &'a State<'_, SessionState>) -> Result<MutexGuard<'a, Session
     state.lock().map_err(|_| "Состояние сессии повреждено, перезапустите приложение".to_string())
 }
 
+/// Бросок кубов лотка, например `3d6`.
 #[tauri::command]
 fn roll_expression(
     expression: String,
@@ -22,37 +23,22 @@ fn roll_expression(
     lock(&state)?.roll_expression(&expression, critical).map_err(|e| e.to_string())
 }
 
+/// Переброс d20 чертой «Везунчик».
 #[tauri::command]
-fn roll_check(
-    mode: RollMode,
-    modifiers: Vec<Modifier>,
-    crit_threshold: u32,
-    state: State<'_, SessionState>,
-) -> Result<D20Roll, String> {
-    lock(&state)?.roll_check(mode, modifiers, crit_threshold).map_err(|e| e.to_string())
+fn lucky_reroll(state: State<'_, SessionState>) -> Result<LuckyReroll, String> {
+    lock(&state)?.lucky_reroll().map_err(|e| e.to_string())
 }
 
+/// Лист персонажа.
 #[tauri::command]
-fn submit_player_roll(
-    input: String,
-    mode: RollMode,
-    modifiers: Vec<Modifier>,
-    crit_threshold: u32,
-    state: State<'_, SessionState>,
-) -> Result<D20Roll, String> {
-    lock(&state)?
-        .submit_player_roll(&input, mode, modifiers, crit_threshold)
-        .map_err(|e| e.to_string())
+fn character_sheet(state: State<'_, SessionState>) -> Result<CharacterSheet, String> {
+    Ok(lock(&state)?.sheet())
 }
 
+/// Отдых: восстанавливает ресурсы персонажа.
 #[tauri::command]
-fn lucky_status(state: State<'_, SessionState>) -> Result<ResourcePool, String> {
-    Ok(lock(&state)?.lucky().clone())
-}
-
-#[tauri::command]
-fn take_rest(kind: RestKind, state: State<'_, SessionState>) -> Result<ResourcePool, String> {
-    Ok(lock(&state)?.take_rest(kind).clone())
+fn take_rest(kind: RestKind, state: State<'_, SessionState>) -> Result<RestResult, String> {
+    Ok(lock(&state)?.take_rest(kind))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -61,9 +47,8 @@ pub fn run() {
         .manage(Mutex::new(Session::default()))
         .invoke_handler(tauri::generate_handler![
             roll_expression,
-            roll_check,
-            submit_player_roll,
-            lucky_status,
+            lucky_reroll,
+            character_sheet,
             take_rest
         ])
         .run(tauri::generate_context!())

@@ -11,7 +11,7 @@
 
 use std::cell::RefCell;
 
-use dnd_engine::{Modifier, RestKind, RollMode, Session, Xoshiro256};
+use dnd_engine::{RestKind, Session, Xoshiro256};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -19,25 +19,10 @@ use serde_json::{json, Value};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case", rename_all_fields = "camelCase")]
 pub enum Request {
-    RollExpression {
-        expression: String,
-        critical: bool,
-    },
-    RollCheck {
-        mode: RollMode,
-        modifiers: Vec<Modifier>,
-        crit_threshold: u32,
-    },
-    SubmitPlayerRoll {
-        input: String,
-        mode: RollMode,
-        modifiers: Vec<Modifier>,
-        crit_threshold: u32,
-    },
-    LuckyStatus,
-    TakeRest {
-        kind: RestKind,
-    },
+    RollExpression { expression: String, critical: bool },
+    LuckyReroll,
+    CharacterSheet,
+    TakeRest { kind: RestKind },
 }
 
 /// Обрабатывает JSON-запрос и возвращает JSON-ответ.
@@ -57,15 +42,8 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::RollExpression { expression, critical } => {
             to_value(session.roll_expression(&expression, critical).map_err(|e| e.to_string())?)
         }
-        Request::RollCheck { mode, modifiers, crit_threshold } => to_value(
-            session.roll_check(mode, modifiers, crit_threshold).map_err(|e| e.to_string())?,
-        ),
-        Request::SubmitPlayerRoll { input, mode, modifiers, crit_threshold } => to_value(
-            session
-                .submit_player_roll(&input, mode, modifiers, crit_threshold)
-                .map_err(|e| e.to_string())?,
-        ),
-        Request::LuckyStatus => to_value(session.lucky()),
+        Request::LuckyReroll => to_value(session.lucky_reroll().map_err(|e| e.to_string())?),
+        Request::CharacterSheet => to_value(session.sheet()),
         Request::TakeRest { kind } => to_value(session.take_rest(kind)),
     }
 }
@@ -75,7 +53,7 @@ fn to_value<T: Serialize>(value: T) -> Result<Value, String> {
 }
 
 thread_local! {
-    static SESSION: RefCell<Session> = RefCell::new(Session::new(Xoshiro256::from_seed(0)));
+    static SESSION: RefCell<Session> = RefCell::new(Session::with_demo_character(Xoshiro256::from_seed(0)));
     static OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -83,7 +61,7 @@ thread_local! {
 #[no_mangle]
 pub extern "C" fn engine_init(seed_hi: u32, seed_lo: u32) {
     let seed = (u64::from(seed_hi) << 32) | u64::from(seed_lo);
-    SESSION.with(|s| *s.borrow_mut() = Session::new(Xoshiro256::from_seed(seed)));
+    SESSION.with(|s| *s.borrow_mut() = Session::with_demo_character(Xoshiro256::from_seed(seed)));
 }
 
 /// Выделяет буфер под запрос. Буфер освобождается вызовом [`engine_free`].
@@ -136,7 +114,7 @@ mod tests {
     use super::*;
 
     fn session() -> Session {
-        Session::new(Xoshiro256::from_seed(5))
+        Session::with_demo_character(Xoshiro256::from_seed(5))
     }
 
     fn call(session: &mut Session, request: Value) -> Value {
@@ -148,54 +126,49 @@ mod tests {
         let mut s = session();
         let r = call(
             &mut s,
-            json!({ "cmd": "roll_expression", "expression": "2d6+3", "critical": false }),
+            json!({ "cmd": "roll_expression", "expression": "3d6", "critical": false }),
         );
         let total = r["ok"]["total"].as_i64().unwrap();
-        assert!((5..=15).contains(&total));
-        assert_eq!(r["ok"]["expression"], "2d6+3");
-        assert_eq!(r["ok"]["groups"][0]["values"].as_array().unwrap().len(), 2);
+        assert!((3..=18).contains(&total));
+        assert_eq!(r["ok"]["expression"], "3d6");
+        assert_eq!(r["ok"]["groups"][0]["values"].as_array().unwrap().len(), 3);
     }
 
     #[test]
-    fn roll_check_uses_camel_case_fields() {
+    fn character_sheet_has_lucky_and_derived_values() {
         let mut s = session();
-        let r = call(
-            &mut s,
-            json!({
-                "cmd": "roll_check",
-                "mode": "advantage",
-                "modifiers": [{ "label": "ЛОВ", "value": 2 }],
-                "critThreshold": 20
-            }),
-        );
-        assert_eq!(r["ok"]["mode"], "advantage");
-        assert_eq!(r["ok"]["dice"].as_array().unwrap().len(), 2);
-        assert_eq!(r["ok"]["source"], "engine");
+        let r = call(&mut s, json!({ "cmd": "character_sheet" }));
+        let sheet = &r["ok"];
+        assert_eq!(sheet["name"], "Сэр Никис Стрэндж");
+        assert_eq!(sheet["level"], 10);
+        assert_eq!(sheet["proficiency_bonus"], 4);
+        assert_eq!(sheet["abilities"][3]["label"], "ИНТ");
+        assert_eq!(sheet["abilities"][3]["modifier"], 4);
+        assert_eq!(sheet["resources"][0]["id"], "feat.lucky");
+        assert_eq!(sheet["resources"][0]["current"], 3);
     }
 
     #[test]
-    fn lucky_flow_and_rest() {
+    fn lucky_reroll_and_rest() {
         let mut s = session();
-        let r = call(
-            &mut s,
-            json!({
-                "cmd": "submit_player_roll",
-                "input": "12 - везунчик",
-                "mode": "normal",
-                "modifiers": [{ "label": "ЛОВ", "value": 2 }],
-                "critThreshold": 20
-            }),
-        );
-        assert_eq!(r["ok"]["total"], 14);
-        assert_eq!(r["ok"]["lucky_used"], true);
-
-        let status = call(&mut s, json!({ "cmd": "lucky_status" }));
-        assert_eq!(status["ok"]["current"], 2);
-        assert_eq!(status["ok"]["max"], 3);
-        assert_eq!(status["ok"]["recovery"], "long_rest");
+        let r = call(&mut s, json!({ "cmd": "lucky_reroll" }));
+        let value = r["ok"]["value"].as_u64().unwrap();
+        assert!((1..=20).contains(&value));
+        assert_eq!(r["ok"]["lucky"]["current"], 2);
 
         let rested = call(&mut s, json!({ "cmd": "take_rest", "kind": "long" }));
-        assert_eq!(rested["ok"]["current"], 3);
+        assert_eq!(rested["ok"]["sheet"]["resources"][0]["current"], 3);
+        assert!(rested["ok"]["restored"].as_array().unwrap().iter().any(|v| v == "Везунчик"));
+    }
+
+    #[test]
+    fn lucky_without_charges_is_an_error() {
+        let mut s = session();
+        for _ in 0..3 {
+            assert!(call(&mut s, json!({ "cmd": "lucky_reroll" }))["ok"].is_object());
+        }
+        let r = call(&mut s, json!({ "cmd": "lucky_reroll" }));
+        assert!(r["err"].as_str().unwrap().contains("Везунчик"));
     }
 
     #[test]
@@ -221,7 +194,7 @@ mod tests {
     #[test]
     fn ffi_round_trip() {
         engine_init(0, 42);
-        let request = json!({ "cmd": "lucky_status" }).to_string();
+        let request = json!({ "cmd": "character_sheet" }).to_string();
         let bytes = request.as_bytes();
         let ptr = engine_alloc(bytes.len());
         unsafe {
@@ -230,7 +203,7 @@ mod tests {
             engine_free(ptr, bytes.len());
             let out = std::slice::from_raw_parts(engine_output_ptr(), len);
             let value: Value = serde_json::from_slice(out).unwrap();
-            assert_eq!(value["ok"]["name"], "Везунчик");
+            assert_eq!(value["ok"]["resources"][0]["name"], "Везунчик");
         }
     }
 }

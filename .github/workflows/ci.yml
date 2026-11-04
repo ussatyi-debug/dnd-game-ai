@@ -51,6 +51,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
+      - name: Тесты геометрии кубов
+        run: npm test
       - name: Проверка типов и сборка
         run: npm run build
 

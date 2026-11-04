@@ -9,18 +9,22 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
-    "build:web": "tsc --noEmit && vite build --mode web"
+    "build:web": "tsc --noEmit && vite build --mode web",
+    "test": "node --experimental-strip-types --no-warnings scripts/test-dice-geometry.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "cannon-es": "^0.20",
     "react": "^19",
-    "react-dom": "^19"
+    "react-dom": "^19",
+    "three": "^0.180"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
     "@tauri-apps/cli": "^2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.180",
     "@vitejs/plugin-react": "^5",
     "binaryen": ">=120",
     "tailwindcss": "^4",
