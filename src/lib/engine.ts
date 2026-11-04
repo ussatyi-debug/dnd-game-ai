@@ -1,6 +1,12 @@
 // Типы и вызовы движка на Rust. Поля совпадают с сериализацией serde (snake_case).
+//
+// Движок работает в двух режимах с одним и тем же кодом на Rust:
+// - в приложении — через команды Tauri;
+// - в веб-версии — в браузере, через модуль, скомпилированный из Rust в JavaScript.
 
 import { invoke } from "@tauri-apps/api/core";
+import * as webModule from "engine-web-module";
+import { createWebEngine, type WebEngine } from "./webBridge";
 
 export type RollMode = "normal" | "advantage" | "disadvantage";
 export type RollSource = "engine" | "player";
@@ -50,13 +56,38 @@ export interface ResourcePool {
   recovery: Recovery;
 }
 
-/** Запущен ли интерфейс внутри приложения Tauri (а не в обычном браузере). */
-export function isEngineAvailable(): boolean {
+function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** Веб-сборка с движком, работающим прямо в браузере. */
+export const isWebBuild = import.meta.env.MODE === "web";
+
+/** Доступен ли движок: внутри приложения или в веб-сборке. */
+export function isEngineAvailable(): boolean {
+  return isTauri() || isWebBuild;
+}
+
+let webEngine: WebEngine | null = null;
+
+function getWebEngine(): WebEngine {
+  if (!webEngine) {
+    const seed = crypto.getRandomValues(new Uint32Array(2));
+    webEngine = createWebEngine(webModule, [seed[0] ?? 0, seed[1] ?? 0]);
+  }
+  return webEngine;
+}
+
+/** Вызов команды движка. Имена команд и аргументов одинаковы для обоих режимов. */
+async function call<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
+  if (isTauri()) {
+    return invoke<T>(cmd, args);
+  }
+  return getWebEngine().call<T>({ cmd, ...args });
+}
+
 export function rollExpression(expression: string, critical: boolean): Promise<ExprRoll> {
-  return invoke<ExprRoll>("roll_expression", { expression, critical });
+  return call<ExprRoll>("roll_expression", { expression, critical });
 }
 
 export function rollCheck(
@@ -64,7 +95,7 @@ export function rollCheck(
   modifiers: Modifier[],
   critThreshold: number,
 ): Promise<D20Roll> {
-  return invoke<D20Roll>("roll_check", { mode, modifiers, critThreshold });
+  return call<D20Roll>("roll_check", { mode, modifiers, critThreshold });
 }
 
 export function submitPlayerRoll(
@@ -73,15 +104,15 @@ export function submitPlayerRoll(
   modifiers: Modifier[],
   critThreshold: number,
 ): Promise<D20Roll> {
-  return invoke<D20Roll>("submit_player_roll", { input, mode, modifiers, critThreshold });
+  return call<D20Roll>("submit_player_roll", { input, mode, modifiers, critThreshold });
 }
 
 export function luckyStatus(): Promise<ResourcePool> {
-  return invoke<ResourcePool>("lucky_status");
+  return call<ResourcePool>("lucky_status");
 }
 
 export function takeRest(kind: RestKind): Promise<ResourcePool> {
-  return invoke<ResourcePool>("take_rest", { kind });
+  return call<ResourcePool>("take_rest", { kind });
 }
 
 /** Сообщение об ошибке из ответа движка. */

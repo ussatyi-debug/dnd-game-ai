@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import DicePanel from "./components/DicePanel";
 import RollLog, { type LogEntry, type LogTone } from "./components/RollLog";
-import { errorText, isEngineAvailable, luckyStatus, type ResourcePool } from "./lib/engine";
+import {
+  errorText,
+  isEngineAvailable,
+  isWebBuild,
+  luckyStatus,
+  type ResourcePool,
+} from "./lib/engine";
 
 const MAX_LOG_ENTRIES = 200;
 
@@ -33,7 +39,10 @@ export default function App() {
     <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 p-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-serif text-2xl text-parchment">DnD Game AI</h1>
-        <span className="text-sm text-muted">Движок бросков · v0.0.1</span>
+        <span className="text-sm text-muted">
+          Движок бросков · v{__APP_VERSION__}
+          {isWebBuild ? " · веб-версия" : ""}
+        </span>
       </header>
 
       {!engineAvailable && (

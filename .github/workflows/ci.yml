@@ -54,6 +54,62 @@ jobs:
       - name: Проверка типов и сборка
         run: npm run build
 
+  web:
+    name: Веб-версия — движок в JavaScript
+    needs: [engine]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Линтер и тесты веб-интерфейса движка
+        run: |
+          cargo clippy -p dnd-engine-web --all-targets -- -D warnings
+          cargo test -p dnd-engine-web
+      - name: Сборка wasm
+        run: cargo build -p dnd-engine-web --release --target wasm32-unknown-unknown
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Перевод wasm в JavaScript (wasm2js)
+        shell: bash
+        run: |
+          mkdir -p src/generated
+          if ! out=$(npx --no-install wasm2js \
+              target/wasm32-unknown-unknown/release/dnd_engine_web.wasm \
+              --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
+              --enable-mutable-globals --enable-multivalue --enable-reference-types \
+              -O2 -o src/generated/engine-web.js 2>&1); then
+            echo "::error title=wasm2js::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
+            exit 1
+          fi
+          ls -l src/generated/engine-web.js
+      - name: Проверка движка в Node
+        shell: bash
+        run: |
+          if ! out=$(node --experimental-strip-types scripts/smoke-web-engine.ts 2>&1); then
+            echo "::error title=smoke::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "$out"
+      - name: Сборка страницы
+        run: npm run build:web
+      - name: Публикация в ветку web-preview
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: web-preview
+          publish_dir: ./dist-web
+          force_orphan: true
+          commit_message: "web-preview: ${{ github.sha }}"
+
   windows:
     name: Сборка Windows (.exe)
     needs: [engine, frontend]

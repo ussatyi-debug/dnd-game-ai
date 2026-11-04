@@ -22,3 +22,7 @@ Thumbs.db
 .env.*
 *.db
 *.db-journal
+
+# Веб-сборка
+/src/generated/
+/dist-web/

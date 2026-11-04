@@ -9,7 +9,8 @@
 //! - [`expr`] — выражения бросков (`2d6+3`, `8d6`, `1d8+5+2d8`), в т.ч. критический урон;
 //! - [`check`] — броски d20 с преимуществом/помехой, модификаторами и критами;
 //! - [`notation`] — разбор заявок игрока вида «16 - везунчик»;
-//! - [`resource`] — пулы ресурсов (Везунчик, ячейки, Ци) и восстановление на отдыхе.
+//! - [`resource`] — пулы ресурсов (Везунчик, ячейки, Ци) и восстановление на отдыхе;
+//! - [`session`] — сессия, общая для приложения и веб-версии.
 
 pub mod check;
 pub mod error;
@@ -17,6 +18,7 @@ pub mod expr;
 pub mod notation;
 pub mod resource;
 pub mod rng;
+pub mod session;
 
 pub use check::{player_d20, roll_d20, AttackResult, D20Roll, Modifier, RollMode, RollSource};
 pub use error::EngineError;
@@ -24,3 +26,4 @@ pub use expr::{DiceExpr, DiceGroupRoll, ExprRoll, Term};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
 pub use resource::{Recovery, ResourcePool, RestKind};
 pub use rng::{DiceRng, Xoshiro256};
+pub use session::Session;
