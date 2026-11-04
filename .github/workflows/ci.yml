@@ -117,11 +117,17 @@ jobs:
           git add -A
           git commit -q -m "web-preview: ${GITHUB_SHA}"
           remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if ! out=$(git push -f "$remote" web-preview 2>&1); then
-            echo "::error title=web-preview push::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
-            exit 1
-          fi
-          echo "Опубликовано в web-preview"
+          # GitHub иногда отвечает 500 на push — повторяем с паузой.
+          for attempt in 1 2 3 4 5; do
+            if out=$(git push -f "$remote" web-preview 2>&1); then
+              echo "Опубликовано в web-preview (попытка $attempt)"
+              exit 0
+            fi
+            echo "Попытка $attempt не удалась: $out"
+            sleep $((attempt * 10))
+          done
+          echo "::error title=web-preview push::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
+          exit 1
 
   windows:
     name: Сборка Windows (.exe)
