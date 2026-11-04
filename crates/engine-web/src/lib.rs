@@ -19,14 +19,28 @@ use serde_json::{json, Value};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case", rename_all_fields = "camelCase")]
 pub enum Request {
-    RollExpression { expression: String, critical: bool },
+    RollExpression {
+        expression: String,
+        critical: bool,
+    },
     LuckyReroll,
-    CharacterSheet { id: String },
+    CharacterSheet {
+        id: String,
+    },
     Party,
     Treasury,
     SaveState,
-    TreasuryAddManual { asset_id: String, location_id: String, quantity: i64, reason: String },
-    TakeRest { kind: RestKind },
+    /// Системный текст мастера на этот ход: кодекс и состояние игры.
+    MasterContext,
+    TreasuryAddManual {
+        asset_id: String,
+        location_id: String,
+        quantity: i64,
+        reason: String,
+    },
+    TakeRest {
+        kind: RestKind,
+    },
 }
 
 /// Обрабатывает JSON-запрос и возвращает JSON-ответ.
@@ -51,6 +65,9 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::Party => to_value(session.party_view()),
         Request::Treasury => to_value(session.treasury_view()),
         Request::SaveState => to_value(session.save_state()),
+        Request::MasterContext => {
+            to_value(dnd_master::system_text(&dnd_master::turn_context(session)))
+        }
         Request::TreasuryAddManual { asset_id, location_id, quantity, reason } => to_value(
             session
                 .add_manual_treasury_entry(&asset_id, &location_id, quantity, &reason)
@@ -211,6 +228,16 @@ mod tests {
         assert_eq!(added["ok"]["entries"][0]["source"], "manual");
         let missing = call(&mut s, json!({ "cmd": "character_sheet", "id": "x" }));
         assert!(missing["err"].is_string());
+    }
+
+    #[test]
+    fn master_context_is_text_with_codex_and_state() {
+        let mut s = session();
+        let r = call(&mut s, json!({ "cmd": "master_context" }));
+        let text = r["ok"].as_str().unwrap();
+        assert!(text.starts_with("Ты — Мастер"));
+        assert!(text.contains("Сэр Никис Стрэндж"));
+        assert!(text.contains("кубы_мастера"));
     }
 
     #[test]

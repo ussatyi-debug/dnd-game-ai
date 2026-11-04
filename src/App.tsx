@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AiSettingsWindow from "./components/AiSettingsWindow";
 import CharacterSheetPanel from "./components/CharacterSheetPanel";
-import ChatPanel, { type ChatMessage } from "./components/ChatPanel";
+import ChatPanel, { type ChatMessage, type MasterMode } from "./components/ChatPanel";
 import DiceDrawer from "./components/DiceDrawer";
 import KnowledgeBase from "./components/KnowledgeBase";
 import MainMenu, { type MenuAction } from "./components/MainMenu";
@@ -19,6 +19,7 @@ import {
   isEngineAvailable,
   isWebBuild,
   LUCKY_ID,
+  masterContext,
   partyView,
   takeRest,
   type AiSettingsView,
@@ -28,6 +29,13 @@ import {
   type ResourcePool,
   type RestKind,
 } from "./lib/engine";
+import {
+  CLAUDE_TIERS,
+  claudeMasterReply,
+  getSample,
+  sampleErrorText,
+  type ClaudeTier,
+} from "./lib/claude";
 import type { RollResult, TrayRoll } from "./lib/rolls";
 
 const MAX_ROLLS = 200;
@@ -44,15 +52,42 @@ const TABS: { id: Tab; label: string }[] = [
 
 const now = () => new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
-const WELCOME_APP =
-  "Мастер готов. Выберите модель в меню «Модели ИИ», опишите, что делает сэр Никис. " +
+const ROLL_HINT =
   "Броски — кнопкой 🎲 или своими кубами: присылайте только значение на кубе, модификаторы прибавит мастер.";
-const WELCOME_WEB =
-  "Веб-версия: отряд, казна, кубы и база знаний работают, а ИИ-мастер — только в приложении для ПК.";
+const WELCOME_APP = `Мастер готов. Выберите модель в меню «Модели ИИ» и опишите, что делает сэр Никис. ${ROLL_HINT}`;
+const WELCOME_CLAUDE =
+  `Мастера ведёт Claude от вашего аккаунта — при первой заявке Claude попросит разрешение. ${ROLL_HINT}`;
+const WELCOME_NONE =
+  "Мастер недоступен в этом окне: откройте страницу внутри Claude или запустите приложение для ПК. " +
+  "Отряд, казна, кубы и база знаний работают.";
+
+const TIER_STORAGE_KEY = "dnd.claudeTier";
+
+function loadTier(): ClaudeTier {
+  try {
+    const saved = window.localStorage.getItem(TIER_STORAGE_KEY);
+    if (saved === "quick" || saved === "default" || saved === "complex") return saved;
+  } catch {
+    // Хранилище браузера может быть недоступно — тогда уровень по умолчанию.
+  }
+  return "default";
+}
+
+function saveTier(tier: ClaudeTier) {
+  try {
+    window.localStorage.setItem(TIER_STORAGE_KEY, tier);
+  } catch {
+    // Не критично: выбор просто не запомнится.
+  }
+}
 
 export default function App() {
   const engineAvailable = isEngineAvailable();
   const aiAvailable = isAiAvailable();
+  const [sample, setSample] = useState<Awaited<ReturnType<typeof getSample>>>(null);
+  const [tier, setTier] = useState<ClaudeTier>(loadTier);
+  const abortRef = useRef<AbortController | null>(null);
+  const masterMode: MasterMode = aiAvailable ? "provider" : sample ? "claude" : "none";
   const [tab, setTab] = useState<Tab>("dialog");
   const [openWindow, setOpenWindow] = useState<Overlay>(null);
   const [diceOpen, setDiceOpen] = useState(false);
@@ -62,9 +97,9 @@ export default function App() {
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
   const [playerSheet, setPlayerSheet] = useState<CharacterSheet | null>(null);
   const [rolls, setRolls] = useState<TrayRoll[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: 0, author: "system", text: aiAvailable ? WELCOME_APP : WELCOME_WEB, time: now() },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    aiAvailable ? [{ id: 0, author: "system", text: WELCOME_APP, time: now() }] : [],
+  );
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [thinking, setThinking] = useState(false);
@@ -95,6 +130,22 @@ export default function App() {
       .then(setSheet)
       .catch((e: unknown) => addMessage("system", `Не удалось загрузить лист: ${errorText(e)}`));
   }, [engineAvailable, activeId, party, addMessage]);
+
+  useEffect(() => {
+    if (aiAvailable) return;
+    let cancelled = false;
+    getSample().then((fn) => {
+      if (cancelled) return;
+      setSample(() => fn);
+      setMessages((prev) => [
+        { id: nextId.current++, author: "system", text: fn ? WELCOME_CLAUDE : WELCOME_NONE, time: now() },
+        ...prev,
+      ]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [aiAvailable]);
 
   useEffect(() => {
     if (!aiAvailable) return;
@@ -129,29 +180,78 @@ export default function App() {
     setTab("dialog");
   }
 
+  function historyWith(playerMessage: ChatMessage) {
+    return [...messages, playerMessage]
+      .filter((m) => m.author !== "system")
+      .map((m) => ({ role: m.author === "player" ? ("player" as const) : ("master" as const), text: m.text }));
+  }
+
   function send(text: string) {
     const playerMessage = addMessage("player", text);
     setDraft("");
-    if (!aiAvailable) return;
+    if (masterMode === "claude" && sample) {
+      sendToClaude(sample, playerMessage);
+      return;
+    }
+    if (masterMode !== "provider") return;
     if (!ai?.model) {
       addMessage("system", "Выберите модель мастера в меню «Модели ИИ».");
       return;
     }
-    const history = [...messages, playerMessage]
-      .filter((m) => m.author !== "system")
-      .map((m) => ({ role: m.author === "player" ? ("player" as const) : ("master" as const), text: m.text }));
+    const controller = new AbortController();
+    abortRef.current = controller;
     setThinking(true);
-    aiChat(history)
-      .then((reply) => addMessage("master", reply.text, reply.model))
-      .catch((e: unknown) => addMessage("system", errorText(e)))
+    aiChat(historyWith(playerMessage))
+      .then((reply) => {
+        if (!controller.signal.aborted) addMessage("master", reply.text, reply.model);
+      })
+      .catch((e: unknown) => {
+        if (!controller.signal.aborted) addMessage("system", errorText(e));
+      })
       .finally(() => setThinking(false));
   }
 
+  function sendToClaude(fn: NonNullable<typeof sample>, playerMessage: ChatMessage) {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const tierName = CLAUDE_TIERS.find((t) => t.id === tier)?.name ?? "Claude";
+    const reply: ChatMessage = { id: nextId.current++, author: "master", text: "", time: now(), model: tierName };
+    let shown = false;
+    const show = (text: string) => {
+      setMessages((prev) =>
+        shown ? prev.map((m) => (m.id === reply.id ? { ...m, text } : m)) : [...prev, { ...reply, text }],
+      );
+      shown = true;
+    };
+    setThinking(true);
+    masterContext()
+      .then((system) => claudeMasterReply(fn, system, historyWith(playerMessage), tier, show, controller.signal))
+      .then((text) => show(text))
+      .catch((e: unknown) => {
+        const partial = typeof e === "object" && e !== null && "text" in e ? (e as { text?: string }).text : undefined;
+        if (partial) show(`${partial}\n\n(ответ прерван)`);
+        addMessage("system", typeof e === "string" ? e : sampleErrorText(e));
+      })
+      .finally(() => setThinking(false));
+  }
+
+  function stop() {
+    abortRef.current?.abort();
+  }
+
   function changeModel(model: string) {
+    if (masterMode === "claude") {
+      const next = CLAUDE_TIERS.find((t) => t.id === model);
+      if (!next) return;
+      setTier(next.id);
+      saveTier(next.id);
+      addMessage("system", `Мастера ведёт ${next.name}. Контекст сцены сохранён.`);
+      return;
+    }
     if (!ai || !model) return;
     aiSelectModel(ai.provider, model)
-      .then((next) => {
-        setAi(next);
+      .then((settings) => {
+        setAi(settings);
         addMessage("system", `Мастера ведёт модель ${model}. Контекст сцены сохранён.`);
       })
       .catch((e: unknown) => addMessage("system", errorText(e)));
@@ -206,10 +306,7 @@ export default function App() {
           <PartyPanel
             party={party}
             activeId={activeId}
-            onSelect={(id) => {
-              setActiveId(id);
-              setTab("character");
-            }}
+            onSelect={setActiveId}
             onOpenTreasury={() => setOpenWindow("treasury")}
           />
         </div>
@@ -219,11 +316,12 @@ export default function App() {
             messages={messages}
             draft={draft}
             thinking={thinking}
-            aiAvailable={aiAvailable}
-            model={ai?.model ?? null}
-            models={models}
+            masterMode={masterMode}
+            model={masterMode === "claude" ? tier : (ai?.model ?? null)}
+            modelOptions={masterMode === "claude" ? CLAUDE_TIERS : models}
             onDraftChange={setDraft}
             onSend={send}
+            onStop={stop}
             onModelChange={changeModel}
             onOpenModels={() => setOpenWindow("models")}
             onOpenDice={() => setDiceOpen(true)}
@@ -282,6 +380,9 @@ export default function App() {
       {openWindow === "models" && (
         <AiSettingsWindow
           onClose={() => setOpenWindow(null)}
+          masterMode={masterMode}
+          tier={tier}
+          onTierChange={changeModel}
           models={models}
           onModelsLoaded={setModels}
           onSettingsChange={setAi}

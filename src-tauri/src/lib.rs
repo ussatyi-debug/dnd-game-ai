@@ -131,7 +131,7 @@ async fn ai_chat(
     let settings = lock(&ai.settings)?.clone();
     let system = {
         let mut session = lock(&session)?;
-        ai::prompt::system_text(&ai::prompt::turn_context(&mut session))
+        dnd_master::system_text(&dnd_master::turn_context(&mut session))
     };
     ai::chat(&ai.client, &settings, &system, &history).await
 }

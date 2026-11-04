@@ -1,0 +1,11 @@
+[package]
+name = "dnd-master"
+description = "ИИ-мастер: кодекс кампании и контекст хода — общие для приложения и веб-версии"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+dnd-engine = { path = "../engine", features = ["serde"] }
+serde_json = "1"

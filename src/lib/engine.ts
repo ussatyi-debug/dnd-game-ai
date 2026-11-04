@@ -230,6 +230,11 @@ export function saveState(): Promise<unknown> {
   return call<unknown>("save_state");
 }
 
+/** Кодекс мастера и состояние игры на этот ход (с новыми кубами мастера). */
+export function masterContext(): Promise<string> {
+  return call<string>("master_context");
+}
+
 export function takeRest(kind: RestKind): Promise<RestResult> {
   return call<RestResult>("take_rest", { kind });
 }

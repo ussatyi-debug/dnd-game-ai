@@ -38,6 +38,9 @@ assert.equal(party.members.length, 6);
 const treasury = engine.call<{ total: number }>({ cmd: "treasury" });
 assert.equal(treasury.total, party.treasury_total);
 
+const context = engine.call<string>({ cmd: "master_context" });
+assert.ok(context.startsWith("Ты — Мастер") && context.includes("кубы_мастера"));
+
 assert.throws(
   () => engine.call({ cmd: "roll_expression", expression: "2d7", critical: false }),
   (error: unknown) => typeof error === "string" && error.includes("d7"),

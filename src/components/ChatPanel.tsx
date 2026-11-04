@@ -1,5 +1,4 @@
 import { useEffect, useRef, type FormEvent, type ReactNode } from "react";
-import type { ModelInfo } from "../lib/engine";
 
 export interface ChatMessage {
   id: number;
@@ -10,15 +9,18 @@ export interface ChatMessage {
   model?: string;
 }
 
+export type MasterMode = "provider" | "claude" | "none";
+
 interface ChatPanelProps {
   messages: ChatMessage[];
   draft: string;
   thinking: boolean;
-  aiAvailable: boolean;
+  masterMode: MasterMode;
   model: string | null;
-  models: ModelInfo[];
+  modelOptions: { id: string; name: string }[];
   onDraftChange: (text: string) => void;
   onSend: (text: string) => void;
+  onStop: () => void;
   onModelChange: (model: string) => void;
   onOpenModels: () => void;
   onOpenDice: () => void;
@@ -52,11 +54,12 @@ export default function ChatPanel({
   messages,
   draft,
   thinking,
-  aiAvailable,
+  masterMode,
   model,
-  models,
+  modelOptions,
   onDraftChange,
   onSend,
+  onStop,
   onModelChange,
   onOpenModels,
   onOpenDice,
@@ -75,15 +78,17 @@ export default function ChatPanel({
   }
 
   // Быстрое переключение модели прямо в диалоге — без перезапуска и потери контекста.
-  const options: { id: string; name: string }[] =
-    models.some((m) => m.id === model) || !model ? models : [{ id: model, name: model }, ...models];
+  const options =
+    modelOptions.some((m) => m.id === model) || !model
+      ? modelOptions
+      : [{ id: model, name: model }, ...modelOptions];
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge bg-panel">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-edge px-4 py-2">
         <h2 className="font-serif text-lg text-gold">Диалог</h2>
         <div className="flex items-center gap-2">
-          {aiAvailable && options.length > 0 ? (
+          {masterMode !== "none" && options.length > 0 ? (
             <select
               value={model ?? ""}
               onChange={(e) => onModelChange(e.target.value)}
@@ -103,7 +108,7 @@ export default function ChatPanel({
               onClick={onOpenModels}
               className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-gold"
             >
-              {aiAvailable ? "Выбрать модель" : "Мастер — в приложении"}
+              {masterMode === "provider" ? "Выбрать модель" : "Мастер недоступен"}
             </button>
           )}
         </div>
@@ -140,8 +145,15 @@ export default function ChatPanel({
           </li>
         ))}
         {thinking && (
-          <li className="flex">
+          <li className="flex items-center gap-2">
             <p className="rounded-2xl border border-edge px-4 py-2 text-sm text-muted">Мастер пишет…</p>
+            <button
+              type="button"
+              onClick={onStop}
+              className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-fumble hover:text-fumble"
+            >
+              Стоп
+            </button>
           </li>
         )}
       </ol>

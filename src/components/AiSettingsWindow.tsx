@@ -9,10 +9,15 @@ import {
   type AiSettingsView,
   type ModelInfo,
 } from "../lib/engine";
+import { CLAUDE_TIERS, type ClaudeTier } from "../lib/claude";
+import type { MasterMode } from "./ChatPanel";
 import Modal from "./Modal";
 
 interface AiSettingsWindowProps {
   onClose: () => void;
+  masterMode: MasterMode;
+  tier: ClaudeTier;
+  onTierChange: (tier: ClaudeTier) => void;
   models: ModelInfo[];
   onModelsLoaded: (models: ModelInfo[]) => void;
   onSettingsChange: (settings: AiSettingsView) => void;
@@ -20,6 +25,9 @@ interface AiSettingsWindowProps {
 
 export default function AiSettingsWindow({
   onClose,
+  masterMode,
+  tier,
+  onTierChange,
   models,
   onModelsLoaded,
   onSettingsChange,
@@ -89,12 +97,41 @@ export default function AiSettingsWindow({
 
   return (
     <Modal title="Модели ИИ" onClose={onClose} size="lg">
-      {!available ? (
+      {!available && masterMode === "claude" ? (
+        <div className="space-y-4 p-4 text-sm">
+          <p>
+            В этой версии мастера ведёт <span className="text-gold">Claude</span> — от аккаунта, в котором открыта
+            страница. Ключи не нужны; при первой заявке Claude попросит разрешение, а запросы расходуют лимиты
+            вашего аккаунта Claude.
+          </p>
+          <ul className="space-y-1.5">
+            {CLAUDE_TIERS.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => onTierChange(t.id)}
+                  aria-pressed={tier === t.id}
+                  className={`w-full rounded-lg border px-3 py-2 text-left ${
+                    tier === t.id ? "border-gold bg-gold/10" : "border-edge hover:border-gold/50"
+                  }`}
+                >
+                  <span className="block font-medium">{t.name}</span>
+                  <span className="block text-xs text-muted">{t.hint}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted">
+            Модель можно сменить и прямо в шапке диалога — контекст сцены сохраняется. В приложении для ПК
+            доступен Gemini со своим ключом, позже — локальная модель.
+          </p>
+        </div>
+      ) : !available ? (
         <div className="space-y-3 p-4 text-sm">
-          <p>ИИ-мастер работает в приложении для ПК: запросы к модели и API-ключ остаются на компьютере.</p>
+          <p>Мастер недоступен в этом окне.</p>
           <p className="text-muted">
-            В веб-версии браузер не даёт странице обращаться к внешним сервисам, поэтому здесь модели
-            недоступны. Лоток, отряд, казна и база знаний работают.
+            Откройте страницу внутри Claude — тогда мастера поведёт Claude, — или запустите приложение для ПК с
+            Gemini. Лоток, отряд, казна и база знаний работают и здесь.
           </p>
         </div>
       ) : (

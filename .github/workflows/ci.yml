@@ -69,10 +69,10 @@ jobs:
           targets: wasm32-unknown-unknown
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Линтер и тесты веб-интерфейса движка
+      - name: Линтер и тесты веб-движка и мастера
         run: |
-          cargo clippy -p dnd-engine-web --all-targets -- -D warnings
-          cargo test -p dnd-engine-web
+          cargo clippy -p dnd-engine-web -p dnd-master --all-targets -- -D warnings
+          cargo test -p dnd-engine-web -p dnd-master
       - name: Сборка wasm
         run: cargo build -p dnd-engine-web --release --target wasm32-unknown-unknown
       - uses: actions/setup-node@v4

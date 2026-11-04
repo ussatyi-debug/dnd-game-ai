@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getDownloads } from "../lib/claude";
 import { errorText, saveState } from "../lib/engine";
 import type { TrayRoll } from "../lib/rolls";
 import type { ChatMessage } from "./ChatPanel";
@@ -21,6 +22,7 @@ export default function SaveWindow({ onClose, messages, rolls }: SaveWindowProps
   const [json, setJson] = useState<string | null>(null);
   const [name, setName] = useState("dnd-save.json");
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     saveState()
@@ -44,8 +46,20 @@ export default function SaveWindow({ onClose, messages, rolls }: SaveWindowProps
       .catch((e: unknown) => setError(errorText(e)));
   }, [messages, rolls]);
 
-  function download() {
+  async function download() {
     if (!json) return;
+    setNote(null);
+    // Внутри Claude файл сохраняется через платформу (с подтверждением); иначе — обычной ссылкой.
+    const downloads = await getDownloads();
+    if (downloads) {
+      try {
+        await downloads.save({ filename: name, data: json });
+        setNote("Файл сохранён.");
+      } catch {
+        setNote("Сохранение отменено. Можно скопировать сохранение кнопкой «Копировать».");
+      }
+      return;
+    }
     const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
     const a = document.createElement("a");
     a.href = url;
@@ -70,13 +84,14 @@ export default function SaveWindow({ onClose, messages, rolls }: SaveWindowProps
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={download}
+                onClick={() => void download()}
                 className="rounded-md bg-blood px-4 py-2 text-parchment hover:bg-blood/80"
               >
                 Скачать {name}
               </button>
               <CopyButton text={json} className="px-4 py-2 text-sm" />
             </div>
+            {note && <p className="text-crit">{note}</p>}
             <p className="text-xs text-muted">
               Если скачивание не началось (например, в просмотре внутри Claude), скопируйте сохранение и
               вставьте в файл с расширением .json.

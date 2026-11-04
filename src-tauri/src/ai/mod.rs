@@ -5,7 +5,6 @@
 //! можно сменить посреди сцены — следующий ответ даст новая модель с тем же контекстом.
 
 pub mod gemini;
-pub mod prompt;
 
 use std::fs;
 use std::path::PathBuf;
