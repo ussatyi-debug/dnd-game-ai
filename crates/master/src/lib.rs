@@ -196,7 +196,8 @@ fn sheet_context(c: &Character) -> Value {
         .attacks
         .iter()
         .map(|a| {
-            let unknown = if a.proficiency_unknown { ", владение не указано" } else { "" };
+            let unknown =
+                if a.proficiency_unknown { ", владение не указано" } else { "" };
             format!("{}: {} к попаданию, {}{unknown}", a.name, signed(a.to_hit), a.damage)
         })
         .collect();
@@ -327,7 +328,11 @@ mod tests {
         let context = turn_context(&mut session);
         let nikis = &context["листы"]["pc.nikis"];
         assert!(nikis["спасброски"].as_array().unwrap().iter().any(|v| v == "ЛОВ +6*"));
-        assert!(nikis["навыки"].as_array().unwrap().iter().any(|v| v.as_str().unwrap().starts_with("Ловкость рук +15")));
+        assert!(nikis["навыки"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v.as_str().unwrap().starts_with("Ловкость рук +15")));
         assert_eq!(nikis["пассивная_внимательность"], 15);
         assert!(nikis["инвентарь"]["Кольцо Теневого Хранилища"].is_array());
         assert!(context["листы"]["npc.valeria"]["навыки"].is_string());

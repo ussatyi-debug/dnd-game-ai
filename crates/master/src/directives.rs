@@ -175,7 +175,9 @@ fn opt_text<'a>(cmd: &'a Value, key: &str) -> Option<&'a str> {
 fn positive(cmd: &Value, key: &str) -> Result<Option<u32>, String> {
     match int_field(cmd, key) {
         None => Ok(None),
-        Some(n) if n > 0 => u32::try_from(n).map(Some).map_err(|_| format!("«{key}» слишком велико")),
+        Some(n) if n > 0 => {
+            u32::try_from(n).map(Some).map_err(|_| format!("«{key}» слишком велико"))
+        }
         Some(n) => Err(format!("«{key}» должно быть больше нуля, а не {n}")),
     }
 }

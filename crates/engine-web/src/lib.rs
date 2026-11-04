@@ -144,9 +144,7 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::Inventory { id } => to_value(session.inventory(&id).map_err(|e| e.to_string())?),
         Request::MasterNotes => to_value(session.notes()),
         Request::MasterUndoInfo => to_value(session.master_undo_info()),
-        Request::UndoMasterTurn => {
-            to_value(session.undo_master_turn().map_err(|e| e.to_string())?)
-        }
+        Request::UndoMasterTurn => to_value(session.undo_master_turn().map_err(|e| e.to_string())?),
         Request::MasterApply { text } => to_value(dnd_master::apply_directives(session, &text)),
     }
 }
