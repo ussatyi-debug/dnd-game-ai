@@ -288,6 +288,10 @@ pub struct GrantedSpell {
     pub cast_level: u8,
     /// Класс, чьи КС и атака используются.
     pub caster_id: Option<String>,
+    /// Можно ли накладывать и своими ячейками (так позволяют черты «Затронутый Тенью»
+    /// и «Затронутый Феями»; заклинания предметов и воззваний — нет).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub slots_allowed: bool,
 }
 
 /// Свитки одного заклинания.
@@ -491,6 +495,8 @@ pub struct GrantedView {
     pub cast_level: u8,
     /// `None` — неограниченно.
     pub uses: Option<ResourcePool>,
+    /// Можно ли накладывать и своими ячейками.
+    pub slots_allowed: bool,
 }
 
 /// Стопка свитков.
@@ -746,6 +752,7 @@ impl Character {
                     source: g.source.clone(),
                     cast_level: g.cast_level.max(m.level),
                     uses: g.resource_id.as_deref().and_then(|id| self.resource(id)).cloned(),
+                    slots_allowed: g.slots_allowed,
                 })
             })
             .collect();
@@ -880,6 +887,22 @@ impl Character {
             spell: m.name.to_string(),
         };
 
+        // Ячейками можно творить подготовленное/известное и заклинания черт, где это разрешено.
+        let feat_slots = granted.filter(|g| g.slots_allowed);
+        let can_slot = ready.is_some() || feat_slots.is_some();
+        let slot_caster = ready.clone().or_else(|| feat_slots.and_then(|g| g.caster_id.clone()));
+        let slot_kind = || {
+            let pact_fits = pact >= m.level && req.slot_level.is_none_or(|l| l == pact);
+            let has_regular = (m.level..=9).any(|l| self.has_pool(&slot_id(l)));
+            if (pact_fits && self.pool_nonempty(PACT_SLOTS_ID)) || (pact > 0 && !has_regular) {
+                CastMethod::Pact
+            } else {
+                CastMethod::Slot
+            }
+        };
+        let granted_has_uses = granted
+            .is_some_and(|g| g.resource_id.as_deref().is_none_or(|id| self.pool_nonempty(id)));
+
         let method = match req.method {
             Some(method) => method,
             None if m.is_cantrip() => {
@@ -891,15 +914,10 @@ impl Character {
                     return Err(not_available());
                 }
             }
-            None if ready.is_some() => {
-                let pact_fits = pact >= m.level && req.slot_level.is_none_or(|l| l == pact);
-                let has_regular = (m.level..=9).any(|l| self.has_pool(&slot_id(l)));
-                if (pact_fits && self.pool_nonempty(PACT_SLOTS_ID)) || (pact > 0 && !has_regular) {
-                    CastMethod::Pact
-                } else {
-                    CastMethod::Slot
-                }
-            }
+            None if ready.is_some() => slot_kind(),
+            // Сначала бесплатное применение черты, когда оно кончилось — ячейка, если можно.
+            None if granted_has_uses && req.slot_level.is_none() => CastMethod::Granted,
+            None if feat_slots.is_some() => slot_kind(),
             None if granted.is_some() => CastMethod::Granted,
             None if scroll.is_some() => CastMethod::Scroll,
             None => return Err(not_available()),
@@ -919,7 +937,7 @@ impl Character {
                 if m.is_cantrip() {
                     return Err(EngineError::CantripNoSlot(m.name.to_string()));
                 }
-                if ready.is_none() {
+                if !can_slot {
                     return Err(not_available());
                 }
                 let level = match req.slot_level {
@@ -954,7 +972,7 @@ impl Character {
                 if m.is_cantrip() {
                     return Err(EngineError::CantripNoSlot(m.name.to_string()));
                 }
-                if ready.is_none() {
+                if !can_slot {
                     return Err(not_available());
                 }
                 if pact == 0 {
@@ -974,7 +992,7 @@ impl Character {
                     method,
                     resource: PACT_SLOTS_ID.into(),
                     cast_level: pact,
-                    caster: ready,
+                    caster: slot_caster,
                 })
             }
             CastMethod::Ritual => {
@@ -1336,6 +1354,36 @@ mod tests {
         ));
         nikis.cast_spell(&CastRequest::new("invisibility")).unwrap();
         assert_eq!(nikis.resource(PACT_SLOTS_ID).unwrap().current(), 2);
+    }
+
+    #[test]
+    fn shadow_touched_spells_use_free_cast_then_slots() {
+        let mut nikis = member("pc.nikis");
+        let free = nikis.cast_spell(&CastRequest::new("cause-fear")).unwrap();
+        assert_eq!((free.method, free.cast_level), (CastMethod::Granted, 1));
+        assert_eq!(nikis.resource(PACT_SLOTS_ID).unwrap().current(), 2);
+        // Бесплатное применение потрачено — дальше ячейкой договора на 4 круге.
+        let slot = nikis.cast_spell(&CastRequest::new("cause-fear")).unwrap();
+        assert_eq!((slot.method, slot.cast_level), (CastMethod::Pact, 4));
+        assert_eq!(slot.save_dc, Some(16));
+        assert_eq!(nikis.resource(PACT_SLOTS_ID).unwrap().current(), 1);
+        // Явный выбор ячейки, пока бесплатное применение ещё есть.
+        let out = nikis
+            .cast_spell(&CastRequest::new("invisibility").with_method(CastMethod::Pact))
+            .unwrap();
+        assert_eq!(out.method, CastMethod::Pact);
+        assert_eq!(nikis.resource("feat.shadow_touched.invisibility").unwrap().current(), 1);
+        // Заклинание предмета ячейкой не творится.
+        assert!(matches!(
+            nikis.cast_spell(&CastRequest::new("hunger-of-hadar").with_method(CastMethod::Pact)),
+            Err(EngineError::SpellNotAvailable { .. })
+        ));
+        let book = nikis.spellbook().unwrap();
+        let fear = book.granted.iter().find(|g| g.spell.id == "cause-fear").unwrap();
+        assert!(fear.slots_allowed);
+        assert!(
+            !book.granted.iter().find(|g| g.spell.id == "hunger-of-hadar").unwrap().slots_allowed
+        );
     }
 
     #[test]

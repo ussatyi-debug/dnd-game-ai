@@ -40,6 +40,10 @@ pub struct Scene {
     pub time: Option<String>,
     /// Где находится персонаж игрока.
     pub location: String,
+    /// Обстановка для мастера: что произошло накануне и что запланировано, чтобы ИИ
+    /// начинал сцену с фактов кампании, а не придумывал её заново.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub situation: String,
 }
 
 /// Результат переброса d20 чертой «Везунчик».
@@ -464,11 +468,12 @@ mod tests {
         assert_eq!(view.scene.day, 82);
         assert_eq!(view.members.len(), 6);
         let by_id = |id: &str| view.members.iter().find(|m| m.id == id).unwrap();
-        assert_eq!(view.scene.location, "Вейденбург, Мясной мост");
+        assert_eq!(view.scene.location, "Цитадель Кроу-Рок");
+        assert!(view.scene.situation.contains("Пять Столпов"));
         assert!(by_id("pc.nikis").in_scene);
-        assert!(by_id("npc.corvus").in_scene);
+        assert!(by_id("npc.valeria").in_scene);
         assert!(by_id("npc.yussach").in_scene);
-        assert!(!by_id("npc.valeria").in_scene);
+        assert!(!by_id("npc.corvus").in_scene);
         assert!(!by_id("npc.gunther").in_scene);
         assert_eq!(by_id("npc.corvus").summary, "Монах 8");
         assert_eq!(by_id("npc.yussach").summary, "Исчадие (квазит)");

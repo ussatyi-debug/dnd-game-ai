@@ -48,18 +48,47 @@ fn granted(spell: &str, source: &str, resource: Option<&str>, level: u8) -> Gran
         resource_id: resource.map(Into::into),
         cast_level: level,
         caster_id: Some("warlock".into()),
+        slots_allowed: false,
     }
+}
+
+/// Заклинание черты, которое по её тексту можно накладывать и своими ячейками
+/// («Затронутый Тенью», «Затронутый Феями»).
+fn feat_spell(spell: &str, source: &str, resource: &str, level: u8) -> GrantedSpell {
+    GrantedSpell { slots_allowed: true, ..granted(spell, source, Some(resource), level) }
 }
 
 fn scroll(spell: &str, level: u8, count: u32) -> ScrollStack {
     ScrollStack { spell_id: spell.into(), level, count }
 }
 
-/// Текущая сцена на День 82 (лист персонажей): Вейденбург, штурм красилен у Мясного моста.
-pub const SCENE_LOCATION: &str = "Вейденбург, Мясной мост";
+/// Где начинается День 82. Строка «Текущая сцена: Мясной мост» в листе персонажей осталась
+/// от Дня 46 (штурм красилен завершён в тот день). По правилу «по локациям — самые поздние
+/// сведения» берутся хроника (вечер Дня 81) и заметки героя (график Дней 82–86).
+pub const SCENE_LOCATION: &str = "Цитадель Кроу-Рок";
+
+/// Обстановка начала Дня 82 по хронике и заметкам героя.
+pub const SCENE_SITUATION: &str = "Утро Дня 82, Глава VI. Накануне вечером (День 81) сэр Никис \
+вернулся в грот Кроу-Рока в лике Владыки Стрэнджа и вместе с Калебом и бухгалтером Вайгелем \
+утвердил государственное устройство «Пять Столпов Альт-Вардена». Открыты вакансии: Старший \
+Казначей Коронной Палаты, Земский Бургомистр посадов Шпиля, Коронный Судья-Асессор и \
+Церемониймейстер Шпиля. На сегодня назначено прибытие кандидатов от барона Гуго фон Сталя \
+(из «Стального Утёса» и Черноводья) — начинается смотр претендентов. Дальше по графику: \
+День 83 — кандидаты от Старшины Хеккера и фактора Бранда (Вейденбург); День 84 — кандидаты от \
+баронессы Элеоноры фон Хольц и Прокурора фон Рауха с первым обозом репараций на 20 000 ЗМ; \
+День 85 — готова «Княжеская Астролябия Звёздного Моста» у Халида, прибывает делегация Мирры, \
+отчёт Папаши Крота о слежке за Мадам Орели; День 86 — коронация в Серебряном Шпиле. Корвус \
+как Хранитель Тайной Печати — в Шпиле (переход Звёздным Мостом из грота мгновенный), Гюнтер и \
+Брокк — в Копях Альт-Вардена, Валерия — в Кроу-Роке. Штурм красилен у Мясного моста давно \
+завершён (День 46).";
 
 pub fn demo_scene() -> Scene {
-    Scene { day: 82, time: Some("≈11:30".into()), location: SCENE_LOCATION.into() }
+    Scene {
+        day: 82,
+        time: Some("утро".into()),
+        location: SCENE_LOCATION.into(),
+        situation: SCENE_SITUATION.into(),
+    }
 }
 
 /// Колдовство сэра Никиса: Колдун 7 (Исчадие), воззвания, «Затронутый Тенью», Окуляр, свитки.
@@ -109,13 +138,13 @@ fn nikis_spellcasting() -> Spellcasting {
         granted: vec![
             granted("disguise-self", "Воззвание: Маска многих обличий", None, 1),
             granted("speak-with-dead", "Воззвание: Шёпот могилы", None, 3),
-            granted(
+            feat_spell(
                 "invisibility",
                 "Черта: Затронутый Тенью",
-                Some("feat.shadow_touched.invisibility"),
+                "feat.shadow_touched.invisibility",
                 2,
             ),
-            granted("cause-fear", "Черта: Затронутый Тенью", Some("feat.shadow_touched.fear"), 1),
+            feat_spell("cause-fear", "Черта: Затронутый Тенью", "feat.shadow_touched.fear", 1),
             granted("hunger-of-hadar", "Великий Окуляр", Some("item.ocular.hadar"), 3),
         ],
         scrolls: vec![
@@ -279,7 +308,7 @@ pub fn demo_party() -> Vec<Character> {
             hit_points: hp(59, 0),
             armor_class: 19,
             speed_ft: 50,
-            location: SCENE_LOCATION.into(),
+            location: "Серебряный Шпиль".into(),
             resources: vec![
                 pool("monk.ki", "Очки Ци", 8, Recovery::ShortRest),
                 pool("monk.wholeness_of_body", "Целостность тела", 1, Recovery::LongRest),

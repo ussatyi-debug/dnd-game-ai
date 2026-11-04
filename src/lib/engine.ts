@@ -88,6 +88,8 @@ export interface Scene {
   day: number;
   time: string | null;
   location: string;
+  /** Обстановка: что было накануне и что запланировано. */
+  situation: string;
 }
 
 export interface PartyMember {
@@ -295,6 +297,8 @@ export interface GrantedView {
   source: string;
   cast_level: number;
   uses: ResourcePool | null;
+  /** Можно ли накладывать и своими ячейками (черты «Затронутый Тенью» и т. п.). */
+  slots_allowed: boolean;
 }
 
 export interface ScrollView {

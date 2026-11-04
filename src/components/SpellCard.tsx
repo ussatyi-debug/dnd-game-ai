@@ -89,12 +89,22 @@ function castOptions(book: SpellbookView, spellId: string, level: number): CastO
     (c) => c.spells.some((s) => s.id === spellId && s.ready) || c.cantrips.some((s) => s.id === spellId),
   );
   const options: CastOption[] = [];
+  const featSlots = book.granted.some((g) => g.spell.id === spellId && g.slots_allowed);
   if (level === 0) {
     const granted = book.granted.some((g) => g.spell.id === spellId);
     if (ready || granted) options.push({ key: "cantrip", label: "Заговор, без ячейки", method: null, slotLevel: null });
     return options;
   }
-  if (ready) {
+  for (const g of book.granted.filter((g) => g.spell.id === spellId)) {
+    const uses = g.uses ? `осталось ${g.uses.current}/${g.uses.max}` : "неограниченно";
+    options.push({
+      key: `granted-${g.source}`,
+      label: `${g.source}: без ячейки, ${g.cast_level} круг (${uses})`,
+      method: "granted",
+      slotLevel: null,
+    });
+  }
+  if (ready || featSlots) {
     for (const s of book.slots) {
       if (s.level < level || s.pool.current === 0) continue;
       options.push(
@@ -114,18 +124,9 @@ function castOptions(book: SpellbookView, spellId: string, level: number): CastO
       );
     }
     const spell = SPELL_BY_ID.get(spellId);
-    if (spell?.ritual) {
+    if (ready && spell?.ritual) {
       options.push({ key: "ritual", label: "Ритуалом: без ячейки, +10 минут", method: "ritual", slotLevel: null });
     }
-  }
-  for (const g of book.granted.filter((g) => g.spell.id === spellId)) {
-    const uses = g.uses ? `${g.uses.current}/${g.uses.max}` : "неограниченно";
-    options.push({
-      key: `granted-${g.source}`,
-      label: `${g.source}: ${g.cast_level} круг (${uses})`,
-      method: "granted",
-      slotLevel: null,
-    });
   }
   const scroll = book.scrolls.find((s) => s.spell.id === spellId);
   if (scroll) {

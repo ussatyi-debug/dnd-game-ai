@@ -20,13 +20,19 @@ export default function PartyPanel({ party, activeId, onSelect, onOpenTreasury }
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge bg-panel">
-      <header className="border-b border-edge px-4 py-3">
+      <header className="shrink-0 border-b border-edge px-4 py-3">
         <h2 className="font-serif text-lg text-gold">Отряд</h2>
         <p className="text-sm">
           День {party.scene.day}
           {party.scene.time ? `, ${party.scene.time}` : ""}
         </p>
         <p className="text-xs text-muted">{party.scene.location}</p>
+        {party.scene.situation && (
+          <details className="mt-1 text-xs">
+            <summary className="cursor-pointer text-gold/80">Обстановка и планы</summary>
+            <p className="mt-1 max-h-48 overflow-y-auto leading-relaxed text-muted">{party.scene.situation}</p>
+          </details>
+        )}
       </header>
 
       <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
