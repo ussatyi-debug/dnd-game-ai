@@ -85,6 +85,13 @@ interface CastOption {
   slotLevel: number | null;
 }
 
+/** Пометка усиления: «— усиление на 2 круга». */
+function upcast(slotLevel: number, spellLevel: number): string {
+  const diff = slotLevel - spellLevel;
+  if (diff <= 0) return "";
+  return ` — усиление на ${diff} ${diff === 1 ? "круг" : diff < 5 ? "круга" : "кругов"}`;
+}
+
 /** Способы сотворить заклинание, доступные персонажу прямо сейчас. Правила проверит движок. */
 function castOptions(book: SpellbookView, spellId: string, level: number): CastOption[] {
   const ready = book.casters.some(
@@ -114,13 +121,13 @@ function castOptions(book: SpellbookView, spellId: string, level: number): CastO
         s.pact
           ? {
               key: "pact",
-              label: `Ячейка договора, ${s.level} круг (${s.pool.current}/${s.pool.max})`,
+              label: `Ячейка договора, ${s.level} круг (${s.pool.current}/${s.pool.max})${upcast(s.level, level)}`,
               method: "pact",
               slotLevel: null,
             }
           : {
               key: `slot-${s.level}`,
-              label: `Ячейка ${s.level} круга (${s.pool.current}/${s.pool.max})${s.level > level ? " — усиление" : ""}`,
+              label: `Ячейка ${s.level} круга (${s.pool.current}/${s.pool.max})${upcast(s.level, level)}`,
               method: "slot",
               slotLevel: s.level,
             },
