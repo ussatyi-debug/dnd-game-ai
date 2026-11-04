@@ -24,6 +24,17 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      - name: Согласованность версий
+        shell: bash
+        run: |
+          cargo_v=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p}' Cargo.toml)
+          npm_v=$(node -p "require('./package.json').version")
+          tauri_v=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "Cargo: $cargo_v, package.json: $npm_v, tauri.conf.json: $tauri_v"
+          if [ "$cargo_v" != "$npm_v" ] || [ "$cargo_v" != "$tauri_v" ]; then
+            echo "::error::Версии в Cargo.toml, package.json и tauri.conf.json должны совпадать"
+            exit 1
+          fi
       - name: Форматирование
         run: cargo fmt --all --check
       - name: Линтер
@@ -69,3 +80,42 @@ jobs:
           name: dnd-game-ai-windows-${{ github.ref_name }}
           path: target/release/bundle/nsis/*.exe
           if-no-files-found: error
+
+  release:
+    name: Тег версии и релиз
+    needs: [windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Определение версии
+        id: version
+        shell: bash
+        run: |
+          tag="v$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Тег $tag уже существует — релиз не создаётся"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Загрузка установщика
+        if: steps.version.outputs.exists == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: dnd-game-ai-windows-${{ github.ref_name }}
+          path: release-files
+      - name: Создание тега и релиза
+        if: steps.version.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: DnD Game AI ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: release-files/*.exe
+          generate_release_notes: true
