@@ -18,10 +18,10 @@ import type { LogTone } from "./RollLog";
 
 const QUICK_DICE = [4, 6, 8, 10, 12, 20, 100] as const;
 
-const MODES: { value: RollMode; label: string }[] = [
-  { value: "normal", label: "Обычный" },
-  { value: "advantage", label: "Преимущество" },
-  { value: "disadvantage", label: "Помеха" },
+const MODES: { value: RollMode; label: string; short: string }[] = [
+  { value: "normal", label: "Обычный", short: "Обычный" },
+  { value: "advantage", label: "Преимущество", short: "Преим." },
+  { value: "disadvantage", label: "Помеха", short: "Помеха" },
 ];
 
 interface DicePanelProps {
@@ -166,32 +166,41 @@ export default function DicePanel({ enabled, lucky, onLuckyChange, onLog }: Dice
 
       <div className="space-y-3">
         <h2 className="font-serif text-lg text-gold">Бросок d20</h2>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_7rem_7rem]">
+        <label className="block text-sm text-muted">
+          Название
           <input
             value={checkLabel}
             onChange={(e) => setCheckLabel(e.target.value)}
-            placeholder="Название: Скрытность, Атака…"
+            placeholder="Скрытность, Атака…"
             aria-label="Название броска"
-            className={inputClass}
+            className={`${inputClass} mt-1`}
           />
-          <input
-            value={modifierText}
-            onChange={(e) => setModifierText(e.target.value)}
-            inputMode="numeric"
-            aria-label="Модификатор"
-            aria-invalid={!modifierValid}
-            className={`${inputClass} ${modifierValid ? "" : "border-fumble"}`}
-          />
-          <select
-            value={critThreshold}
-            onChange={(e) => setCritThreshold(Number(e.target.value))}
-            aria-label="Порог крита"
-            className={inputClass}
-          >
-            <option value={20}>Крит 20</option>
-            <option value={19}>Крит 19–20</option>
-            <option value={18}>Крит 18–20</option>
-          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block text-sm text-muted">
+            Модификатор
+            <input
+              value={modifierText}
+              onChange={(e) => setModifierText(e.target.value)}
+              inputMode="numeric"
+              aria-label="Модификатор"
+              aria-invalid={!modifierValid}
+              className={`${inputClass} mt-1 ${modifierValid ? "" : "border-fumble"}`}
+            />
+          </label>
+          <label className="block text-sm text-muted">
+            Порог крита
+            <select
+              value={critThreshold}
+              onChange={(e) => setCritThreshold(Number(e.target.value))}
+              aria-label="Порог крита"
+              className={`${inputClass} mt-1`}
+            >
+              <option value={20}>20</option>
+              <option value={19}>19–20</option>
+              <option value={18}>18–20</option>
+            </select>
+          </label>
         </div>
 
         <div className="grid grid-cols-3 gap-1 rounded-md border border-edge p-1" role="radiogroup">
@@ -206,7 +215,8 @@ export default function DicePanel({ enabled, lucky, onLuckyChange, onLog }: Dice
                 mode === m.value ? "bg-gold text-ink" : "text-muted hover:text-parchment"
               }`}
             >
-              {m.label}
+              <span className="sm:hidden">{m.short}</span>
+              <span className="hidden sm:inline">{m.label}</span>
             </button>
           ))}
         </div>

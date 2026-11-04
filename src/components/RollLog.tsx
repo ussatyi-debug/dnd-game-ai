@@ -8,7 +8,7 @@ export interface LogEntry {
   tone: LogTone;
 }
 
-const toneClass: Record<LogTone, string> = {
+export const toneClass: Record<LogTone, string> = {
   normal: "border-edge",
   crit: "border-crit bg-crit/10",
   fumble: "border-fumble bg-fumble/10",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import DicePanel from "./components/DicePanel";
-import RollLog, { type LogEntry, type LogTone } from "./components/RollLog";
+import RollLog, { toneClass, type LogEntry, type LogTone } from "./components/RollLog";
 import {
   errorText,
   isEngineAvailable,
@@ -35,8 +35,10 @@ export default function App() {
       .catch((error: unknown) => log("Движок", errorText(error), "error"));
   }, [engineAvailable, log]);
 
+  const latest = entries[0];
+
   return (
-    <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 p-4">
+    <div className="mx-auto flex h-full max-w-6xl flex-col gap-4 p-4 pb-28 lg:pb-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-serif text-2xl text-parchment">DnD Game AI</h1>
         <span className="text-sm text-muted">
@@ -56,6 +58,18 @@ export default function App() {
         <DicePanel enabled={engineAvailable} lucky={lucky} onLuckyChange={setLucky} onLog={log} />
         <RollLog entries={entries} onClear={() => setEntries([])} />
       </main>
+
+      {latest && (
+        <div
+          aria-live="polite"
+          className="fixed inset-x-3 bottom-3 overflow-hidden rounded-xl bg-panel shadow-lg shadow-black/60 lg:hidden"
+        >
+          <div className={`border-l-4 px-4 py-3 ${toneClass[latest.tone]}`}>
+            <div className="text-sm text-muted">{latest.title}</div>
+            <div className="font-mono text-base break-words">{latest.detail}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

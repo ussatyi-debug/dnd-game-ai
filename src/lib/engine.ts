@@ -124,15 +124,23 @@ export function errorText(error: unknown): string {
 
 /** Текстовая разбивка броска d20 для лога. */
 export function describeD20(roll: D20Roll): string {
-  const dice =
-    roll.mode === "normal"
-      ? `d20: ${roll.natural}`
-      : `d20 ${roll.mode === "advantage" ? "с преимуществом" : "с помехой"} [${roll.dice.join(", ")}] → ${roll.natural}`;
-  const lucky = roll.lucky_used ? " (везунчик)" : "";
+  const modeText =
+    roll.mode === "advantage" ? "с преимуществом" : roll.mode === "disadvantage" ? "с помехой" : "";
+  let dice: string;
+  if (roll.source === "player") {
+    // Игрок сообщает уже засчитанный куб, поэтому показываем одно значение.
+    const notes = ["свой куб", modeText, roll.lucky_used ? "везунчик" : ""].filter(Boolean);
+    dice = `d20: ${roll.natural} (${notes.join(", ")})`;
+  } else if (roll.mode === "normal") {
+    dice = `d20: ${roll.natural}`;
+  } else {
+    dice = `d20 ${modeText} [${roll.dice.join(", ")}] → ${roll.natural}`;
+  }
   const mods = roll.modifiers
     .map((m) => ` ${m.value < 0 ? "−" : "+"} ${m.label} ${Math.abs(m.value)}`)
     .join("");
-  return `${dice}${lucky}${mods} = ${roll.total}`;
+  const mark = roll.critical ? " — КРИТ" : roll.fumble ? " — натуральная 1" : "";
+  return `${dice}${mods} = ${roll.total}${mark}`;
 }
 
 /** Текстовая разбивка броска выражения для лога. */
