@@ -79,7 +79,7 @@ export default function CharacterSheetPanel({
 
   return (
     <section className="flex min-h-0 flex-col overflow-y-auto rounded-xl border border-edge bg-panel">
-      <header className="border-b border-edge p-4">
+      <header className="shrink-0 border-b border-edge p-4">
         <h2 className="font-serif text-xl text-parchment">{sheet.name}</h2>
         <p className="mt-0.5 text-xs text-muted">{sheet.title}</p>
         <p className="mt-2 text-sm">
@@ -95,7 +95,7 @@ export default function CharacterSheetPanel({
         <p className="mt-1 text-xs text-gold/80">📍 {sheet.location}</p>
       </header>
 
-      <div className="flex gap-1 overflow-x-auto border-b border-edge p-2" role="tablist">
+      <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-edge p-2" role="tablist">
         {(
           [
             ["main", "Основное"],
