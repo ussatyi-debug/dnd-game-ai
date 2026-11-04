@@ -104,13 +104,24 @@ jobs:
         run: npm run build:web
       - name: Публикация в ветку web-preview
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: web-preview
-          publish_dir: ./dist-web
-          force_orphan: true
-          commit_message: "web-preview: ${{ github.sha }}"
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          du -sh dist-web
+          cd dist-web
+          touch .nojekyll
+          git init -q -b web-preview
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "web-preview: ${GITHUB_SHA}"
+          remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if ! out=$(git push -f "$remote" web-preview 2>&1); then
+            echo "::error title=web-preview push::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "Опубликовано в web-preview"
 
   windows:
     name: Сборка Windows (.exe)
