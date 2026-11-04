@@ -178,7 +178,6 @@ export interface OutSpell {
   classes: string[];
   desc: string[];
   higher: string[];
-  translated: boolean;
   source: "srd" | "custom";
   sourceNote: string;
 }
@@ -200,6 +199,7 @@ for (const s of srd) {
   if (!name) fail(`нет русского названия для «${s.id}»`);
   checkClasses(s.id, s.classes);
   const ru = texts[s.id];
+  if (!ru) fail(`нет русского описания для «${s.id}» (data/spells/ru/text-*.json)`);
   out.push({
     id: s.id,
     name,
@@ -208,14 +208,13 @@ for (const s of srd) {
     school: lookup(SCHOOLS, s.school, "школа", s.id),
     castingTime: lookup(CASTING_TIME, s.casting_time, "время накладывания", s.id),
     range: rangeRu(s),
-    components: componentsRu(s.components, ru ? ru.material : s.material),
+    components: componentsRu(s.components, s.material ? ru.material ?? fail(`${s.id}: нет перевода материального компонента`) : undefined),
     duration: durationRu(s),
     ritual: s.ritual,
     concentration: s.concentration,
     classes: s.classes,
-    desc: ru ? ru.desc : s.desc,
-    higher: ru ? (ru.higher ?? []) : (s.higher_level ?? []),
-    translated: Boolean(ru),
+    desc: ru.desc,
+    higher: ru.higher ?? [],
     source: "srd",
     sourceNote: "SRD 5.1",
   });
@@ -240,7 +239,6 @@ for (const s of custom) {
     classes: s.classes,
     desc: s.descRu,
     higher: s.higherRu ?? [],
-    translated: true,
     source: "custom",
     sourceNote: s.source,
   });
@@ -305,5 +303,4 @@ for (const [path, content] of [
 }
 if (stale) process.exit(1);
 
-const translated = out.filter((s) => s.translated).length;
-console.log(`Заклинаний: ${out.length}, с русским описанием: ${translated}`);
+console.log(`Заклинаний: ${out.length}`);

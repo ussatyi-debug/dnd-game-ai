@@ -17,8 +17,6 @@ export interface SpellData {
   classes: string[];
   desc: string[];
   higher: string[];
-  /** Есть ли русское описание (иначе показывается оригинал SRD). */
-  translated: boolean;
   source: "srd" | "custom";
   sourceNote: string;
 }

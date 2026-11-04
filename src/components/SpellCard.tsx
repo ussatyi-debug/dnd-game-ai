@@ -210,11 +210,6 @@ export default function SpellCard({ spellId, book, onClose, onCast }: SpellCardP
           ))}
         </dl>
 
-        {!spell.translated && (
-          <p className="rounded-md border border-gold/40 bg-gold/5 px-3 py-2 text-xs text-gold">
-            Русский перевод описания готовится — пока показан оригинал SRD.
-          </p>
-        )}
         <SpellText paragraphs={spell.desc} />
         {spell.higher.length > 0 && (
           <div>
