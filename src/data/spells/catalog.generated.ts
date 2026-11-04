@@ -779,11 +779,11 @@ export const SPELLS: SpellData[] = [
    "cleric"
   ],
   "desc": [
-   "You create a vertical wall of whirling, razor-sharp blades made of magical energy. The wall appears within range and lasts for the duration. You can make a straight wall up to 100 feet long, 20 feet high, and 5 feet thick, or a ringed wall up to 60 feet in diameter, 20 feet high, and 5 feet thick. The wall provides three-quarters cover to creatures behind it, and its space is difficult terrain.",
-   "When a creature enters the wall's area for the first time on a turn or starts its turn there, the creature must make a dexterity saving throw. On a failed save, the creature takes 6d10 slashing damage. On a successful save, the creature takes half as much damage."
+   "Вы создаёте вертикальную стену из вращающихся бритвенно-острых клинков магической энергии. Стена появляется в пределах дистанции и держится, пока действует заклинание. Это может быть прямая стена длиной до 100 футов, высотой 20 футов и толщиной 5 футов или кольцевая стена диаметром до 60 футов, высотой 20 футов и толщиной 5 футов. Стена даёт существам за ней укрытие на три четверти, а её пространство — труднопроходимая местность.",
+   "Когда существо впервые за ход входит в область стены или начинает в ней ход, оно совершает спасбросок Ловкости. При провале существо получает 6d10 рубящего урона, при успехе — половину этого урона."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -1059,7 +1059,7 @@ export const SPELLS: SpellData[] = [
   "school": "Воплощение",
   "castingTime": "1 действие",
   "range": "150 фт",
-  "components": "В, С, М (A bit of fur; a piece of amber, glass, or a crystal rod; and three silver pins.)",
+  "components": "В, С, М (клочок меха, кусочек янтаря, стекла или хрустальная палочка и три серебряные булавки)",
   "duration": "Мгновенная",
   "ritual": false,
   "concentration": false,
@@ -1068,13 +1068,13 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "You create a bolt of lightning that arcs toward a target of your choice that you can see within range. Three bolts then leap from that target to as many as three other targets, each of which must be within 30 feet of the first target. A target can be a creature or an object and can be targeted by only one of the bolts.",
-   "A target must make a dexterity saving throw. The target takes 10d8 lightning damage on a failed save, or half as much damage on a successful one."
+   "Вы создаёте молнию, которая устремляется к выбранной вами видимой цели в пределах дистанции. Затем от этой цели перескакивают три молнии — к трём другим целям, каждая из которых должна быть в пределах 30 футов от первой. Целью может быть существо или предмет; в каждую цель может попасть только одна молния.",
+   "Цель совершает спасбросок Ловкости. При провале цель получает 10d8 урона электричеством, при успехе — половину этого урона."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, one additional bolt leaps from the first target to another target for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, за каждый круг ячейки выше 6-го от первой цели к ещё одной цели перескакивает дополнительная молния."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -1142,7 +1142,7 @@ export const SPELLS: SpellData[] = [
   "school": "Некромантия",
   "castingTime": "1 действие",
   "range": "150 фт (сфера радиусом 60 фт)",
-  "components": "В, С, М (The powder of a crushed black pearl worth at least 500 gp.)",
+  "components": "В, С, М (порошок из истолчённой чёрной жемчужины стоимостью не меньше 500 зм)",
   "duration": "Мгновенная",
   "ritual": false,
   "concentration": false,
@@ -1152,12 +1152,12 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "A sphere of negative energy ripples out in a 60-foot radius sphere from a point within range. Each creature in that area must make a constitution saving throw. A target takes 8d6 necrotic damage on a failed save, or half as much damage on a successful one."
+   "Из точки в пределах дистанции расходится сфера отрицательной энергии радиусом 60 футов. Каждое существо в области совершает спасбросок Телосложения. При провале цель получает 8d6 некротического урона, при успехе — половину этого урона."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, the damage increases by 2d6 for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, урон увеличивается на 2d6 за каждый круг ячейки выше 6-го."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -1571,15 +1571,15 @@ export const SPELLS: SpellData[] = [
    "warlock"
   ],
   "desc": [
-   "You summon a fey creature of challenge rating 6 or lower, or a fey spirit that takes the form of a beast of challenge rating 6 or lower. It appears in an unoccupied space that you can see within range. The fey creature disappears when it drops to 0 hit points or when the spell ends.",
-   "The fey creature is friendly to you and your companions for the duration. Roll initiative for the creature, which has its own turns. It obeys any verbal commands that you issue to it (no action required by you), as long as they don't violate its alignment. If you don't issue any commands to the fey creature, it defends itself from hostile creatures but otherwise takes no actions.",
-   "If your concentration is broken, the fey creature doesn't disappear. Instead, you lose control of the fey creature, it becomes hostile toward you and your companions, and it might attack. An uncontrolled fey creature can't be dismissed by you, and it disappears 1 hour after you summoned it.",
-   "The GM has the fey creature's statistics."
+   "Вы призываете фею с показателем опасности 6 или ниже или духа фей, принимающего облик зверя с показателем опасности 6 или ниже. Существо появляется в видимом вами свободном пространстве в пределах дистанции и исчезает, когда его хиты опускаются до 0 или когда заклинание заканчивается.",
+   "Пока действует заклинание, фея дружелюбна к вам и вашим спутникам. Бросьте для неё инициативу; у неё свои ходы. Она выполняет любые ваши устные приказы (вам не нужно тратить действие), если они не противоречат её мировоззрению. Без приказов она защищается от враждебных существ, но иных действий не совершает.",
+   "Если ваша концентрация прервана, фея не исчезает. Вместо этого вы теряете над ней контроль, она становится враждебной вам и вашим спутникам и может напасть. Вы не можете отпустить неподконтрольную фею; она исчезает через 1 час после призыва.",
+   "Параметры феи у Мастера."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, the challenge rating increases by 1 for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, показатель опасности увеличивается на 1 за каждый круг ячейки выше 6-го."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -1714,7 +1714,7 @@ export const SPELLS: SpellData[] = [
   "school": "Воплощение",
   "castingTime": "10 минут",
   "range": "На себя",
-  "components": "В, С, М (A statuette of yourself carved from ivory and decorated with gems worth at least 1,500 gp.)",
+  "components": "В, С, М (ваша статуэтка, вырезанная из слоновой кости и украшенная самоцветами, стоимостью не меньше 1 500 зм)",
   "duration": "10 дней",
   "ritual": false,
   "concentration": false,
@@ -1722,12 +1722,12 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "Choose a spell of 5th level or lower that you can cast, that has a casting time of 1 action, and that can target you. You cast that spell--called the contingent spell--as part of casting contingency, expending spell slots for both, but the contingent spell doesn't come into effect. Instead, it takes effect when a certain circumstance occurs. You describe that circumstance when you cast the two spells. For example, a contingency cast with water breathing might stipulate that water breathing comes into effect when you are engulfed in water or a similar liquid.",
-   "The contingent spell takes effect immediately after the circumstance is met for the first time, whether or not you want it to. and then contingency ends.",
-   "The contingent spell takes effect only on you, even if it can normally target others. You can use only one contingency spell at a time. If you cast this spell again, the effect of another contingency spell on you ends. Also, contingency ends on you if its material component is ever not on your person."
+   "Выберите заклинание 5-го круга или ниже, которое вы можете накладывать, со временем накладывания 1 действие и способное выбрать целью вас. Вы накладываете его — это заклинание называется отложенным — в процессе накладывания «Предосторожности», тратя ячейки на оба, но отложенное заклинание не вступает в силу. Оно срабатывает при определённом обстоятельстве, которое вы описываете, накладывая оба заклинания. Например, «Предосторожность» с «Подводным дыханием» может предусматривать, что «Подводное дыхание» вступит в силу, когда вас поглотит вода или иная подобная жидкость.",
+   "Отложенное заклинание вступает в силу сразу после того, как обстоятельство наступит впервые, хотите вы того или нет, после чего «Предосторожность» заканчивается.",
+   "Отложенное заклинание действует только на вас, даже если обычно может действовать на других. Одновременно может действовать только одна «Предосторожность». Если вы накладываете это заклинание снова, действие предыдущей «Предосторожности» на вас заканчивается. Кроме того, «Предосторожность» заканчивается, если её материальный компонент окажется не при вас."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -1928,7 +1928,7 @@ export const SPELLS: SpellData[] = [
   "school": "Некромантия",
   "castingTime": "1 минута",
   "range": "10 фт",
-  "components": "В, С, М (One clay pot filled with grave dirt, one clay pot filled with brackish water, and one 150 gp black onyx stone for each corpse.)",
+  "components": "В, С, М (по глиняному горшку с могильной землёй, глиняному горшку с солоноватой водой и чёрному ониксу стоимостью 150 зм на каждый труп)",
   "duration": "Мгновенная",
   "ritual": false,
   "concentration": false,
@@ -1938,14 +1938,14 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "You can cast this spell only at night. Choose up to three corpses of Medium or Small humanoids within range. Each corpse becomes a ghoul under your control. (The GM has game statistics for these creatures.)",
-   "As a bonus action on each of your turns, you can mentally command any creature you animated with this spell if the creature is within 120 feet of you (if you control multiple creatures, you can command any or all of them at the same time, issuing the same command to each one). You decide what action the creature will take and where it will move during its next turn, or you can issue a general command, such as to guard a particular chamber or corridor. If you issue no commands, the creature only defends itself against hostile creatures. Once given an order, the creature continues to follow it until its task is complete.",
-   "The creature is under your control for 24 hours, after which it stops obeying any command you have given it. To maintain control of the creature for another 24 hours, you must cast this spell on the creature before the current 24-hour period ends. This use of the spell reasserts your control over up to three creatures you have animated with this spell, rather than animating new ones."
+   "Это заклинание можно накладывать только ночью. Выберите до трёх трупов гуманоидов Среднего или Маленького размера в пределах дистанции. Каждый труп становится упырём под вашим контролем (параметры у Мастера).",
+   "В каждый свой ход вы можете бонусным действием мысленно приказать любому существу, поднятому этим заклинанием, если оно в пределах 120 футов от вас (если существ несколько, можно приказать любым или всем одновременно, отдав каждому один и тот же приказ). Вы решаете, какое действие существо совершит и куда переместится в свой следующий ход, или отдаёте общий приказ, например охранять определённый зал или коридор. Без приказов существо лишь защищается от враждебных существ. Получив приказ, существо выполняет его, пока задача не будет решена.",
+   "Существо подчиняется вам 24 часа, после чего перестаёт выполнять ваши приказы. Чтобы сохранить контроль ещё на 24 часа, нужно наложить на существо это заклинание до окончания текущих суток. Такое накладывание возобновляет контроль над тремя существами, поднятыми этим заклинанием, вместо создания новых."
   ],
   "higher": [
-   "When you cast this spell using a 7th-level spell slot, you can animate or reassert control over four ghouls. When you cast this spell using an 8th-level spell slot, you can animate or reassert control over five ghouls or two ghasts or wights. When you cast this spell using a 9th-level spell slot, you can animate or reassert control over six ghouls, three ghasts or wights, or two mummies."
+   "С ячейкой 7-го круга вы поднимаете или возобновляете контроль над четырьмя упырями. С ячейкой 8-го круга — над пятью упырями или двумя гастами или умертвиями. С ячейкой 9-го круга — над шестью упырями, тремя гастами или умертвиями или двумя мумиями."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -2369,7 +2369,7 @@ export const SPELLS: SpellData[] = [
   "school": "Преобразование",
   "castingTime": "1 действие",
   "range": "60 фт (куб 10 фт)",
-  "components": "В, С, М (A lodestone and a pinch of dust.)",
+  "components": "В, С, М (магнитный железняк и щепотка пыли)",
   "duration": "Мгновенная",
   "ritual": false,
   "concentration": false,
@@ -2378,15 +2378,15 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "A thin green ray springs from your pointing finger to a target that you can see within range. The target can be a creature, an object, or a creation of magical force, such as the wall created by wall of force.",
-   "A creature targeted by this spell must make a dexterity saving throw. On a failed save, the target takes 10d6 + 40 force damage. If this damage reduces the target to 0 hit points, it is disintegrated.",
-   "A disintegrated creature and everything it is wearing and carrying, except magic items, are reduced to a pile of fine gray dust. The creature can be restored to life only by means of a true resurrection or a wish spell.",
-   "This spell automatically disintegrates a Large or smaller nonmagical object or a creation of magical force. If the target is a Huge or larger object or creation of force, this spell disintegrates a 10-foot-cube portion of it. A magic item is unaffected by this spell."
+   "Из вашего указующего пальца к видимой вами цели в пределах дистанции бьёт тонкий зелёный луч. Целью может быть существо, предмет или творение магической силы, например стена, созданная «Силовой стеной».",
+   "Существо-цель совершает спасбросок Ловкости. При провале цель получает 10d6 + 40 урона силовым полем. Если этот урон опускает хиты цели до 0, она распадается.",
+   "Распавшееся существо и всё, что на нём надето и что оно несёт, кроме магических предметов, превращается в горстку тонкой серой пыли. Вернуть такое существо к жизни можно только заклинанием «Истинное воскрешение» или «Исполнение желаний».",
+   "Заклинание автоматически уничтожает немагический предмет размером Большой или меньше или творение магической силы. Если цель — предмет или творение силы размером Огромный или больше, заклинание уничтожает его часть объёмом куб с ребром 10 футов. На магические предметы заклинание не действует."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, the damage increases by 3d6 for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, урон увеличивается на 3d6 за каждый круг ячейки выше 6-го."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -2910,13 +2910,13 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "For the spell's duration, your eyes become an inky void imbued with dread power. One creature of your choice within 60 feet of you that you can see must succeed on a wisdom saving throw or be affected by one of the following effects of your choice for the duration. On each of your turns until the spell ends, you can use your action to target another creature but can't target a creature again if it has succeeded on a saving throw against this casting of eyebite.",
-   "***Asleep.*** The target falls unconscious. It wakes up if it takes any damage or if another creature uses its action to shake the sleeper awake.",
-   "***Panicked.*** The target is frightened of you. On each of its turns, the frightened creature must take the Dash action and move away from you by the safest and shortest available route, unless there is nowhere to move. If the target moves to a place at least 60 feet away from you where it can no longer see you, this effect ends.",
-   "***Sickened.*** The target has disadvantage on attack rolls and ability checks. At the end of each of its turns, it can make another wisdom saving throw. If it succeeds, the effect ends."
+   "Пока действует заклинание, ваши глаза становятся чернильной пустотой, наполненной жуткой силой. Одно выбранное вами видимое существо в пределах 60 футов должно преуспеть в спасброске Мудрости, иначе на время действия заклинания попадает под один из эффектов ниже на ваш выбор. В каждый свой ход до окончания заклинания вы можете действием выбрать целью другое существо, но не существо, уже преуспевшее в спасброске против этого накладывания.",
+   "***Сон.*** Цель теряет сознание. Она просыпается, если получает любой урон или если другое существо действием растормошит её.",
+   "***Паника.*** Цель испугана вами. В каждый свой ход испуганное существо должно совершать действие «Рывок» и удаляться от вас самым безопасным и коротким доступным путём, если есть куда двигаться. Если цель оказывается в месте не ближе 60 футов от вас, откуда больше вас не видит, эффект заканчивается.",
+   "***Недомогание.*** Цель совершает с помехой броски атаки и проверки характеристик. В конце каждого своего хода она может повторить спасбросок Мудрости; при успехе эффект заканчивается."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -3165,7 +3165,7 @@ export const SPELLS: SpellData[] = [
   "school": "Прорицание",
   "castingTime": "1 минута",
   "range": "На себя",
-  "components": "В, С, М (A set of divinatory tools--such as bones, ivory sticks, cards, teeth, or carved runes--worth 100gp and an object from the location you wish to find.)",
+  "components": "В, С, М (набор гадательных принадлежностей — кости, палочки из слоновой кости, карты, зубы или резные руны — стоимостью 100 зм и предмет из места, которое вы хотите найти)",
   "duration": "Концентрация, вплоть до 24 часов",
   "ritual": false,
   "concentration": true,
@@ -3175,11 +3175,11 @@ export const SPELLS: SpellData[] = [
    "druid"
   ],
   "desc": [
-   "This spell allows you to find the shortest, most direct physical route to a specific fixed location that you are familiar with on the same plane of existence. If you name a destination on another plane of existence, a destination that moves (such as a mobile fortress), or a destination that isn't specific (such as \"a green dragon's lair\"), the spell fails.",
-   "For the duration, as long as you are on the same plane of existence as the destination, you know how far it is and in what direction it lies. While you are traveling there, whenever you are presented with a choice of paths along the way, you automatically determine which path is the shortest and most direct route (but not necessarily the safest route) to the destination."
+   "Заклинание позволяет найти кратчайший и самый прямой физический путь к определённому неподвижному месту на том же плане бытия, которое вам знакомо. Если назвать место на другом плане, движущееся место (например, передвижную крепость) или неконкретное место (например, «логово зелёного дракона»), заклинание не срабатывает.",
+   "Пока действует заклинание и пока вы на одном плане бытия с целью, вы знаете, как далеко она и в каком направлении. В пути каждый раз, когда перед вами выбор дорог, вы автоматически определяете, какая из них кратчайшая и самая прямая (но не обязательно самая безопасная)."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -3426,7 +3426,7 @@ export const SPELLS: SpellData[] = [
   "school": "Преобразование",
   "castingTime": "1 действие",
   "range": "60 фт",
-  "components": "В, С, М (A pinch of lime, water, and earth.)",
+  "components": "В, С, М (щепотка извести, вода и земля)",
   "duration": "Концентрация, вплоть до 1 минуты",
   "ritual": false,
   "concentration": true,
@@ -3435,13 +3435,13 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "You attempt to turn one creature that you can see within range into stone. If the target's body is made of flesh, the creature must make a constitution saving throw. On a failed save, it is restrained as its flesh begins to harden. On a successful save, the creature isn't affected.",
-   "A creature restrained by this spell must make another constitution saving throw at the end of each of its turns. If it successfully saves against this spell three times, the spell ends. If it fails its saves three times, it is turned to stone and subjected to the petrified condition for the duration. The successes and failures don't need to be consecutive; keep track of both until the target collects three of a kind.",
-   "If the creature is physically broken while petrified, it suffers from similar deformities if it reverts to its original state.",
-   "If you maintain your concentration on this spell for the entire possible duration, the creature is turned to stone until the effect is removed."
+   "Вы пытаетесь превратить одно видимое вами существо в пределах дистанции в камень. Если тело цели из плоти, она совершает спасбросок Телосложения. При провале она опутана: её плоть начинает твердеть. При успехе существо не затронуто.",
+   "Опутанное этим заклинанием существо в конце каждого своего хода повторяет спасбросок Телосложения. После трёх успехов заклинание заканчивается. После трёх провалов существо превращается в камень и окаменевает на время действия заклинания. Успехи и провалы не обязательно должны идти подряд; учитывайте и те и другие, пока цель не наберёт три одинаковых.",
+   "Если окаменевшее существо физически повредить, то, вернувшись в обычное состояние, оно получит подобные увечья.",
+   "Если вы поддерживаете концентрацию на заклинании всю возможную длительность, существо остаётся камнем, пока эффект не снимут."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -3533,7 +3533,7 @@ export const SPELLS: SpellData[] = [
   "school": "Ограждение",
   "castingTime": "10 минут",
   "range": "Касание (куб 40000 фт)",
-  "components": "В, С, М (A sprinkling of holy water, rare incense, and powdered ruby worth at least 1,000 gp.)",
+  "components": "В, С, М (несколько капель святой воды, редкие благовония и рубиновый порошок стоимостью не меньше 1 000 зм)",
   "duration": "24 часа",
   "ritual": true,
   "concentration": false,
@@ -3541,13 +3541,13 @@ export const SPELLS: SpellData[] = [
    "cleric"
   ],
   "desc": [
-   "You create a ward against magical travel that protects up to 40,000 square feet of floor space to a height of 30 feet above the floor. For the duration, creatures can't teleport into the area or use portals, such as those created by the gate spell, to enter the area. The spell proofs the area against planar travel, and therefore prevents creatures from accessing the area by way of the Astral Plane, Ethereal Plane, Feywild, Shadowfell, or the plane shift spell.",
-   "In addition, the spell damages types of creatures that you choose when you cast it. Choose one or more of the following: celestials, elementals, fey, fiends, and undead. When a chosen creature enters the spell's area for the first time on a turn or starts its turn there, the creature takes 5d10 radiant or necrotic damage (your choice when you cast this spell).",
-   "When you cast this spell, you can designate a password. A creature that speaks the password as it enters the area takes no damage from the spell.",
-   "The spell's area can't overlap with the area of another forbiddance spell. If you cast forbiddance every day for 30 days in the same location, the spell lasts until it is dispelled, and the material components are consumed on the last casting."
+   "Вы создаёте защиту от магических перемещений, охраняющую до 40 000 квадратных футов площади пола на высоту до 30 футов. Пока действует заклинание, существа не могут телепортироваться в область или входить в неё через порталы, например созданные «Вратами». Заклинание защищает область от межпланарных перемещений и не даёт попасть в неё через Астральный план, Эфирный план, Страну Фей, Царство Теней или заклинанием «Уход в иной мир».",
+   "Кроме того, заклинание причиняет урон существам видов, выбранных при накладывании: одного или нескольких из небожителей, элементалей, фей, исчадий и нежити. Когда выбранное существо впервые за ход входит в область или начинает в ней ход, оно получает 5d10 урона излучением или некротического урона (выбирается при накладывании).",
+   "При накладывании можно задать пароль. Существо, произносящее пароль при входе в область, не получает урона от заклинания.",
+   "Область заклинания не может пересекаться с областью другого «Запрета». Если накладывать «Запрет» каждый день 30 дней подряд на одном месте, он действует, пока его не рассеют, а материальные компоненты расходуются при последнем накладывании."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -3643,7 +3643,7 @@ export const SPELLS: SpellData[] = [
   "school": "Воплощение",
   "castingTime": "1 действие",
   "range": "300 фт (сфера радиусом 60 фт)",
-  "components": "В, С, М (A small crystal sphere.)",
+  "components": "В, С, М (маленькая хрустальная сфера)",
   "duration": "Мгновенная",
   "ritual": false,
   "concentration": false,
@@ -3651,14 +3651,14 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "A frigid globe of cold energy streaks from your fingertips to a point of your choice within range, where it explodes in a 60-foot-radius sphere. Each creature within the area must make a constitution saving throw. On a failed save, a creature takes 10d6 cold damage. On a successful save, it takes half as much damage.",
-   "If the globe strikes a body of water or a liquid that is principally water (not including water-based creatures), it freezes the liquid to a depth of 6 inches over an area 30 feet square. This ice lasts for 1 minute. Creatures that were swimming on the surface of frozen water are trapped in the ice. A trapped creature can use an action to make a Strength check against your spell save DC to break free.",
-   "You can refrain from firing the globe after completing the spell, if you wish. A small globe about the size of a sling stone, cool to the touch, appears in your hand. At any time, you or a creature you give the globe to can throw the globe (to a range of 40 feet) or hurl it with a sling (to the sling's normal range). It shatters on impact, with the same effect as the normal casting of the spell. You can also set the globe down without shattering it. After 1 minute, if the globe hasn't already shattered, it explodes."
+   "Из кончиков ваших пальцев к выбранной вами точке в пределах дистанции летит ледяной шар холодной энергии и взрывается сферой радиусом 60 футов. Каждое существо в области совершает спасбросок Телосложения. При провале существо получает 10d6 урона холодом, при успехе — половину этого урона.",
+   "Если шар попадает в водоём или жидкость, состоящую в основном из воды (кроме водных существ), он замораживает её на глубину 6 дюймов на площади 30 на 30 футов. Лёд держится 1 минуту. Существа, плававшие на поверхности замёрзшей воды, вмерзают в лёд. Вмёрзшее существо может действием совершить проверку Силы против КС ваших заклинаний, чтобы освободиться.",
+   "Закончив накладывание, вы можете не выпускать шар. Тогда в вашей руке появляется маленький шарик размером с камень для пращи, холодный на ощупь. В любой момент вы или существо, которому вы его отдали, можете бросить шарик (на 40 футов) или метнуть пращой (на её обычную дистанцию). При ударе он разбивается с тем же эффектом, что и при обычном накладывании. Шарик можно и положить, не разбив. Через 1 минуту, если он ещё не разбит, он взрывается."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, the damage increases by 1d6 for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, урон увеличивается на 1d6 за каждый круг ячейки выше 6-го."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -3831,7 +3831,7 @@ export const SPELLS: SpellData[] = [
   "school": "Ограждение",
   "castingTime": "1 действие",
   "range": "На себя (сфера радиусом 10 фт)",
-  "components": "В, С, М (A glass or crystal bead that shatters when the spell ends.)",
+  "components": "В, С, М (стеклянная или хрустальная бусина, которая разбивается, когда заклинание заканчивается)",
   "duration": "Концентрация, вплоть до 1 минуты",
   "ritual": false,
   "concentration": true,
@@ -3840,13 +3840,13 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "An immobile, faintly shimmering barrier springs into existence in a 10-foot radius around you and remains for the duration.",
-   "Any spell of 5th level or lower cast from outside the barrier can't affect creatures or objects within it, even if the spell is cast using a higher level spell slot. Such a spell can target creatures and objects within the barrier, but the spell has no effect on them. Similarly, the area within the barrier is excluded from the areas affected by such spells."
+   "Вокруг вас в радиусе 10 футов возникает неподвижный, слегка мерцающий барьер и держится, пока действует заклинание.",
+   "Любое заклинание 5-го круга или ниже, наложенное снаружи барьера, не может затронуть существ и предметы внутри него, даже если наложено ячейкой более высокого круга. Такое заклинание может выбрать целью существ и предметы внутри барьера, но не оказывает на них эффекта. Точно так же область внутри барьера исключается из областей действия таких заклинаний."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, the barrier blocks spells of one level higher for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, за каждый круг ячейки выше 6-го барьер блокирует заклинания на один круг выше."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -4018,7 +4018,7 @@ export const SPELLS: SpellData[] = [
   "school": "Ограждение",
   "castingTime": "10 минут",
   "range": "Касание (куб 2500 фт)",
-  "components": "В, С, М (Burning incense, a small measure of brimstone and oil, a knotted string, a small amount of umber hulk blood, and a small silver rod worth at least 10 gp.)",
+  "components": "В, С, М (горящие благовония, немного серы и масла, верёвка с узлами, немного крови бурого увальня и маленький серебряный жезл стоимостью не меньше 10 зм)",
   "duration": "24 часа",
   "ritual": false,
   "concentration": false,
@@ -4027,23 +4027,23 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "You create a ward that protects up to 2,500 square feet of floor space (an area 50 feet square, or one hundred 5-foot squares or twenty-five 10-foot squares). The warded area can be up to 20 feet tall, and shaped as you desire. You can ward several stories of a stronghold by dividing the area among them, as long as you can walk into each contiguous area while you are casting the spell.",
-   "When you cast this spell, you can specify individuals that are unaffected by any or all of the effects that you choose. You can also specify a password that, when spoken aloud, makes the speaker immune to these effects.",
-   "Guards and wards creates the following effects within the warded area.",
-   "***Corridors.*** Fog fills all the warded corridors, making them heavily obscured. In addition, at each intersection or branching passage offering a choice of direction, there is a 50 percent chance that a creature other than you will believe it is going in the opposite direction from the one it chooses.",
-   "***Doors.*** All doors in the warded area are magically locked, as if sealed by an arcane lock spell. In addition, you can cover up to ten doors with an illusion (equivalent to the illusory object function of the minor illusion spell) to make them appear as plain sections of wall.",
-   "***Stairs.*** Webs fill all stairs in the warded area from top to bottom, as the web spell. These strands regrow in 10 minutes if they are burned or torn away while guards and wards lasts.",
-   "***Other Spell Effect.*** You can place your choice of one of the following magical effects within the warded area of the stronghold.",
-   "- Place dancing lights in four corridors. You can designate a simple program that the lights repeat as long as guards and wards lasts.",
-   "- Place magic mouth in two locations.",
-   "- Place stinking cloud in two locations. The vapors appear in the places you designate; they return within 10 minutes if dispersed by wind while guards and wards lasts.",
-   "- Place a constant gust of wind in one corridor or room.",
-   "- Place a suggestion in one location. You select an area of up to 5 feet square, and any creature that enters or passes through the area receives the suggestion mentally.",
-   "The whole warded area radiates magic. A dispel magic cast on a specific effect, if successful, removes only that effect.",
-   "You can create a permanently guarded and warded structure by casting this spell there every day for one year."
+   "Вы создаёте защиту, охраняющую до 2 500 квадратных футов площади пола (квадрат 50 на 50 футов, сто квадратов 5 на 5 футов или двадцать пять квадратов 10 на 10 футов). Высота охраняемой области — до 20 футов, форма — на ваш выбор. Можно защитить несколько этажей крепости, распределив площадь между ними, если вы можете пройти в каждую смежную область, пока накладываете заклинание.",
+   "При накладывании вы можете указать лиц, на которых не действует любой или все выбранные эффекты. Можно также задать пароль: произнёсший его вслух становится невосприимчив к этим эффектам.",
+   "«Охрана и защита» создаёт в охраняемой области следующие эффекты.",
+   "***Коридоры.*** Все охраняемые коридоры заполняет туман, делая их сильно заслонёнными. Кроме того, на каждом перекрёстке или развилке существо, кроме вас, с шансом 50 процентов считает, что идёт в направлении, противоположном выбранному.",
+   "***Двери.*** Все двери в охраняемой области магически заперты, как «Волшебным замком». Кроме того, до десяти дверей можно скрыть иллюзией (как образом предмета «Малой иллюзии»), чтобы они выглядели обычными участками стены.",
+   "***Лестницы.*** Все лестницы в охраняемой области сверху донизу заполняет паутина, как от заклинания «Паутина». Пока действует «Охрана и защита», сожжённые или разорванные нити отрастают за 10 минут.",
+   "***Иной эффект заклинания.*** Вы можете поместить в охраняемой области крепости один из следующих магических эффектов на ваш выбор.",
+   "- «Пляшущие огоньки» в четырёх коридорах. Можно задать простую программу, которую огоньки повторяют, пока действует «Охрана и защита».",
+   "- «Волшебные уста» в двух местах.",
+   "- «Зловонное облако» в двух местах. Пары появляются в указанных вами местах; если их развеет ветер, они возвращаются в течение 10 минут, пока действует «Охрана и защита».",
+   "- Постоянный «Порыв ветра» в одном коридоре или комнате.",
+   "- «Внушение» в одном месте. Вы выбираете область размером до 5 на 5 футов, и любое существо, входящее в неё или проходящее через неё, мысленно получает внушение.",
+   "Вся охраняемая область излучает магию. Успешное «Рассеивание магии», наложенное на конкретный эффект, снимает только этот эффект.",
+   "Постоянно охраняемое строение можно создать, накладывая на нём это заклинание каждый день в течение года."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -4202,10 +4202,10 @@ export const SPELLS: SpellData[] = [
    "cleric"
   ],
   "desc": [
-   "You unleash a virulent disease on a creature that you can see within range. The target must make a constitution saving throw. On a failed save, it takes 14d6 necrotic damage, or half as much damage on a successful save. The damage can't reduce the target's hit points below 1. If the target fails the saving throw, its hit point maximum is reduced for 1 hour by an amount equal to the necrotic damage it took. Any effect that removes a disease allows a creature's hit point maximum to return to normal before that time passes."
+   "Вы насылаете на видимое вами существо в пределах дистанции жестокую болезнь. Цель совершает спасбросок Телосложения. При провале она получает 14d6 некротического урона, при успехе — половину этого урона. Урон не может опустить хиты цели ниже 1. Если цель провалила спасбросок, её максимум хитов на 1 час уменьшается на величину полученного некротического урона. Любой эффект, излечивающий болезни, возвращает максимум хитов к норме раньше этого срока."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -4251,12 +4251,12 @@ export const SPELLS: SpellData[] = [
    "druid"
   ],
   "desc": [
-   "Choose a creature that you can see within range. A surge of positive energy washes through the creature, causing it to regain 70 hit points. This spell also ends blindness, deafness, and any diseases affecting the target. This spell has no effect on constructs or undead."
+   "Выберите видимое вами существо в пределах дистанции. Волна положительной энергии проходит сквозь него, восстанавливая 70 хитов. Заклинание также оканчивает слепоту, глухоту и любые болезни цели. На конструктов и нежить заклинание не действует."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, the amount of healing increases by 10 for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, лечение увеличивается на 10 за каждый круг ячейки выше 6-го."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -4347,7 +4347,7 @@ export const SPELLS: SpellData[] = [
   "school": "Вызов",
   "castingTime": "10 минут",
   "range": "30 фт",
-  "components": "В, С, М (A gem-encrusted bowl worth at least 1,000gp, which the spell consumes.)",
+  "components": "В, С, М (инкрустированная самоцветами чаша стоимостью не меньше 1 000 зм, которую заклинание расходует)",
   "duration": "Мгновенная",
   "ritual": false,
   "concentration": false,
@@ -4356,11 +4356,11 @@ export const SPELLS: SpellData[] = [
    "druid"
   ],
   "desc": [
-   "You bring forth a great feast, including magnificent food and drink. The feast takes 1 hour to consume and disappears at the end of that time, and the beneficial effects don't set in until this hour is over. Up to twelve other creatures can partake of the feast.",
-   "A creature that partakes of the feast gains several benefits. The creature is cured of all diseases and poison, becomes immune to poison and being frightened, and makes all wisdom saving throws with advantage. Its hit point maximum also increases by 2d10, and it gains the same number of hit points. These benefits last for 24 hours."
+   "Вы создаёте великий пир с превосходной едой и питьём. Пир длится 1 час и исчезает по его окончании, а благотворное действие наступает только после этого часа. Пировать могут до двенадцати других существ.",
+   "Участник пира получает несколько преимуществ. Он излечивается от всех болезней и ядов, становится невосприимчив к яду и испугу и совершает все спасброски Мудрости с преимуществом. Его максимум хитов также увеличивается на 2d10, и он получает столько же хитов. Эти преимущества действуют 24 часа."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -4777,7 +4777,7 @@ export const SPELLS: SpellData[] = [
   "school": "Вызов",
   "castingTime": "1 минута",
   "range": "Касание",
-  "components": "В, С, М (A sapphire worth 1,000 gp.)",
+  "components": "В, С, М (сапфир стоимостью 1 000 зм)",
   "duration": "Пока не рассеется",
   "ritual": true,
   "concentration": false,
@@ -4785,13 +4785,13 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "You touch an object weighing 10 pounds or less whose longest dimension is 6 feet or less. The spell leaves an invisible mark on its surface and invisibly inscribes the name of the item on the sapphire you use as the material component. Each time you cast this spell, you must use a different sapphire.",
-   "At any time thereafter, you can use your action to speak the item's name and crush the sapphire. The item instantly appears in your hand regardless of physical or planar distances, and the spell ends.",
-   "If another creature is holding or carrying the item, crushing the sapphire doesn't transport the item to you, but instead you learn who the creature possessing the object is and roughly where that creature is located at that moment.",
-   "Dispel magic or a similar effect successfully applied to the sapphire ends this spell's effect."
+   "Вы касаетесь предмета весом не больше 10 фунтов и длиной не больше 6 футов. Заклинание оставляет на его поверхности невидимую метку и невидимо вписывает название предмета в сапфир, служащий материальным компонентом. Для каждого накладывания нужен новый сапфир.",
+   "В любой момент после этого вы можете действием произнести название предмета и раздавить сапфир. Предмет мгновенно появляется в вашей руке, каким бы ни было физическое или межпланарное расстояние, и заклинание заканчивается.",
+   "Если предмет держит или несёт другое существо, раздавленный сапфир не переносит предмет к вам, но вы узнаёте, у кого он, и примерно где это существо находится в этот момент.",
+   "Успешное «Рассеивание магии» или подобный эффект, применённый к сапфиру, оканчивает действие заклинания."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -4840,11 +4840,11 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "Choose one creature that you can see within range. The target begins a comic dance in place: shuffling, tapping its feet, and capering for the duration. Creatures that can't be charmed are immune to this spell.",
-   "A dancing creature must use all its movement to dance without leaving its space and has disadvantage on dexterity saving throws and attack rolls. While the target is affected by this spell, other creatures have advantage on attack rolls against it. As an action, a dancing creature makes a wisdom saving throw to regain control of itself. On a successful save, the spell ends."
+   "Выберите одно видимое вами существо в пределах дистанции. Пока действует заклинание, цель исполняет на месте комичный танец: шаркает, притопывает и выделывает коленца. Существа, которых нельзя очаровать, невосприимчивы к этому заклинанию.",
+   "Танцующее существо должно тратить всё перемещение на танец, не покидая своего пространства, и совершает с помехой спасброски Ловкости и броски атаки. Пока цель под действием заклинания, другие существа совершают броски атаки по ней с преимуществом. Действием танцующее существо может совершить спасбросок Мудрости, чтобы вернуть контроль над собой. При успехе заклинание заканчивается."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -5241,7 +5241,7 @@ export const SPELLS: SpellData[] = [
   "school": "Некромантия",
   "castingTime": "1 минута",
   "range": "На себя",
-  "components": "В, С, М (A gem, crystal, reliquary, or some other ornamental container worth at least 500 gp.)",
+  "components": "В, С, М (самоцвет, хрусталь, реликварий или иное декоративное вместилище стоимостью не меньше 500 зм)",
   "duration": "Пока не рассеется",
   "ritual": false,
   "concentration": false,
@@ -5249,16 +5249,16 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "Your body falls into a catatonic state as your soul leaves it and enters the container you used for the spell's material component. While your soul inhabits the container, you are aware of your surroundings as if you were in the container's space. You can't move or use reactions. The only action you can take is to project your soul up to 100 feet out of the container, either returning to your living body (and ending the spell) or attempting to possess a humanoids body.",
-   "You can attempt to possess any humanoid within 100 feet of you that you can see (creatures warded by a protection from evil and good or magic circle spell can't be possessed). The target must make a charisma saving throw. On a failure, your soul moves into the target's body, and the target's soul becomes trapped in the container. On a success, the target resists your efforts to possess it, and you can't attempt to possess it again for 24 hours.",
-   "Once you possess a creature's body, you control it. Your game statistics are replaced by the statistics of the creature, though you retain your alignment and your Intelligence, Wisdom, and Charisma scores. You retain the benefit of your own class features. If the target has any class levels, you can't use any of its class features.",
-   "Meanwhile, the possessed creature's soul can perceive from the container using its own senses, but it can't move or take actions at all.",
-   "While possessing a body, you can use your action to return from the host body to the container if it is within 100 feet of you, returning the host creature's soul to its body. If the host body dies while you're in it, the creature dies, and you must make a charisma saving throw against your own spellcasting DC. On a success, you return to the container if it is within 100 feet of you. Otherwise, you die.",
-   "If the container is destroyed or the spell ends, your soul immediately returns to your body. If your body is more than 100 feet away from you or if your body is dead when you attempt to return to it, you die. If another creature's soul is in the container when it is destroyed, the creature's soul returns to its body if the body is alive and within 100 feet. Otherwise, that creature dies.",
-   "When the spell ends, the container is destroyed."
+   "Ваше тело впадает в оцепенение: душа покидает его и вселяется во вместилище, служащее материальным компонентом. Пока душа во вместилище, вы осознаёте окружающее, как если бы находились в его пространстве. Вы не можете перемещаться и совершать реакции. Единственное доступное действие — выбросить душу из вместилища на расстояние до 100 футов, чтобы вернуться в своё живое тело (окончив заклинание) или попытаться вселиться в тело гуманоида.",
+   "Вы можете попытаться вселиться в любого видимого вами гуманоида в пределах 100 футов (в существ, защищённых «Защитой от добра и зла» или «Магическим кругом», вселиться нельзя). Цель совершает спасбросок Харизмы. При провале ваша душа переходит в тело цели, а душа цели оказывается заточена во вместилище. При успехе цель сопротивляется, и 24 часа вы не можете снова попытаться в неё вселиться.",
+   "Вселившись в тело существа, вы управляете им. Ваши игровые параметры заменяются параметрами существа, но вы сохраняете мировоззрение, Интеллект, Мудрость и Харизму. Вы сохраняете преимущества собственных классовых умений. Если у цели есть уровни класса, вы не можете пользоваться её классовыми умениями.",
+   "Тем временем душа одержимого существа может воспринимать окружающее из вместилища своими чувствами, но не может ни перемещаться, ни совершать действия.",
+   "Находясь в теле, вы можете действием вернуться из него во вместилище, если оно в пределах 100 футов, возвращая душу хозяина в его тело. Если тело хозяина умирает, пока вы в нём, существо умирает, а вы совершаете спасбросок Харизмы против собственного КС заклинаний. При успехе вы возвращаетесь во вместилище, если оно в пределах 100 футов. Иначе вы умираете.",
+   "Если вместилище уничтожено или заклинание заканчивается, ваша душа немедленно возвращается в ваше тело. Если тело дальше 100 футов или мертво, когда вы пытаетесь вернуться, вы умираете. Если во вместилище в момент уничтожения находится душа другого существа, она возвращается в своё тело, если оно живо и в пределах 100 футов. Иначе это существо умирает.",
+   "Когда заклинание заканчивается, вместилище разрушается."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -5480,7 +5480,7 @@ export const SPELLS: SpellData[] = [
   "school": "Очарование",
   "castingTime": "1 действие",
   "range": "60 фт",
-  "components": "В, М (A snake's tongue and either a bit of honeycomb or a drop of sweet oil.)",
+  "components": "В, М (змеиный язык и кусочек сотового мёда или капля сладкого масла)",
   "duration": "24 часа",
   "ritual": false,
   "concentration": false,
@@ -5491,15 +5491,15 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "You suggest a course of activity (limited to a sentence or two) and magically influence up to twelve creatures of your choice that you can see within range and that can hear and understand you. Creatures that can't be charmed are immune to this effect. The suggestion must be worded in such a manner as to make the course of action sound reasonable. Asking the creature to stab itself, throw itself onto a spear, immolate itself, or do some other obviously harmful act automatically negates the effect of the spell.",
-   "Each target must make a wisdom saving throw. On a failed save, it pursues the course of action you described to the best of its ability. The suggested course of action can continue for the entire duration. If the suggested activity can be completed in a shorter time, the spell ends when the subject finishes what it was asked to do.",
-   "You can also specify conditions that will trigger a special activity during the duration. For example, you might suggest that a group of soldiers give all their money to the first beggar they meet. If the condition isn't met before the spell ends, the activity isn't performed.",
-   "If you or any of your companions damage a creature affected by this spell, the spell ends for that creature."
+   "Вы предлагаете образ действий (не длиннее одного-двух предложений) и магически влияете на выбранных вами видимых существ в пределах дистанции, числом до двенадцати, которые слышат и понимают вас. Существа, которых нельзя очаровать, невосприимчивы к этому эффекту. Внушение должно быть сформулировано так, чтобы действие казалось разумным. Если предложить существу заколоть себя, броситься на копьё, сжечь себя или совершить иное очевидно вредное действие, эффект заклинания автоматически отменяется.",
+   "Каждая цель совершает спасбросок Мудрости. При провале она следует описанному образу действий как может. Внушённое действие может продолжаться всё время действия заклинания. Если его можно выполнить быстрее, заклинание заканчивается, когда цель сделает то, о чём её просили.",
+   "Можно также задать условие, при котором цели совершат особое действие во время действия заклинания. Например, внушить отряду солдат отдать все деньги первому встречному нищему. Если условие не выполнится до окончания заклинания, действие не совершается.",
+   "Если вы или ваши спутники причиняете урон затронутому существу, заклинание для него заканчивается."
   ],
   "higher": [
-   "When you cast this spell using a 7th-level spell slot, the duration is 10 days. When you use an 8th-level spell slot, the duration is 30 days. When you use a 9th-level spell slot, the duration is a year and a day."
+   "С ячейкой 7-го круга длительность — 10 дней, с ячейкой 8-го — 30 дней, с ячейкой 9-го — год и один день."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -5859,7 +5859,7 @@ export const SPELLS: SpellData[] = [
   "school": "Преобразование",
   "castingTime": "1 действие",
   "range": "120 фт (конус 40 фт)",
-  "components": "В, С, М (An iron blade and a small bag containing a mixture of soils--clay, loam, and sand.)",
+  "components": "В, С, М (железное лезвие и мешочек со смесью почв — глины, суглинка и песка)",
   "duration": "Концентрация, вплоть до 2 часов",
   "ritual": false,
   "concentration": true,
@@ -5869,14 +5869,14 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "Choose an area of terrain no larger than 40 feet on a side within range. You can reshape dirt, sand, or clay in the area in any manner you choose for the duration. You can raise or lower the area's elevation, create or fill in a trench, erect or flatten a wall, or form a pillar. The extent of any such changes can't exceed half the area's largest dimension. So, if you affect a 40-foot square, you can create a pillar up to 20 feet high, raise or lower the square's elevation by up to 20 feet, dig a trench up to 20 feet deep, and so on. It takes 10 minutes for these changes to complete.",
-   "At the end of every 10 minutes you spend concentrating on the spell, you can choose a new area of terrain to affect.",
-   "Because the terrain's transformation occurs slowly, creatures in the area can't usually be trapped or injured by the ground's movement.",
-   "This spell can't manipulate natural stone or stone construction. Rocks and structures shift to accommodate the new terrain. If the way you shape the terrain would make a structure unstable, it might collapse.",
-   "Similarly, this spell doesn't directly affect plant growth. The moved earth carries any plants along with it."
+   "Выберите в пределах дистанции участок местности со стороной не больше 40 футов. Пока действует заклинание, вы можете как угодно изменять форму земли, песка или глины на этом участке: поднять или опустить его, вырыть или засыпать траншею, возвести или сровнять вал, создать столб. Размах изменений не может превышать половины наибольшего измерения участка. Так, на квадрате 40 на 40 футов можно создать столб высотой до 20 футов, поднять или опустить участок на 20 футов, вырыть траншею глубиной до 20 футов и так далее. Изменения завершаются за 10 минут.",
+   "По окончании каждых 10 минут концентрации на заклинании можно выбрать новый участок местности.",
+   "Поскольку преобразование происходит медленно, существа в области обычно не могут оказаться в ловушке или пострадать от движения земли.",
+   "Заклинание не действует на природный камень и каменные постройки. Камни и строения смещаются, приспосабливаясь к новому рельефу. Если изменения делают постройку неустойчивой, она может обрушиться.",
+   "Точно так же заклинание не влияет напрямую на рост растений: перемещаемая земля переносит растения вместе с собой."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -6018,15 +6018,15 @@ export const SPELLS: SpellData[] = [
    "cleric"
   ],
   "desc": [
-   "You beseech an otherworldly entity for aid. The being must be known to you: a god, a primordial, a demon prince, or some other being of cosmic power. That entity sends a celestial, an elemental, or a fiend loyal to it to aid you, making the creature appear in an unoccupied space within range. If you know a specific creature's name, you can speak that name when you cast this spell to request that creature, though you might get a different creature anyway (GM's choice).",
-   "When the creature appears, it is under no compulsion to behave in any particular way. You can ask the creature to perform a service in exchange for payment, but it isn't obliged to do so. The requested task could range from simple (fly us across the chasm, or help us fight a battle) to complex (spy on our enemies, or protect us during our foray into the dungeon). You must be able to communicate with the creature to bargain for its services.",
-   "Payment can take a variety of forms. A celestial might require a sizable donation of gold or magic items to an allied temple, while a fiend might demand a living sacrifice or a gift of treasure. Some creatures might exchange their service for a quest undertaken by you.",
-   "As a rule of thumb, a task that can be measured in minutes requires a payment worth 100 gp per minute. A task measured in hours requires 1,000 gp per hour. And a task measured in days (up to 10 days) requires 10,000 gp per day. The GM can adjust these payments based on the circumstances under which you cast the spell. If the task is aligned with the creature's ethos, the payment might be halved or even waived. Nonhazardous tasks typically require only half the suggested payment, while especially dangerous tasks might require a greater gift. Creatures rarely accept tasks that seem suicidal.",
-   "After the creature completes the task, or when the agreed-upon duration of service expires, the creature returns to its home plane after reporting back to you, if appropriate to the task and if possible. If you are unable to agree on a price for the creature's service, the creature immediately returns to its home plane.",
-   "A creature enlisted to join your group counts as a member of it, receiving a full share of experience points awarded."
+   "Вы молите потустороннюю сущность о помощи. Она должна быть вам известна: бог, изначальный, принц демонов или иное существо космической мощи. Сущность посылает вам на помощь верного ей небожителя, элементаля или исчадие, и оно появляется в свободном пространстве в пределах дистанции. Если вы знаете имя конкретного существа, можно произнести его при накладывании, чтобы попросить именно его, но может явиться и другое (на усмотрение Мастера).",
+   "Явившееся существо не обязано вести себя каким-то определённым образом. Вы можете попросить его о службе за плату, но оно не обязано соглашаться. Задача может быть простой («перенеси нас через пропасть», «помоги в битве») или сложной («шпионь за врагами», «защищай нас в подземелье»). Чтобы торговаться о службе, вы должны иметь возможность общаться с существом.",
+   "Плата бывает разной. Небожитель может потребовать крупного пожертвования золотом или магическими предметами союзному храму, а исчадие — живой жертвы или дара сокровищами. Некоторые существа согласятся служить в обмен на задание, которое выполните вы.",
+   "Ориентировочно задача, измеряемая минутами, стоит 100 зм за минуту; задача, измеряемая часами, — 1 000 зм за час; задача, измеряемая днями (до 10 дней), — 10 000 зм за день. Мастер может менять плату в зависимости от обстоятельств. Если задача соответствует убеждениям существа, плата может быть уменьшена вдвое или вовсе отменена. Безопасные задачи обычно стоят половину, а особо опасные могут потребовать большего дара. На явно самоубийственные задачи существа соглашаются редко.",
+   "Выполнив задачу или по истечении оговорённого срока службы, существо, если это уместно и возможно, докладывает вам и возвращается на свой родной план. Если о цене договориться не удалось, существо сразу возвращается на родной план.",
+   "Существо, присоединившееся к вашей группе, считается её участником и получает полную долю опыта."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -6416,7 +6416,7 @@ export const SPELLS: SpellData[] = [
   "school": "Иллюзия",
   "castingTime": "1 действие",
   "range": "120 фт (куб 30 фт)",
-  "components": "В, С, М (A bit of fleece and jade dust worth at least 25 gp.)",
+  "components": "В, С, М (клочок овечьей шерсти и нефритовая пыль стоимостью не меньше 25 зм)",
   "duration": "Пока не рассеется",
   "ritual": false,
   "concentration": false,
@@ -6425,13 +6425,13 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "You create an illusion of an object, a creature, or some other visible phenomenon within range that activates when a specific condition occurs. The illusion is imperceptible until then. It must be no larger than a 30-foot cube, and you decide when you cast the spell how the illusion behaves and what sounds it makes. This scripted performance can last up to 5 minutes.",
-   "When the condition you specify occurs, the illusion springs into existence and performs in the manner you described. Once the illusion finishes performing, it disappears and remains dormant for 10 minutes. After this time, the illusion can be activated again.",
-   "The triggering condition can be as general or as detailed as you like, though it must be based on visual or audible conditions that occur within 30 feet of the area. For example, you could create an illusion of yourself to appear and warn off others who attempt to open a trapped door, or you could set the illusion to trigger only when a creature says the correct word or phrase.",
-   "Physical interaction with the image reveals it to be an illusion, because things can pass through it. A creature that uses its action to examine the image can determine that it is an illusion with a successful Intelligence (Investigation) check against your spell save DC. If a creature discerns the illusion for what it is, the creature can see through the image, and any noise it makes sounds hollow to the creature."
+   "Вы создаёте в пределах дистанции иллюзию предмета, существа или иного видимого явления, которая срабатывает при определённом условии. До тех пор иллюзию невозможно заметить. Она должна умещаться в кубе с ребром 30 футов; при накладывании вы решаете, как она будет себя вести и какие звуки издавать. Это представление может длиться до 5 минут.",
+   "Когда заданное условие выполняется, иллюзия появляется и разыгрывает описанное представление. Закончив, она исчезает и бездействует 10 минут, после чего может сработать снова.",
+   "Условие может быть сколь угодно общим или подробным, но должно основываться на видимых или слышимых явлениях в пределах 30 футов от области. Например, можно создать иллюзию самого себя, которая появится и предупредит тех, кто пытается открыть дверь с ловушкой, или настроить иллюзию срабатывать, только когда существо произнесёт нужное слово или фразу.",
+   "Физическое взаимодействие с образом выдаёт иллюзию, потому что предметы проходят сквозь него. Существо, потратившее действие на изучение образа, может понять, что это иллюзия, преуспев в проверке Интеллекта (Анализ) против КС ваших заклинаний. Распознавшее иллюзию существо видит сквозь образ, а все звуки иллюзии кажутся ему пустыми."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -7808,7 +7808,7 @@ export const SPELLS: SpellData[] = [
   "school": "Воплощение",
   "castingTime": "1 действие",
   "range": "На себя (линия 60 фт)",
-  "components": "В, С, М (A magnifying glass.)",
+  "components": "В, С, М (увеличительное стекло)",
   "duration": "Концентрация, вплоть до 1 минуты",
   "ritual": false,
   "concentration": true,
@@ -7818,12 +7818,12 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "A beam of brilliant light flashes out from your hand in a 5-foot-wide, 60-foot-long line. Each creature in the line must make a constitution saving throw. On a failed save, a creature takes 6d8 radiant damage and is blinded until your next turn. On a successful save, it takes half as much damage and isn't blinded by this spell. Undead and oozes have disadvantage on this saving throw.",
-   "You can create a new line of radiance as your action on any turn until the spell ends.",
-   "For the duration, a mote of brilliant radiance shines in your hand. It sheds bright light in a 30-foot radius and dim light for an additional 30 feet. This light is sunlight."
+   "Из вашей руки вырывается луч ослепительного света — линия шириной 5 футов и длиной 60 футов. Каждое существо в линии совершает спасбросок Телосложения. При провале существо получает 6d8 урона излучением и ослеплено до вашего следующего хода. При успехе — половину урона и не ослеплено. Нежить и слизи совершают этот спасбросок с помехой.",
+   "До окончания заклинания в любой свой ход вы можете действием создать новую линию сияния.",
+   "Пока действует заклинание, в вашей руке сияет искра ослепительного света. Она испускает яркий свет в радиусе 30 футов и тусклый свет ещё на 30 футов. Этот свет считается солнечным."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -8170,10 +8170,10 @@ export const SPELLS: SpellData[] = [
    "druid"
   ],
   "desc": [
-   "This spell creates a magical link between a Large or larger inanimate plant within range and another plant, at any distance, on the same plane of existence. You must have seen or touched the destination plant at least once before. For the duration, any creature can step into the target plant and exit from the destination plant by using 5 feet of movement."
+   "Заклинание создаёт магическую связь между неодушевлённым растением размером Большой или больше в пределах дистанции и другим растением на любом расстоянии на том же плане бытия. Растение назначения вы должны были хотя бы раз видеть или касаться. Пока действует заклинание, любое существо может, потратив 5 футов перемещения, войти в растение-цель и выйти из растения назначения."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -8269,7 +8269,7 @@ export const SPELLS: SpellData[] = [
   "school": "Прорицание",
   "castingTime": "1 действие",
   "range": "Касание",
-  "components": "В, С, М (An ointment for the eyes that costs 25gp; is made from mushroom powder, saffron, and fat; and is consumed by the spell.)",
+  "components": "В, С, М (мазь для глаз стоимостью 25 зм из грибного порошка, шафрана и жира, которую заклинание расходует)",
   "duration": "1 час",
   "ritual": false,
   "concentration": false,
@@ -8281,10 +8281,10 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "This spell gives the willing creature you touch the ability to see things as they actually are. For the duration, the creature has truesight, notices secret doors hidden by magic, and can see into the Ethereal Plane, all out to a range of 120 feet."
+   "Заклинание даёт согласному существу, которого вы касаетесь, способность видеть вещи такими, какие они есть. Пока действует заклинание, существо обладает истинным зрением, замечает потайные двери, скрытые магией, и видит Эфирный план — всё в пределах 120 футов."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -8452,7 +8452,7 @@ export const SPELLS: SpellData[] = [
   "school": "Воплощение",
   "castingTime": "1 действие",
   "range": "120 фт (сфера радиусом 10 фт)",
-  "components": "В, С, М (A small piece of quartz.)",
+  "components": "В, С, М (маленький кусочек кварца)",
   "duration": "Концентрация, вплоть до 10 минут",
   "ritual": false,
   "concentration": true,
@@ -8460,14 +8460,14 @@ export const SPELLS: SpellData[] = [
    "wizard"
   ],
   "desc": [
-   "You create a wall of ice on a solid surface within range. You can form it into a hemispherical dome or a sphere with a radius of up to 10 feet, or you can shape a flat surface made up of ten 10-foot-square panels. Each panel must be contiguous with another panel. In any form, the wall is 1 foot thick and lasts for the duration.",
-   "If the wall cuts through a creature's space when it appears, the creature within its area is pushed to one side of the wall and must make a dexterity saving throw. On a failed save, the creature takes 10d6 cold damage, or half as much damage on a successful save.",
-   "The wall is an object that can be damaged and thus breached. It has AC 12 and 30 hit points per 10-foot section, and it is vulnerable to fire damage. Reducing a 10-foot section of wall to 0 hit points destroys it and leaves behind a sheet of frigid air in the space the wall occupied. A creature moving through the sheet of frigid air for the first time on a turn must make a constitution saving throw. That creature takes 5d6 cold damage on a failed save, or half as much damage on a successful one."
+   "Вы создаёте стену льда на твёрдой поверхности в пределах дистанции. Ей можно придать форму полусферического купола или сферы радиусом до 10 футов либо плоской поверхности из десяти панелей 10 на 10 футов; каждая панель должна примыкать к другой. В любой форме толщина стены 1 фут; она держится, пока действует заклинание.",
+   "Если при появлении стена проходит через пространство существа, оно выталкивается на одну из сторон стены и совершает спасбросок Ловкости. При провале существо получает 10d6 урона холодом, при успехе — половину этого урона.",
+   "Стена — предмет, который можно повредить и пробить. У каждой секции длиной 10 футов КД 12 и 30 хитов, и она уязвима к урону огнём. Секция с 0 хитов разрушается, оставляя на своём месте завесу ледяного воздуха. Существо, впервые за ход проходящее сквозь завесу, совершает спасбросок Телосложения. При провале оно получает 5d6 урона холодом, при успехе — половину этого урона."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, the damage the wall deals when it appears increases by 2d6, and the damage from passing through the sheet of frigid air increases by 1d6, for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, за каждый круг ячейки выше 6-го урон при появлении стены увеличивается на 2d6, а урон от прохода сквозь завесу ледяного воздуха — на 1d6."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -8509,7 +8509,7 @@ export const SPELLS: SpellData[] = [
   "school": "Вызов",
   "castingTime": "1 действие",
   "range": "120 фт (линия 60 фт)",
-  "components": "В, С, М (A handful of thorns.)",
+  "components": "В, С, М (горсть шипов)",
   "duration": "Концентрация, вплоть до 10 минут",
   "ritual": false,
   "concentration": true,
@@ -8517,14 +8517,14 @@ export const SPELLS: SpellData[] = [
    "druid"
   ],
   "desc": [
-   "You create a wall of tough, pliable, tangled brush bristling with needle-sharp thorns. The wall appears within range on a solid surface and lasts for the duration. You choose to make the wall up to 60 feet long, 10 feet high, and 5 feet thick or a circle that has a 20-foot diameter and is up to 20 feet high and 5 feet thick. The wall blocks line of sight.",
-   "When the wall appears, each creature within its area must make a dexterity saving throw. On a failed save, a creature takes 7d8 piercing damage, or half as much damage on a successful save.",
-   "A creature can move through the wall, albeit slowly and painfully. For every 1 foot a creature moves through the wall, it must spend 4 feet of movement. Furthermore, the first time a creature enters the wall on a turn or ends its turn there, the creature must make a dexterity saving throw. It takes 7d8 slashing damage on a failed save, or half as much damage on a successful one."
+   "Вы создаёте стену из жёсткого, гибкого, спутанного кустарника, ощетинившегося иглами-шипами. Стена появляется на твёрдой поверхности в пределах дистанции и держится, пока действует заклинание. Это может быть стена длиной до 60 футов, высотой 10 футов и толщиной 5 футов или кольцо диаметром 20 футов, высотой до 20 футов и толщиной 5 футов. Стена перекрывает обзор.",
+   "Когда стена появляется, каждое существо в её области совершает спасбросок Ловкости. При провале существо получает 7d8 колющего урона, при успехе — половину этого урона.",
+   "Сквозь стену можно пройти, хоть медленно и мучительно: на каждый фут перемещения сквозь стену тратится 4 фута. Кроме того, когда существо впервые за ход входит в стену или заканчивает в ней ход, оно совершает спасбросок Ловкости. При провале оно получает 7d8 рубящего урона, при успехе — половину этого урона."
   ],
   "higher": [
-   "When you cast this spell using a spell slot of 7th level or higher, both types of damage increase by 1d8 for each slot level above 6th."
+   "Если вы накладываете это заклинание с помощью ячейки 7-го круга или выше, оба вида урона увеличиваются на 1d8 за каждый круг ячейки выше 6-го."
   ],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -8691,7 +8691,7 @@ export const SPELLS: SpellData[] = [
   "school": "Преобразование",
   "castingTime": "1 минута",
   "range": "30 фт",
-  "components": "В, С, М (Fire and holy water.)",
+  "components": "В, С, М (огонь и святая вода)",
   "duration": "8 часов",
   "ritual": false,
   "concentration": false,
@@ -8699,11 +8699,11 @@ export const SPELLS: SpellData[] = [
    "druid"
   ],
   "desc": [
-   "You and up to ten willing creatures you can see within range assume a gaseous form for the duration, appearing as wisps of cloud. While in this cloud form, a creature has a flying speed of 300 feet and has resistance to damage from nonmagical weapons. The only actions a creature can take in this form are the Dash action or to revert to its normal form. Reverting takes 1 minute, during which time a creature is incapacitated and can't move. Until the spell ends, a creature can revert to cloud form, which also requires the 1-minute transformation.",
-   "If a creature is in cloud form and flying when the effect ends, the creature descends 60 feet per round for 1 minute until it lands, which it does safely. If it can't land after 1 minute, the creature falls the remaining distance."
+   "Вы и до десяти согласных видимых вами существ в пределах дистанции принимаете газообразную форму на время действия заклинания, выглядя как клочья облаков. В облачной форме существо обладает скоростью полёта 300 футов и сопротивлением урону от немагического оружия. Единственные действия, доступные в этой форме, — «Рывок» и возвращение в обычный облик. Возвращение занимает 1 минуту, в течение которой существо недееспособно и не может перемещаться. До окончания заклинания существо может снова принять облачную форму, на что тоже уходит 1 минута.",
+   "Если существо в облачной форме летит, когда эффект заканчивается, оно 1 минуту опускается со скоростью 60 футов за раунд, пока благополучно не приземлится. Если за 1 минуту приземлиться не удалось, оно падает с оставшейся высоты."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
@@ -8782,11 +8782,11 @@ export const SPELLS: SpellData[] = [
    "cleric"
   ],
   "desc": [
-   "You and up to five willing creatures within 5 feet of you instantly teleport to a previously designated sanctuary. You and any creatures that teleport with you appear in the nearest unoccupied space to the spot you designated when you prepared your sanctuary (see below). If you cast this spell without first preparing a sanctuary, the spell has no effect.",
-   "You must designate a sanctuary by casting this spell within a location, such as a temple, dedicated to or strongly linked to your deity. If you attempt to cast the spell in this manner in an area that isn't dedicated to your deity, the spell has no effect."
+   "Вы и до пяти согласных существ в пределах 5 футов от вас мгновенно телепортируетесь в заранее назначенное святилище. Вы и все телепортировавшиеся с вами появляетесь в ближайшем свободном пространстве к месту, которое вы указали, готовя святилище (см. ниже). Если накладывать заклинание, не подготовив святилище, оно не действует.",
+   "Чтобы назначить святилище, нужно наложить это заклинание в месте, посвящённом вашему божеству или тесно с ним связанном, например в храме. Если попытаться сделать это в месте, не посвящённом вашему божеству, заклинание не действует."
   ],
   "higher": [],
-  "translated": false,
+  "translated": true,
   "source": "srd",
   "sourceNote": "SRD 5.1"
  },
