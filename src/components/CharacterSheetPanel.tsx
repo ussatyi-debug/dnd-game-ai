@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { LUCKY_ID, type CharacterSheet, type Recovery, type ResourcePool, type RestKind } from "../lib/engine";
+import {
+  LUCKY_ID,
+  PACT_SLOTS_ID,
+  type CharacterSheet,
+  type Recovery,
+  type ResourcePool,
+  type RestKind,
+  type SpellbookView,
+} from "../lib/engine";
+import SpellbookPanel from "./SpellbookPanel";
 
 const recoveryLabel: Record<Recovery, string> = {
   short_rest: "короткий отдых",
@@ -28,14 +37,31 @@ function Pips({ pool, large = false }: { pool: ResourcePool; large?: boolean }) 
 
 interface CharacterSheetPanelProps {
   sheet: CharacterSheet | null;
+  /** Книга заклинаний активного персонажа; `null` — не колдует. */
+  book: SpellbookView | null;
   busy: boolean;
   onRest: (kind: RestKind) => void;
+  onSpellsChanged: () => void;
+  onEngineNote: (text: string) => void;
 }
 
-type Tab = "main" | "resources";
+type Tab = "main" | "resources" | "spells";
 
-export default function CharacterSheetPanel({ sheet, busy, onRest }: CharacterSheetPanelProps) {
+/** Ячейки заклинаний показываются во вкладке «Заклинания», а не среди ресурсов. */
+function isSlot(r: ResourcePool): boolean {
+  return r.id === PACT_SLOTS_ID || r.id.startsWith("slots.");
+}
+
+export default function CharacterSheetPanel({
+  sheet,
+  book,
+  busy,
+  onRest,
+  onSpellsChanged,
+  onEngineNote,
+}: CharacterSheetPanelProps) {
   const [tab, setTab] = useState<Tab>("main");
+  const activeTab: Tab = tab === "spells" && !book ? "main" : tab;
 
   if (!sheet) {
     return (
@@ -46,7 +72,8 @@ export default function CharacterSheetPanel({ sheet, busy, onRest }: CharacterSh
   }
 
   const lucky = sheet.resources.find((r) => r.id === LUCKY_ID);
-  const others = sheet.resources.filter((r) => r.id !== LUCKY_ID);
+  const others = sheet.resources.filter((r) => r.id !== LUCKY_ID && !isSlot(r));
+  const freeSlots = book?.slots.reduce((sum, s) => sum + s.pool.current, 0) ?? 0;
   const hp = sheet.hit_points;
   const hpPercent = hp.max > 0 ? Math.round((hp.current / hp.max) * 100) : 0;
 
@@ -73,25 +100,29 @@ export default function CharacterSheetPanel({ sheet, busy, onRest }: CharacterSh
           [
             ["main", "Основное"],
             ["resources", "Ресурсы"],
+            ...(book ? ([["spells", "Заклинания"]] as const) : []),
           ] as const
         ).map(([id, label]) => (
           <button
             key={id}
             type="button"
             role="tab"
-            aria-selected={tab === id}
+            aria-selected={activeTab === id}
             onClick={() => setTab(id)}
             className={`rounded-md px-3 py-1.5 text-sm ${
-              tab === id ? "bg-gold text-ink" : "text-muted hover:text-parchment"
+              activeTab === id ? "bg-gold text-ink" : "text-muted hover:text-parchment"
             }`}
           >
             {label}
             {id === "resources" && lucky ? ` ◆${lucky.current}` : ""}
+            {id === "spells" && book && book.slots.length > 0 ? ` ✦${freeSlots}` : ""}
           </button>
         ))}
       </div>
 
-      {tab === "main" ? (
+      {activeTab === "spells" && book ? (
+        <SpellbookPanel book={book} onChanged={onSpellsChanged} onNote={onEngineNote} />
+      ) : activeTab === "main" ? (
       <div className="space-y-4 p-4">
         <div>
           <div className="flex items-baseline justify-between text-sm">

@@ -19,9 +19,13 @@ import {
   isEngineAvailable,
   isWebBuild,
   LUCKY_ID,
+  masterApply,
   masterContext,
   partyView,
+  spellbook,
   takeRest,
+  type MasterAction,
+  type SpellbookView,
   type AiSettingsView,
   type CharacterSheet,
   type ModelInfo,
@@ -95,6 +99,7 @@ export default function App() {
   const [party, setParty] = useState<PartyView | null>(null);
   const [activeId, setActiveId] = useState(PLAYER_ID);
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
+  const [book, setBook] = useState<SpellbookView | null>(null);
   const [playerSheet, setPlayerSheet] = useState<CharacterSheet | null>(null);
   const [rolls, setRolls] = useState<TrayRoll[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>(
@@ -130,6 +135,26 @@ export default function App() {
       .then(setSheet)
       .catch((e: unknown) => addMessage("system", `Не удалось загрузить лист: ${errorText(e)}`));
   }, [engineAvailable, activeId, party, addMessage]);
+
+  useEffect(() => {
+    if (!engineAvailable) return;
+    let cancelled = false;
+    // Ошибка «не владеет магией» — нормальный случай: у персонажа просто нет вкладки заклинаний.
+    spellbook(activeId)
+      .then((next) => !cancelled && setBook(next))
+      .catch(() => !cancelled && setBook(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [engineAvailable, activeId, party]);
+
+  const engineNotes = useCallback(
+    (actions: MasterAction[]) => {
+      for (const a of actions) addMessage("engine", a.ok ? a.summary : `Отказ: ${a.summary}`);
+      if (actions.length > 0) refresh().catch(() => undefined);
+    },
+    [addMessage, refresh],
+  );
 
   useEffect(() => {
     if (aiAvailable) return;
@@ -182,7 +207,7 @@ export default function App() {
 
   function historyWith(playerMessage: ChatMessage) {
     return [...messages, playerMessage]
-      .filter((m) => m.author !== "system")
+      .filter((m) => m.author === "player" || m.author === "master")
       .map((m) => ({ role: m.author === "player" ? ("player" as const) : ("master" as const), text: m.text }));
   }
 
@@ -203,7 +228,9 @@ export default function App() {
     setThinking(true);
     aiChat(historyWith(playerMessage))
       .then((reply) => {
-        if (!controller.signal.aborted) addMessage("master", reply.text, reply.model);
+        if (controller.signal.aborted) return;
+        addMessage("master", reply.text, reply.model);
+        engineNotes(reply.actions);
       })
       .catch((e: unknown) => {
         if (!controller.signal.aborted) addMessage("system", errorText(e));
@@ -227,7 +254,12 @@ export default function App() {
     setThinking(true);
     masterContext()
       .then((system) => claudeMasterReply(fn, system, historyWith(playerMessage), tier, show, controller.signal))
-      .then((text) => show(text))
+      // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
+      .then((text) => masterApply(text))
+      .then((turn) => {
+        show(turn.text);
+        engineNotes(turn.actions);
+      })
       .catch((e: unknown) => {
         const partial = typeof e === "object" && e !== null && "text" in e ? (e as { text?: string }).text : undefined;
         if (partial) show(`${partial}\n\n(ответ прерван)`);
@@ -330,7 +362,16 @@ export default function App() {
         </div>
 
         <div className={`${shown("character")} min-h-0 flex-col lg:flex`}>
-          <CharacterSheetPanel sheet={sheet} busy={busy || !engineAvailable} onRest={rest} />
+          <CharacterSheetPanel
+            sheet={sheet}
+            book={book}
+            busy={busy || !engineAvailable}
+            onRest={rest}
+            onSpellsChanged={() => {
+              refresh().catch((e: unknown) => addMessage("system", errorText(e)));
+            }}
+            onEngineNote={(text) => addMessage("engine", text)}
+          />
         </div>
       </main>
 

@@ -1,8 +1,11 @@
 import { useEffect, useRef, type FormEvent, type ReactNode } from "react";
+import { stripEngineBlocks } from "../lib/engine";
 
 export interface ChatMessage {
   id: number;
-  author: "player" | "master" | "system";
+  /** `engine` — итог действия движка (заклинание, ячейка): в историю мастера не идёт,
+   *  мастер видит его в журнале движка. */
+  author: "player" | "master" | "system" | "engine";
   text: string;
   time: string;
   /** Модель, давшая ответ мастера. */
@@ -130,12 +133,21 @@ export default function ChatPanel({
             )}
             {m.author === "master" && (
               <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-edge bg-ink px-4 py-3">
-                <MasterText text={m.text} />
+                <MasterText text={stripEngineBlocks(m.text)} />
                 <div className="mt-1 flex justify-between gap-2 text-[10px] text-muted">
                   <span>{m.model ?? "Мастер"}</span>
                   <time>{m.time}</time>
                 </div>
               </div>
+            )}
+            {m.author === "engine" && (
+              <p
+                className={`max-w-[90%] rounded-lg border px-3 py-1.5 text-sm ${
+                  m.text.startsWith("Отказ") ? "border-fumble/60 text-fumble" : "border-arcane/50 text-arcane"
+                }`}
+              >
+                ⚙ {m.text}
+              </p>
             )}
             {m.author === "system" && (
               <p className="max-w-[90%] rounded-lg border border-edge px-3 py-2 text-center text-sm text-muted">

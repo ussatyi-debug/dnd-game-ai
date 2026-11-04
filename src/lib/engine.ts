@@ -165,6 +165,9 @@ export function formatGold(copper: number): string {
 /** ID ресурса черты «Везунчик» (совпадает с движком). */
 export const LUCKY_ID = "feat.lucky";
 
+/** ID пула ячеек договора колдуна (совпадает с движком). */
+export const PACT_SLOTS_ID = "pact.slots";
+
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -239,6 +242,159 @@ export function takeRest(kind: RestKind): Promise<RestResult> {
   return call<RestResult>("take_rest", { kind });
 }
 
+// Книга заклинаний. Проверки правил — в движке; интерфейс только показывает и вызывает.
+
+export type SpellClass = "bard" | "cleric" | "druid" | "paladin" | "ranger" | "sorcerer" | "warlock" | "wizard";
+export type Preparation = "known" | "prepared" | "spellbook";
+export type Progression = "full" | "half" | "third" | "pact";
+export type CastMethod = "cantrip" | "slot" | "pact" | "ritual" | "granted" | "scroll";
+export type SlotRef = "pact" | { level: number };
+
+export interface SpellEntry {
+  id: string;
+  name: string;
+  level: number;
+  ritual: boolean;
+  concentration: boolean;
+  ready: boolean;
+  always: boolean;
+  tag: string | null;
+}
+
+export interface SlotView {
+  level: number;
+  pact: boolean;
+  pool: ResourcePool;
+}
+
+export interface CasterView {
+  id: string;
+  label: string;
+  class: SpellClass;
+  ability: string;
+  ability_label: string;
+  save_dc: number;
+  attack_bonus: number;
+  item_bonus_source: string | null;
+  preparation: Preparation;
+  progression: Progression;
+  max_spell_level: number;
+  cantrips: SpellEntry[];
+  max_cantrips: number;
+  spells: SpellEntry[];
+  known_count: number | null;
+  max_known: number | null;
+  prepared_count: number | null;
+  prepared_limit: number | null;
+  over_limit: boolean;
+  spellbook: SpellEntry[];
+}
+
+export interface GrantedView {
+  spell: SpellEntry;
+  source: string;
+  cast_level: number;
+  uses: ResourcePool | null;
+}
+
+export interface ScrollView {
+  spell: SpellEntry;
+  level: number;
+  count: number;
+  usable: boolean;
+  check_dc: number | null;
+}
+
+export interface RestorerView {
+  label: string;
+  max_level: number;
+  pact_only: boolean;
+  uses: ResourcePool;
+}
+
+export interface SpellbookView {
+  character_id: string;
+  can_prepare: boolean;
+  slots: SlotView[];
+  casters: CasterView[];
+  granted: GrantedView[];
+  scrolls: ScrollView[];
+  restorers: RestorerView[];
+}
+
+export interface CastOutcome {
+  character_id: string;
+  character_name: string;
+  spell_id: string;
+  spell_name: string;
+  spell_level: number;
+  cast_level: number;
+  method: CastMethod;
+  spent: ResourcePool | null;
+  scrolls_left: number | null;
+  check_dc: number | null;
+  concentration: boolean;
+  save_dc: number | null;
+  attack_bonus: number | null;
+  summary: string;
+}
+
+export interface SlotRestoreOutcome {
+  slot: ResourcePool;
+  item: ResourcePool;
+  summary: string;
+}
+
+export interface MasterAction {
+  ok: boolean;
+  summary: string;
+}
+
+export interface MasterTurn {
+  text: string;
+  actions: MasterAction[];
+}
+
+export function spellbook(id: string): Promise<SpellbookView> {
+  return call<SpellbookView>("spellbook", { id });
+}
+
+export function preparationOptions(id: string, casterId: string): Promise<SpellEntry[]> {
+  return call<SpellEntry[]>("preparation_options", { id, casterId });
+}
+
+export function prepareSpells(id: string, casterId: string, spells: string[]): Promise<SpellbookView> {
+  return call<SpellbookView>("prepare_spells", { id, casterId, spells });
+}
+
+export function castSpell(
+  id: string,
+  spellId: string,
+  method: CastMethod | null,
+  slotLevel: number | null,
+): Promise<CastOutcome> {
+  return call<CastOutcome>("cast_spell", { id, spellId, method, slotLevel });
+}
+
+/** Ручная трата (`spend = true`) или возврат ячейки. */
+export function changeSlot(id: string, slot: SlotRef, spend: boolean): Promise<SpellbookView> {
+  return call<SpellbookView>("change_slot", { id, slot, spend });
+}
+
+export function restoreSlot(id: string, itemId: string, slot: SlotRef): Promise<SlotRestoreOutcome> {
+  return call<SlotRestoreOutcome>("restore_slot", { id, itemId, slot });
+}
+
+/** Выполняет команды движка из ответа мастера (веб-версия; в приложении — на стороне Rust). */
+export function masterApply(text: string): Promise<MasterTurn> {
+  return call<MasterTurn>("master_apply", { text });
+}
+
+/** Текст ответа мастера без блоков команд движка (в т.ч. незакрытого, пока ответ печатается). */
+export function stripEngineBlocks(text: string): string {
+  return text.replace(/```engine[\s\S]*?(```|$)/g, "").trim();
+}
+
 // ИИ-мастер работает только в приложении: запросы к провайдерам и ключи — на стороне Rust.
 
 export type Provider = "gemini";
@@ -263,6 +419,7 @@ export interface MasterReply {
   text: string;
   provider: Provider;
   model: string;
+  actions: MasterAction[];
 }
 
 /** Доступен ли ИИ-мастер (только в приложении). */

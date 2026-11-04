@@ -103,15 +103,17 @@ jobs:
       - name: Сборка страницы
         run: npm run build:web
       - name: Публикация в ветку web-preview
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # main → web-preview; ветка фичи → web-preview-<ветка> (просмотр до слияния).
+          if [ "$GITHUB_REF_NAME" = "main" ]; then target=web-preview; else target="web-preview-${GITHUB_REF_NAME//\//-}"; fi
           du -sh dist-web
           cd dist-web
           touch .nojekyll
-          git init -q -b web-preview
+          git init -q -b "$target"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -119,8 +121,8 @@ jobs:
           remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           # GitHub иногда отвечает 500 на push — повторяем с паузой.
           for attempt in 1 2 3 4 5; do
-            if out=$(git push -f "$remote" web-preview 2>&1); then
-              echo "Опубликовано в web-preview (попытка $attempt)"
+            if out=$(git push -f "$remote" "$target" 2>&1); then
+              echo "Опубликовано в $target (попытка $attempt)"
               exit 0
             fi
             echo "Попытка $attempt не удалась: $out"
