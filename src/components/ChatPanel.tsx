@@ -1,4 +1,4 @@
-import { useEffect, useRef, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { stripEngineBlocks } from "../lib/engine";
 
 export interface ChatMessage {
@@ -68,11 +68,56 @@ export default function ChatPanel({
   onOpenDice,
 }: ChatPanelProps) {
   const listRef = useRef<HTMLOListElement>(null);
+  const [showJump, setShowJump] = useState(false);
+  const lastId = messages.at(-1)?.id;
+  const lastAuthor = messages.at(-1)?.author;
+  const seenLast = useRef<number | undefined>(undefined);
 
+  /** Элемент последнего сообщения в ленте. */
+  const lastElement = useCallback((): HTMLElement | null => {
+    const list = listRef.current;
+    if (!list || lastId === undefined) return null;
+    return list.querySelector<HTMLElement>(`[data-message-id="${lastId}"]`);
+  }, [lastId]);
+
+  /** Кнопка «к последнему сообщению» — если его начало дальше полутора экранов. */
+  const updateJump = useCallback(() => {
+    const list = listRef.current;
+    const last = lastElement();
+    if (!list || !last) {
+      setShowJump(false);
+      return;
+    }
+    const distance = last.offsetTop - list.scrollTop;
+    setShowJump(Math.abs(distance) > list.clientHeight * 1.5);
+  }, [lastElement]);
+
+  const jumpToLast = useCallback(() => {
+    const list = listRef.current;
+    const last = lastElement();
+    if (list && last) list.scrollTo({ top: Math.max(0, last.offsetTop - 8), behavior: "smooth" });
+  }, [lastElement]);
+
+  // Лента не прилипает к концу ответа: она прокручивается один раз — когда игрок
+  // отправил заявку (к его сообщению) и когда начался ответ мастера (к началу ответа),
+  // и только если игрок в этот момент не читает старые сообщения выше.
   useEffect(() => {
     const list = listRef.current;
-    if (list) list.scrollTop = list.scrollHeight;
-  }, [messages, thinking]);
+    if (!list || lastId === undefined || seenLast.current === lastId) {
+      updateJump();
+      return;
+    }
+    const firstRender = seenLast.current === undefined;
+    seenLast.current = lastId;
+    const last = lastElement();
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < list.clientHeight;
+    if (firstRender || lastAuthor === "player") {
+      list.scrollTop = list.scrollHeight;
+    } else if (last && nearBottom) {
+      list.scrollTo({ top: Math.max(0, last.offsetTop - 8), behavior: "smooth" });
+    }
+    updateJump();
+  }, [lastId, lastAuthor, messages, lastElement, updateJump]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -117,10 +162,12 @@ export default function ChatPanel({
         </div>
       </header>
 
-      <ol ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <ol ref={listRef} onScroll={updateJump} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {messages.map((m) => (
           <li
             key={m.id}
+            data-message-id={m.id}
             className={
               m.author === "player" ? "flex justify-end" : m.author === "master" ? "flex" : "flex justify-center"
             }
@@ -169,6 +216,16 @@ export default function ChatPanel({
           </li>
         )}
       </ol>
+      {showJump && (
+        <button
+          type="button"
+          onClick={jumpToLast}
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-gold/70 bg-panel px-4 py-2 text-sm text-gold shadow-lg hover:bg-gold/10"
+        >
+          ↓ К последнему сообщению
+        </button>
+      )}
+      </div>
 
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-edge p-2">
         <button
@@ -184,16 +241,17 @@ export default function ChatPanel({
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            // Enter — новая строка. Отправка — кнопкой или Ctrl+Enter на ПК.
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               const text = draft.trim();
               if (text && !thinking) onSend(text);
             }
           }}
           rows={2}
-          placeholder="Заявка мастеру…"
+          placeholder="Заявка мастеру… (Enter — новая строка)"
           aria-label="Сообщение мастеру"
-          className="min-h-11 flex-1 resize-none rounded-md border border-edge bg-ink px-3 py-2 text-parchment placeholder:text-muted/70 focus:border-gold focus:outline-none"
+          className="max-h-40 min-h-11 flex-1 resize-none rounded-md border border-edge bg-ink px-3 py-2 text-parchment [field-sizing:content] placeholder:text-muted/70 focus:border-gold focus:outline-none"
         />
         <button
           type="submit"
