@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   KB_BY_ID,
   KB_ENTRIES,
@@ -10,10 +10,65 @@ import {
   type KbLayer,
   type KbStatus,
 } from "../data/kb/index.ts";
+import {
+  errorText,
+  isEngineAvailable,
+  masterNotes,
+  partyView,
+  type MasterNote,
+  type NoteLayer,
+  type PartyView,
+} from "../lib/engine";
+import { FullSheet, PartySection } from "./FullSheet";
 import Modal from "./Modal";
 
 interface KnowledgeBaseProps {
   onClose: () => void;
+  /** Открыть сразу полный лист этого персонажа. */
+  initialCharacterId?: string | null;
+  onOpenTreasury?: () => void;
+}
+
+/** Разделы с живыми данными движка (не из файлов базы). */
+const PARTY_SECTION = { id: "party", title: "Отряд", description: "Полные листы отряда — данные движка, меняются по ходу игры" };
+const NOTES_SECTION: Record<NoteLayer, { id: string; title: string; description: string }> = {
+  player: {
+    id: "master_notes",
+    title: "Записи мастера",
+    description: "Что герой узнал по ходу игры — мастер записывает сам",
+  },
+  master: {
+    id: "master_journal",
+    title: "Журнал мастера",
+    description: "Тайны, планы NPC и импровизации, которые мастер записал, чтобы помнить",
+  },
+};
+const LIVE_IDS = new Set([PARTY_SECTION.id, NOTES_SECTION.player.id, NOTES_SECTION.master.id]);
+
+/** Слои под спойлером: содержимое скрыто, пока игрок сам не откроет слой. */
+const SPOILER_TEXT: Partial<Record<KbLayer, string>> = {
+  master: "Тайны, планы и угрозы мастера. Слой пока открыт без пароля — вход по паролю гейм-мастера появится позже. Карточки с пометкой «черновик мастера» не из документов кампании и ждут вашего утверждения.",
+  world: "Лор, локации, NPC и фракции мира. Здесь есть сведения, которых герой может ещё не знать.",
+};
+
+function NoteList({ notes }: { notes: MasterNote[] }) {
+  if (notes.length === 0) return <p className="text-sm text-muted">Записей пока нет — мастер добавит их по ходу игры.</p>;
+  return (
+    <ul className="space-y-2">
+      {[...notes].reverse().map((n) => (
+        <li key={n.id} className="rounded-lg border border-edge p-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="font-medium">{n.title}</span>
+            <span className="shrink-0 text-[11px] text-muted">
+              День {n.day}
+              {n.time ? `, ${n.time}` : ""}
+            </span>
+          </div>
+          {n.text && <p className="mt-1 whitespace-pre-line text-sm leading-snug">{n.text}</p>}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 const statusClass: Record<KbStatus, string> = {
@@ -176,30 +231,67 @@ function EntryDetail({
   );
 }
 
-export default function KnowledgeBase({ onClose }: KnowledgeBaseProps) {
-  const [layerId, setLayerId] = useState<KbLayer>("world");
-  const layer = KB_LAYERS.find((l) => l.id === layerId) ?? KB_LAYERS[0];
-  const [sectionId, setSectionId] = useState(layer?.sections[0]?.id ?? "");
+export default function KnowledgeBase({ onClose, initialCharacterId = null, onOpenTreasury }: KnowledgeBaseProps) {
+  const [layerId, setLayerId] = useState<KbLayer>("player");
+  const [sectionId, setSectionId] = useState<string>(PARTY_SECTION.id);
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sheetId, setSheetId] = useState<string | null>(initialCharacterId);
   const [history, setHistory] = useState<string[]>([]);
+  const [revealed, setRevealed] = useState<ReadonlySet<KbLayer>>(new Set(["player"]));
+  const [party, setParty] = useState<PartyView | null>(null);
+  const [notes, setNotes] = useState<MasterNote[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const searching = query.trim().length > 0;
+  useEffect(() => {
+    if (!isEngineAvailable()) return;
+    Promise.all([partyView(), masterNotes()])
+      .then(([p, n]) => {
+        setParty(p);
+        setNotes(n);
+      })
+      .catch((e: unknown) => setLoadError(errorText(e)));
+  }, []);
+
+  const baseLayer = KB_LAYERS.find((l) => l.id === layerId) ?? KB_LAYERS[0];
+  const layer = useMemo(() => {
+    if (!baseLayer) return undefined;
+    const sections =
+      baseLayer.id === "player"
+        ? [PARTY_SECTION, ...baseLayer.sections, NOTES_SECTION.player]
+        : baseLayer.id === "master"
+          ? [...baseLayer.sections, NOTES_SECTION.master]
+          : baseLayer.sections;
+    return { ...baseLayer, sections };
+  }, [baseLayer]);
+
+  const hidden = !revealed.has(layerId);
+  const searching = query.trim().length > 0 && !hidden;
   const opened = openId ? KB_BY_ID.get(openId) : undefined;
+  const layerNotes = (l: KbLayer) => notes.filter((n) => n.layer === l);
 
   function switchLayer(id: KbLayer) {
     setLayerId(id);
-    setSectionId(KB_LAYERS.find((l) => l.id === id)?.sections[0]?.id ?? "");
+    setSectionId(id === "player" ? PARTY_SECTION.id : (KB_LAYERS.find((l) => l.id === id)?.sections[0]?.id ?? ""));
     setOpenId(null);
+    setSheetId(null);
     setHistory([]);
+  }
+
+  function reveal(id: KbLayer) {
+    setRevealed((prev) => new Set([...prev, id]));
   }
 
   function open(id: string) {
     const entry = KB_BY_ID.get(id);
     if (!entry) return;
     if (openId) setHistory((h) => [...h, openId]);
-    // Связь может вести в другой слой — переключаемся вместе с ней.
-    if (entry.layer !== layerId) setLayerId(entry.layer);
+    // Связь может вести в другой слой — переключаемся вместе с ней (и открываем его спойлер:
+    // игрок сам перешёл по ссылке).
+    if (entry.layer !== layerId) {
+      setLayerId(entry.layer);
+      reveal(entry.layer);
+    }
     setSectionId(entry.section);
     setOpenId(id);
   }
@@ -215,10 +307,16 @@ export default function KnowledgeBase({ onClose }: KnowledgeBaseProps) {
     setOpenId(previous ?? null);
   }
 
+  const q = query.trim().toLowerCase().replace(/ё/g, "е");
   const results = useMemo(
     () => (searching ? KB_ENTRIES.filter((e) => e.layer === layerId && matchesQuery(e, query)) : []),
     [layerId, query, searching],
   );
+  const noteResults = searching
+    ? notes.filter(
+        (n) => n.layer === layerId && `${n.title} ${n.text}`.toLowerCase().replace(/ё/g, "е").includes(q),
+      )
+    : [];
 
   const sectionEntries = useMemo(() => {
     const groups = new Map<string, KbEntry[]>();
@@ -229,8 +327,22 @@ export default function KnowledgeBase({ onClose }: KnowledgeBaseProps) {
     return [...groups.entries()];
   }, [layerId, sectionId]);
 
-  const counts = (id: string) => KB_ENTRIES.filter((e) => e.layer === layerId && e.section === id).length;
+  const counts = (id: string) => {
+    if (id === PARTY_SECTION.id) return party?.members.length ?? 0;
+    if (id === NOTES_SECTION.player.id) return layerNotes("player").length;
+    if (id === NOTES_SECTION.master.id) return layerNotes("master").length;
+    return KB_ENTRIES.filter((e) => e.layer === layerId && e.section === id).length;
+  };
   const section = layer?.sections.find((s) => s.id === sectionId);
+  const layerCount = (id: KbLayer) =>
+    KB_ENTRIES.filter((e) => e.layer === id).length + layerNotes(id).length + (id === "player" ? (party?.members.length ?? 0) : 0);
+
+  function liveSection() {
+    if (sectionId === PARTY_SECTION.id) return <PartySection party={party} onOpen={setSheetId} />;
+    if (sectionId === NOTES_SECTION.player.id) return <NoteList notes={layerNotes("player")} />;
+    if (sectionId === NOTES_SECTION.master.id) return <NoteList notes={layerNotes("master")} />;
+    return null;
+  }
 
   return (
     <Modal title="База знаний" onClose={onClose} size="xl">
@@ -247,22 +359,38 @@ export default function KnowledgeBase({ onClose }: KnowledgeBaseProps) {
             }`}
           >
             {l.title}
-            <span className="ml-1 text-xs opacity-70">{KB_ENTRIES.filter((e) => e.layer === l.id).length}</span>
+            {SPOILER_TEXT[l.id] && !revealed.has(l.id) ? (
+              <span className="ml-1 text-xs opacity-70">🔒</span>
+            ) : (
+              <span className="ml-1 text-xs opacity-70">{layerCount(l.id)}</span>
+            )}
           </button>
         ))}
       </div>
 
-      {layerId === "master" && (
-        <p className="border-b border-fumble/40 bg-blood/20 px-4 py-2 text-xs">
-          Спойлеры. Слой мастера пока открыт без пароля — вход по паролю гейм-мастера появится позже.
-          Карточки с пометкой «черновик мастера» не из документов кампании и ждут вашего утверждения.
-        </p>
-      )}
+      {loadError && <p className="border-b border-edge px-4 py-2 text-xs text-fumble">Движок: {loadError}</p>}
 
-      {opened ? (
+      {hidden ? (
+        <div className="space-y-3 p-6 text-center">
+          <p className="font-serif text-lg text-gold">Спойлеры · {layer?.title}</p>
+          <p className="mx-auto max-w-prose text-sm text-muted">{SPOILER_TEXT[layerId]}</p>
+          <button
+            type="button"
+            onClick={() => reveal(layerId)}
+            className="rounded-md border border-gold px-4 py-2 text-sm text-gold hover:bg-gold/10"
+          >
+            Открыть слой «{layer?.title}»
+          </button>
+        </div>
+      ) : sheetId ? (
+        <FullSheet id={sheetId} onBack={() => setSheetId(null)} onOpenTreasury={onOpenTreasury} />
+      ) : opened ? (
         <EntryDetail entry={opened} onOpen={open} onBack={back} />
       ) : (
         <>
+          {layerId === "master" && (
+            <p className="border-b border-fumble/40 bg-blood/20 px-4 py-2 text-xs">{SPOILER_TEXT.master}</p>
+          )}
           <div className="border-b border-edge p-3">
             <p className="mb-2 text-xs text-muted">{layer?.description}</p>
             <input
@@ -275,15 +403,18 @@ export default function KnowledgeBase({ onClose }: KnowledgeBaseProps) {
           </div>
 
           {searching ? (
-            <div className="p-3">
-              {results.length === 0 ? (
+            <div className="space-y-3 p-3">
+              {results.length === 0 && noteResults.length === 0 ? (
                 <p className="p-4 text-center text-sm text-muted">Ничего не найдено</p>
               ) : (
-                <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                  {results.map((e) => (
-                    <EntryCard key={e.id} entry={e} onOpen={open} />
-                  ))}
-                </ul>
+                <>
+                  {noteResults.length > 0 && <NoteList notes={noteResults} />}
+                  <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                    {results.map((e) => (
+                      <EntryCard key={e.id} entry={e} onOpen={open} />
+                    ))}
+                  </ul>
+                </>
               )}
             </div>
           ) : (
@@ -309,16 +440,18 @@ export default function KnowledgeBase({ onClose }: KnowledgeBaseProps) {
               </nav>
               <div className="min-w-0 flex-1 space-y-5 p-3">
                 {section && <p className="text-xs text-muted">{section.description}</p>}
-                {sectionEntries.map(([group, entries]) => (
-                  <section key={group}>
-                    <h3 className="mb-2 font-serif text-gold">{group}</h3>
-                    <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                      {entries.map((e) => (
-                        <EntryCard key={e.id} entry={e} onOpen={open} />
-                      ))}
-                    </ul>
-                  </section>
-                ))}
+                {LIVE_IDS.has(sectionId)
+                  ? liveSection()
+                  : sectionEntries.map(([group, entries]) => (
+                      <section key={group}>
+                        <h3 className="mb-2 font-serif text-gold">{group}</h3>
+                        <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                          {entries.map((e) => (
+                            <EntryCard key={e.id} entry={e} onOpen={open} />
+                          ))}
+                        </ul>
+                      </section>
+                    ))}
               </div>
             </div>
           )}

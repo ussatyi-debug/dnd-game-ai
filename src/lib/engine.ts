@@ -399,6 +399,166 @@ export function stripEngineBlocks(text: string): string {
   return text.replace(/```engine[\s\S]*?(```|$)/g, "").trim();
 }
 
+// Полный лист, инвентарь, записи мастера и отмена его хода.
+
+export type Ability = "strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma";
+export type ProficiencyLevel = "none" | "proficient" | "expertise";
+
+export interface Bonus {
+  label: string;
+  value: number;
+}
+
+export interface SaveLine {
+  ability: Ability;
+  label: string;
+  total: number;
+  proficient: boolean;
+  breakdown: Bonus[];
+}
+
+export interface SkillLine {
+  skill: string;
+  name: string;
+  ability_label: string;
+  total: number;
+  proficiency: ProficiencyLevel;
+  source: string;
+  breakdown: Bonus[];
+  advantage: string[];
+  passive: number;
+}
+
+export interface AttackLine {
+  name: string;
+  to_hit: number;
+  to_hit_breakdown: Bonus[];
+  damage: string;
+  range: string;
+  notes: string;
+  proficiency_unknown: boolean;
+}
+
+export interface Feature {
+  name: string;
+  source: string;
+  text: string;
+  resource_id: string | null;
+}
+
+export interface ProficiencyLine {
+  kind: string;
+  text: string;
+  from_rules: boolean;
+}
+
+export interface Attunement {
+  name: string;
+  effect: string;
+}
+
+export interface HitDice {
+  die: number;
+  current: number;
+  total: number;
+}
+
+export interface SheetDetails {
+  background: string;
+  alignment: string;
+  xp: number | null;
+  xp_next: number | null;
+  appearance: string;
+  saves: SaveLine[];
+  save_notes: string[];
+  skills_listed: boolean;
+  skills: SkillLine[];
+  passive_perception: number;
+  passive_insight: number;
+  passive_investigation: number;
+  initiative_breakdown: Bonus[];
+  armor_class_breakdown: Bonus[];
+  hit_dice: HitDice[];
+  attacks: AttackLine[];
+  features: Feature[];
+  proficiencies: ProficiencyLine[];
+  attunement: Attunement[];
+  attunement_note: string;
+  conditions: string[];
+  exhaustion: number;
+  notes: string[];
+}
+
+export interface ItemLine {
+  id: string;
+  name: string;
+  quantity: number;
+  notes: string;
+  scroll: boolean;
+}
+
+export interface ItemGroup {
+  category: string;
+  items: ItemLine[];
+}
+
+export interface ContainerView {
+  id: string;
+  name: string;
+  capacity: string;
+  note: string;
+  groups: ItemGroup[];
+  item_count: number;
+  treasury_name: string | null;
+  treasury_total: number | null;
+}
+
+export interface InventoryView {
+  character_id: string;
+  containers: ContainerView[];
+}
+
+export type NoteLayer = "player" | "master";
+
+export interface MasterNote {
+  id: number;
+  layer: NoteLayer;
+  day: number;
+  time: string | null;
+  title: string;
+  text: string;
+}
+
+export interface UndoInfo {
+  actions: string[];
+  available: boolean;
+}
+
+export function characterDetails(id: string): Promise<SheetDetails> {
+  return call<SheetDetails>("character_details", { id });
+}
+
+export function inventory(id: string): Promise<InventoryView> {
+  return call<InventoryView>("inventory", { id });
+}
+
+export function masterNotes(): Promise<MasterNote[]> {
+  return call<MasterNote[]>("master_notes");
+}
+
+export function masterUndoInfo(): Promise<UndoInfo | null> {
+  return call<UndoInfo | null>("master_undo_info");
+}
+
+/** Отменяет последний ход мастера; возвращает отменённые действия. */
+export function undoMasterTurn(): Promise<string[]> {
+  return call<string[]>("undo_master_turn");
+}
+
+export function signed(value: number): string {
+  return value >= 0 ? `+${value}` : `−${Math.abs(value)}`;
+}
+
 // ИИ-мастер работает только в приложении: запросы к провайдерам и ключи — на стороне Rust.
 
 export type Provider = "gemini" | "openai" | "local";

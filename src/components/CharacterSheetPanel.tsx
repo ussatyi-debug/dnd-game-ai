@@ -2,12 +2,16 @@ import { useState } from "react";
 import {
   LUCKY_ID,
   PACT_SLOTS_ID,
+  signed,
   type CharacterSheet,
+  type InventoryView,
+  type SheetDetails,
   type Recovery,
   type ResourcePool,
   type RestKind,
   type SpellbookView,
 } from "../lib/engine";
+import SheetSections, { StatusLine } from "./SheetSections";
 import SpellbookPanel from "./SpellbookPanel";
 
 const recoveryLabel: Record<Recovery, string> = {
@@ -16,10 +20,6 @@ const recoveryLabel: Record<Recovery, string> = {
   daily: "1/день",
   manual: "вручную",
 };
-
-function signed(value: number): string {
-  return value >= 0 ? `+${value}` : `−${Math.abs(value)}`;
-}
 
 function Pips({ pool, large = false }: { pool: ResourcePool; large?: boolean }) {
   const size = large ? "h-5 w-5" : "h-3 w-3";
@@ -39,7 +39,12 @@ interface CharacterSheetPanelProps {
   sheet: CharacterSheet | null;
   /** Книга заклинаний активного персонажа; `null` — не колдует. */
   book: SpellbookView | null;
+  /** Полный лист и инвентарь активного персонажа. */
+  details: SheetDetails | null;
+  inventory: InventoryView | null;
   busy: boolean;
+  onOpenFullSheet: (id: string) => void;
+  onOpenTreasury: () => void;
   onRest: (kind: RestKind) => void;
   onSpellsChanged: () => void;
   onEngineNote: (text: string) => void;
@@ -55,7 +60,11 @@ function isSlot(r: ResourcePool): boolean {
 export default function CharacterSheetPanel({
   sheet,
   book,
+  details,
+  inventory,
   busy,
+  onOpenFullSheet,
+  onOpenTreasury,
   onRest,
   onSpellsChanged,
   onEngineNote,
@@ -150,15 +159,21 @@ export default function CharacterSheetPanel({
           ))}
         </dl>
 
-        <dl className="grid grid-cols-3 gap-2 text-center">
-          {sheet.abilities.map((a) => (
-            <div key={a.ability} className="rounded-lg border border-edge py-2">
-              <dt className="text-[11px] text-muted">{a.label}</dt>
-              <dd className="font-mono text-lg">{signed(a.modifier)}</dd>
-              <dd className="text-xs text-muted">{a.score}</dd>
-            </div>
-          ))}
-        </dl>
+        {details && <StatusLine details={details} />}
+
+        <button
+          type="button"
+          onClick={() => onOpenFullSheet(sheet.id)}
+          className="w-full rounded-md border border-gold/60 px-3 py-2 text-sm text-gold hover:bg-gold/10"
+        >
+          📜 Полный лист в базе знаний
+        </button>
+
+        {details ? (
+          <SheetSections sheet={sheet} details={details} inventory={inventory} onOpenTreasury={onOpenTreasury} />
+        ) : (
+          <p className="text-sm text-muted">Полный лист загружается…</p>
+        )}
       </div>
       ) : (
       <div className="space-y-4 p-4">

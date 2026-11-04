@@ -13,7 +13,11 @@ import {
   aiListModels,
   aiSelectModel,
   aiSettings,
+  characterDetails,
   characterSheet,
+  inventory as loadInventory,
+  masterUndoInfo,
+  undoMasterTurn,
   errorText,
   isAiAvailable,
   isEngineAvailable,
@@ -24,7 +28,10 @@ import {
   partyView,
   spellbook,
   takeRest,
+  type InventoryView,
   type MasterAction,
+  type SheetDetails,
+  type UndoInfo,
   type SpellbookView,
   type AiSettingsView,
   type CharacterSheet,
@@ -100,6 +107,10 @@ export default function App() {
   const [activeId, setActiveId] = useState(PLAYER_ID);
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
   const [book, setBook] = useState<SpellbookView | null>(null);
+  const [details, setDetails] = useState<SheetDetails | null>(null);
+  const [inv, setInv] = useState<InventoryView | null>(null);
+  const [undo, setUndo] = useState<UndoInfo | null>(null);
+  const [kbCharacter, setKbCharacter] = useState<string | null>(null);
   const [playerSheet, setPlayerSheet] = useState<CharacterSheet | null>(null);
   const [rolls, setRolls] = useState<TrayRoll[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>(
@@ -119,9 +130,14 @@ export default function App() {
   }, []);
 
   const refresh = useCallback(async () => {
-    const [nextParty, nextPlayer] = await Promise.all([partyView(), characterSheet(PLAYER_ID)]);
+    const [nextParty, nextPlayer, nextUndo] = await Promise.all([
+      partyView(),
+      characterSheet(PLAYER_ID),
+      masterUndoInfo(),
+    ]);
     setParty(nextParty);
     setPlayerSheet(nextPlayer);
+    setUndo(nextUndo);
   }, []);
 
   useEffect(() => {
@@ -147,6 +163,21 @@ export default function App() {
       cancelled = true;
     };
   }, [engineAvailable, activeId, party]);
+
+  useEffect(() => {
+    if (!engineAvailable) return;
+    let cancelled = false;
+    Promise.all([characterDetails(activeId), loadInventory(activeId)])
+      .then(([d, i]) => {
+        if (cancelled) return;
+        setDetails(d);
+        setInv(i);
+      })
+      .catch((e: unknown) => !cancelled && addMessage("system", `Не удалось загрузить полный лист: ${errorText(e)}`));
+    return () => {
+      cancelled = true;
+    };
+  }, [engineAvailable, activeId, party, addMessage]);
 
   const engineNotes = useCallback(
     (actions: MasterAction[]) => {
@@ -196,7 +227,7 @@ export default function App() {
         : s;
     setPlayerSheet(patch);
     setSheet(patch);
-    partyView().then(setParty).catch(() => undefined);
+    refresh().catch(() => undefined);
   }
 
   function sendToChat(text: string) {
@@ -308,7 +339,25 @@ export default function App() {
       .finally(() => setBusy(false));
   }
 
+  function undoMaster() {
+    undoMasterTurn()
+      .then(async (actions) => {
+        addMessage("engine", `Отменены действия мастера (${actions.length}): ${actions.join("; ")}`);
+        await refresh();
+      })
+      .catch((e: unknown) => {
+        addMessage("system", errorText(e));
+        refresh().catch(() => undefined);
+      });
+  }
+
+  function openFullSheet(id: string) {
+    setKbCharacter(id);
+    setOpenWindow("knowledge");
+  }
+
   function menu(action: MenuAction) {
+    if (action === "knowledge") setKbCharacter(null);
     setOpenWindow(action);
   }
 
@@ -358,6 +407,8 @@ export default function App() {
             onModelChange={changeModel}
             onOpenModels={() => setOpenWindow("models")}
             onOpenDice={() => setDiceOpen(true)}
+            undo={undo}
+            onUndo={undoMaster}
           />
         </div>
 
@@ -365,7 +416,11 @@ export default function App() {
           <CharacterSheetPanel
             sheet={sheet}
             book={book}
+            details={details}
+            inventory={inv}
             busy={busy || !engineAvailable}
+            onOpenFullSheet={openFullSheet}
+            onOpenTreasury={() => setOpenWindow("treasury")}
             onRest={rest}
             onSpellsChanged={() => {
               refresh().catch((e: unknown) => addMessage("system", errorText(e)));
@@ -409,13 +464,20 @@ export default function App() {
         onSendToChat={sendToChat}
       />
 
-      {openWindow === "knowledge" && <KnowledgeBase onClose={() => setOpenWindow(null)} />}
+      {openWindow === "knowledge" && (
+        <KnowledgeBase
+          key={kbCharacter ?? "kb"}
+          initialCharacterId={kbCharacter}
+          onClose={() => setOpenWindow(null)}
+          onOpenTreasury={() => setOpenWindow("treasury")}
+        />
+      )}
       {openWindow === "save" && <SaveWindow onClose={() => setOpenWindow(null)} messages={messages} rolls={rolls} />}
       {openWindow === "treasury" && (
         <TreasuryWindow
           onClose={() => setOpenWindow(null)}
           onChanged={() => {
-            partyView().then(setParty).catch(() => undefined);
+            refresh().catch(() => undefined);
           }}
         />
       )}

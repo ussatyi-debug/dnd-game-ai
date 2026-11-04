@@ -5,9 +5,10 @@ import { WORLD_ENTRIES, WORLD_LAYER } from "./world.ts";
 
 export * from "./types.ts";
 
-export const KB_LAYERS: KbLayerInfo[] = [WORLD_LAYER, PLAYER_LAYER, MASTER_LAYER];
+/** Порядок слоёв: Игрок, Мастер, Мир. */
+export const KB_LAYERS: KbLayerInfo[] = [PLAYER_LAYER, MASTER_LAYER, WORLD_LAYER];
 
-export const KB_ENTRIES: KbEntry[] = [...WORLD_ENTRIES, ...PLAYER_ENTRIES, ...MASTER_ENTRIES];
+export const KB_ENTRIES: KbEntry[] = [...PLAYER_ENTRIES, ...MASTER_ENTRIES, ...WORLD_ENTRIES];
 
 export const KB_BY_ID: ReadonlyMap<string, KbEntry> = new Map(KB_ENTRIES.map((e) => [e.id, e]));
 

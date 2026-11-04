@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { stripEngineBlocks } from "../lib/engine";
+import { stripEngineBlocks, type UndoInfo } from "../lib/engine";
 
 export interface ChatMessage {
   id: number;
@@ -27,6 +27,9 @@ interface ChatPanelProps {
   onModelChange: (model: string) => void;
   onOpenModels: () => void;
   onOpenDice: () => void;
+  /** Последний ход мастера, изменивший состояние, — его можно отменить. */
+  undo: UndoInfo | null;
+  onUndo: () => void;
 }
 
 /** Текст мастера: строки «> — ...» — прямая речь (формат из кодекса кампании). */
@@ -66,6 +69,8 @@ export default function ChatPanel({
   onModelChange,
   onOpenModels,
   onOpenDice,
+  undo,
+  onUndo,
 }: ChatPanelProps) {
   const listRef = useRef<HTMLOListElement>(null);
   const [showJump, setShowJump] = useState(false);
@@ -249,6 +254,21 @@ export default function ChatPanel({
         </button>
       )}
       </div>
+
+      {undo?.available && !thinking && (
+        <div className="flex items-center justify-between gap-2 border-t border-arcane/40 bg-arcane/5 px-3 py-1.5 text-xs">
+          <span className="min-w-0 truncate text-arcane" title={undo.actions.join("\n")}>
+            ⚙ Мастер изменил состояние: действий — {undo.actions.length}
+          </span>
+          <button
+            type="button"
+            onClick={onUndo}
+            className="shrink-0 rounded-md border border-arcane/60 px-2 py-1 text-arcane hover:bg-arcane/10"
+          >
+            Отменить действия мастера
+          </button>
+        </div>
+      )}
 
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-edge p-2">
         <button
