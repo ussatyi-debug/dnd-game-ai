@@ -56,6 +56,8 @@ pub struct MasterReply {
     pub text: String,
     pub provider: Provider,
     pub model: String,
+    /// Итоги команд движка из ответа мастера (ячейки, заклинания).
+    pub actions: Vec<dnd_master::MasterAction>,
 }
 
 /// Настройки ИИ. Хранятся в папке настроек приложения на ПК.
@@ -169,7 +171,7 @@ pub async fn chat(
     let text = match settings.provider {
         Provider::Gemini => gemini::generate(client, key, &model, system, history).await?,
     };
-    Ok(MasterReply { text, provider: settings.provider, model })
+    Ok(MasterReply { text, provider: settings.provider, model, actions: Vec::new() })
 }
 
 #[cfg(test)]

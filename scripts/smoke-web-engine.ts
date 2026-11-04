@@ -38,7 +38,29 @@ assert.equal(party.members.length, 6);
 const treasury = engine.call<{ total: number }>({ cmd: "treasury" });
 assert.equal(treasury.total, party.treasury_total);
 
+const book = engine.call<{ slots: { pact: boolean; pool: { current: number } }[] }>({
+  cmd: "spellbook",
+  id: "pc.nikis",
+});
+assert.equal(book.slots[0]?.pact, true);
+const cast = engine.call<{ cast_level: number; summary: string }>({
+  cmd: "cast_spell",
+  id: "pc.nikis",
+  spellId: "misty-step",
+  method: null,
+  slotLevel: null,
+});
+assert.equal(cast.cast_level, 4);
+assert.ok(cast.summary.includes("Туманный шаг"));
+const applied = engine.call<{ text: string; actions: { ok: boolean }[] }>({
+  cmd: "master_apply",
+  text: 'Вспышка.\n```engine\n{"cmd":"cast","character":"npc.valeria","spell":"bless"}\n```',
+});
+assert.equal(applied.text, "Вспышка.");
+assert.equal(applied.actions[0]?.ok, true);
+
 const context = engine.call<string>({ cmd: "master_context" });
+assert.ok(context.includes("журнал_движка") && context.includes("misty-step"));
 assert.ok(context.startsWith("Ты — Мастер") && context.includes("кубы_мастера"));
 
 assert.throws(

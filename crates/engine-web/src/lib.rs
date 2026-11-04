@@ -11,7 +11,7 @@
 
 use std::cell::RefCell;
 
-use dnd_engine::{RestKind, Session, Xoshiro256};
+use dnd_engine::{CastMethod, CastRequest, RestKind, Session, SlotRef, Xoshiro256};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -40,6 +40,39 @@ pub enum Request {
     },
     TakeRest {
         kind: RestKind,
+    },
+    Spellbook {
+        id: String,
+    },
+    PreparationOptions {
+        id: String,
+        caster_id: String,
+    },
+    PrepareSpells {
+        id: String,
+        caster_id: String,
+        spells: Vec<String>,
+    },
+    CastSpell {
+        id: String,
+        spell_id: String,
+        method: Option<CastMethod>,
+        slot_level: Option<u8>,
+    },
+    ChangeSlot {
+        id: String,
+        slot: SlotRef,
+        spend: bool,
+    },
+    RestoreSlot {
+        id: String,
+        item_id: String,
+        slot: SlotRef,
+    },
+    EngineLog,
+    /// Выполняет команды движка из ответа мастера и возвращает текст без них.
+    MasterApply {
+        text: String,
     },
 }
 
@@ -74,6 +107,25 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
                 .map_err(|e| e.to_string())?,
         ),
         Request::TakeRest { kind } => to_value(session.take_rest(kind)),
+        Request::Spellbook { id } => to_value(session.spellbook(&id).map_err(|e| e.to_string())?),
+        Request::PreparationOptions { id, caster_id } => {
+            to_value(session.preparation_options(&id, &caster_id).map_err(|e| e.to_string())?)
+        }
+        Request::PrepareSpells { id, caster_id, spells } => {
+            to_value(session.prepare_spells(&id, &caster_id, &spells).map_err(|e| e.to_string())?)
+        }
+        Request::CastSpell { id, spell_id, method, slot_level } => {
+            let request = CastRequest { spell_id, method, slot_level };
+            to_value(session.cast_spell(&id, &request).map_err(|e| e.to_string())?)
+        }
+        Request::ChangeSlot { id, slot, spend } => {
+            to_value(session.change_slot(&id, slot, spend).map_err(|e| e.to_string())?)
+        }
+        Request::RestoreSlot { id, item_id, slot } => {
+            to_value(session.restore_slot_with(&id, &item_id, slot).map_err(|e| e.to_string())?)
+        }
+        Request::EngineLog => to_value(session.engine_log()),
+        Request::MasterApply { text } => to_value(dnd_master::apply_directives(session, &text)),
     }
 }
 
@@ -204,6 +256,63 @@ mod tests {
     }
 
     #[test]
+    fn spellbook_cast_and_slots() {
+        let mut s = session();
+        let book = call(&mut s, json!({ "cmd": "spellbook", "id": "pc.nikis" }));
+        assert_eq!(book["ok"]["slots"][0]["pact"], true);
+        assert_eq!(book["ok"]["casters"][0]["save_dc"], 16);
+
+        let cast = call(
+            &mut s,
+            json!({ "cmd": "cast_spell", "id": "npc.valeria", "spellId": "bless", "slotLevel": 2 }),
+        );
+        assert_eq!(cast["ok"]["cast_level"], 2);
+        assert_eq!(cast["ok"]["method"], "slot");
+        let refused = call(
+            &mut s,
+            json!({ "cmd": "cast_spell", "id": "pc.nikis", "spellId": "fireball", "method": null }),
+        );
+        assert!(refused["err"].as_str().unwrap().contains("Огненный шар"));
+
+        let changed = call(
+            &mut s,
+            json!({ "cmd": "change_slot", "id": "pc.nikis", "slot": "pact", "spend": true }),
+        );
+        assert_eq!(changed["ok"]["slots"][0]["pool"]["current"], 1);
+        let changed = call(
+            &mut s,
+            json!({ "cmd": "change_slot", "id": "npc.valeria", "slot": { "level": 3 }, "spend": true }),
+        );
+        assert!(changed["ok"]["slots"].is_array());
+        let restored = call(
+            &mut s,
+            json!({ "cmd": "restore_slot", "id": "pc.nikis", "itemId": "item.pact_rod.slot", "slot": "pact" }),
+        );
+        assert_eq!(restored["ok"]["slot"]["current"], 2);
+
+        let options = call(
+            &mut s,
+            json!({ "cmd": "preparation_options", "id": "npc.valeria", "casterId": "cleric" }),
+        );
+        assert!(options["ok"].as_array().unwrap().len() > 40);
+        let prepared = call(
+            &mut s,
+            json!({ "cmd": "prepare_spells", "id": "npc.valeria", "casterId": "cleric", "spells": ["bless"] }),
+        );
+        assert!(prepared["err"].as_str().unwrap().contains("длительного отдыха"));
+
+        let log = call(&mut s, json!({ "cmd": "engine_log" }));
+        assert!(log["ok"].as_array().unwrap().len() >= 4);
+
+        let applied = call(
+            &mut s,
+            json!({ "cmd": "master_apply", "text": "Готово.\n```engine\n{\"cmd\":\"cast\",\"character\":\"pc.nikis\",\"spell\":\"eldritch-blast\"}\n```" }),
+        );
+        assert_eq!(applied["ok"]["text"], "Готово.");
+        assert_eq!(applied["ok"]["actions"][0]["ok"], true);
+    }
+
+    #[test]
     fn party_treasury_and_save() {
         let mut s = session();
         let party = call(&mut s, json!({ "cmd": "party" }));
@@ -213,7 +322,7 @@ mod tests {
         assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
         assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
         let save = call(&mut s, json!({ "cmd": "save_state" }));
-        assert_eq!(save["ok"]["format_version"], 1);
+        assert_eq!(save["ok"]["format_version"], 2);
         assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
         let added = call(
             &mut s,

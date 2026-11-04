@@ -5,6 +5,7 @@
 
 use crate::error::EngineError;
 use crate::resource::{ResourcePool, RestKind};
+use crate::spellcasting::Spellcasting;
 
 /// Характеристика.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -129,6 +130,8 @@ pub struct Character {
     /// Где персонаж сейчас.
     pub location: String,
     pub(crate) resources: Vec<ResourcePool>,
+    /// Колдовство; `None` — персонаж не владеет магией.
+    pub spellcasting: Option<Spellcasting>,
 }
 
 /// Строка характеристики в листе.
@@ -197,6 +200,9 @@ impl Character {
     pub fn apply_rest(&mut self, rest: RestKind) -> Vec<String> {
         if rest == RestKind::Long {
             self.hit_points.current = self.hit_points.max;
+            if let Some(sc) = self.spellcasting.as_mut() {
+                sc.can_prepare = true;
+            }
         }
         self.resources
             .iter_mut()
@@ -283,10 +289,10 @@ mod tests {
         let mut nikis = demo_nikis();
         nikis.hit_points.current = 20;
         nikis.resource_mut("feat.lucky").unwrap().spend(2).unwrap();
-        nikis.resource_mut("warlock.slots").unwrap().spend(2).unwrap();
+        nikis.resource_mut("pact.slots").unwrap().spend(2).unwrap();
 
         let restored = nikis.apply_rest(RestKind::Short);
-        assert_eq!(restored, vec!["Ячейки колдуна (4 круг)".to_string()]);
+        assert_eq!(restored, vec!["Ячейки договора (4 круг)".to_string()]);
         assert_eq!(nikis.resource("feat.lucky").unwrap().current(), 1);
         assert_eq!(nikis.hit_points.current, 20);
 
@@ -318,6 +324,7 @@ mod tests {
             speed_ft: 30,
             location: "Тестовая".into(),
             resources: vec![ResourcePool::new("x", "X", 1, Recovery::Manual)],
+            spellcasting: None,
         };
         assert_eq!(
             c.resource_mut("feat.lucky"),

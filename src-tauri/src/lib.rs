@@ -12,8 +12,9 @@ use ai::{
     AiSettings, AiSettingsView, ChatMessage, MasterReply, ModelInfo, Provider, SettingsStore,
 };
 use dnd_engine::{
-    CharacterSheet, ExprRoll, LuckyReroll, PartyView, RestKind, RestResult, SaveState, Session,
-    TreasuryView,
+    CastMethod, CastOutcome, CastRequest, CharacterSheet, ExprRoll, LuckyReroll, PartyView,
+    RestKind, RestResult, SaveState, Session, SlotRef, SlotRestoreOutcome, SpellEntry,
+    SpellbookView, TreasuryView,
 };
 use tauri::{Manager, State};
 
@@ -82,6 +83,67 @@ fn take_rest(kind: RestKind, state: State<'_, SessionState>) -> Result<RestResul
 }
 
 #[tauri::command]
+fn spellbook(id: String, state: State<'_, SessionState>) -> Result<SpellbookView, String> {
+    lock(&state)?.spellbook(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn preparation_options(
+    id: String,
+    caster_id: String,
+    state: State<'_, SessionState>,
+) -> Result<Vec<SpellEntry>, String> {
+    lock(&state)?.preparation_options(&id, &caster_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn prepare_spells(
+    id: String,
+    caster_id: String,
+    spells: Vec<String>,
+    state: State<'_, SessionState>,
+) -> Result<SpellbookView, String> {
+    lock(&state)?.prepare_spells(&id, &caster_id, &spells).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn cast_spell(
+    id: String,
+    spell_id: String,
+    method: Option<CastMethod>,
+    slot_level: Option<u8>,
+    state: State<'_, SessionState>,
+) -> Result<CastOutcome, String> {
+    let request = CastRequest { spell_id, method, slot_level };
+    lock(&state)?.cast_spell(&id, &request).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn change_slot(
+    id: String,
+    slot: SlotRef,
+    spend: bool,
+    state: State<'_, SessionState>,
+) -> Result<SpellbookView, String> {
+    lock(&state)?.change_slot(&id, slot, spend).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn restore_slot(
+    id: String,
+    item_id: String,
+    slot: SlotRef,
+    state: State<'_, SessionState>,
+) -> Result<SlotRestoreOutcome, String> {
+    lock(&state)?.restore_slot_with(&id, &item_id, slot).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn engine_log(state: State<'_, SessionState>) -> Result<Vec<String>, String> {
+    Ok(lock(&state)?.engine_log().to_vec())
+}
+
+#[tauri::command]
 fn ai_settings(ai: State<'_, AiState>) -> Result<AiSettingsView, String> {
     Ok(lock(&ai.settings)?.view())
 }
@@ -133,7 +195,11 @@ async fn ai_chat(
         let mut session = lock(&session)?;
         dnd_master::system_text(&dnd_master::turn_context(&mut session))
     };
-    ai::chat(&ai.client, &settings, &system, &history).await
+    let mut reply = ai::chat(&ai.client, &settings, &system, &history).await?;
+    let turn = dnd_master::apply_directives(&mut *lock(&session)?, &reply.text);
+    reply.text = turn.text;
+    reply.actions = turn.actions;
+    Ok(reply)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -160,6 +226,13 @@ pub fn run() {
             save_state,
             treasury_add_manual,
             take_rest,
+            spellbook,
+            preparation_options,
+            prepare_spells,
+            cast_spell,
+            change_slot,
+            restore_slot,
+            engine_log,
             ai_settings,
             ai_set_key,
             ai_select_model,

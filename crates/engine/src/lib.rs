@@ -11,6 +11,8 @@
 //! - [`notation`] — разбор заявок игрока вида «16 - везунчик»;
 //! - [`resource`] — пулы ресурсов (Везунчик, ячейки, Ци) и восстановление на отдыхе;
 //! - [`character`] — персонаж: исходные данные и вычисляемые значения листа;
+//! - [`spells`] — каталог заклинаний (метаданные для проверок);
+//! - [`spellcasting`] — книга заклинаний персонажа: подготовка, ячейки, накладывание;
 //! - [`fixtures`] — демо-персонаж до появления импорта кампании;
 //! - [`treasury`] — казна отряда с журналом операций;
 //! - [`session`] — сессия, общая для приложения и веб-версии.
@@ -24,6 +26,9 @@ pub mod notation;
 pub mod resource;
 pub mod rng;
 pub mod session;
+mod spell_catalog;
+pub mod spellcasting;
+pub mod spells;
 pub mod treasury;
 
 pub use character::{
@@ -38,8 +43,14 @@ pub use resource::{Recovery, ResourcePool, RestKind};
 pub use rng::{DiceRng, Xoshiro256};
 pub use session::{
     LuckyReroll, PartyMember, PartyView, RestResult, RestedCharacter, SaveState, Scene, Session,
-    LUCKY_ID, SAVE_FORMAT_VERSION,
+    ENGINE_LOG_LIMIT, LUCKY_ID, SAVE_FORMAT_VERSION,
 };
+pub use spellcasting::{
+    slot_id, CastMethod, CastOutcome, CastRequest, Caster, CasterView, GrantedSpell, GrantedView,
+    Preparation, Progression, RestorerView, ScrollStack, ScrollView, SlotRef, SlotRestoreOutcome,
+    SlotRestorer, SlotView, SpellEntry, SpellbookView, Spellcasting, PACT_SLOTS_ID,
+};
+pub use spells::{all_spells, class_list, spell, SpellClass, SpellMeta};
 pub use treasury::{
     gp, Asset, AssetKind, Copper, Entry, EntrySource, EntryView, Location, NewEntry, Treasury,
     TreasuryView,

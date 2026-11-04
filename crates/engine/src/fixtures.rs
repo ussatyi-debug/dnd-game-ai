@@ -3,8 +3,13 @@
 //! Источник — лист персонажей кампании «Дом Стрэндж» на День 82: по механике лист является
 //! главным источником (утверждённое правило разрешения противоречий).
 
-use crate::character::{AbilityScores, Character, CharacterKind, ClassLevel, HitPoints};
+use crate::character::{Ability, AbilityScores, Character, CharacterKind, ClassLevel, HitPoints};
 use crate::resource::{Recovery, ResourcePool};
+use crate::session::Scene;
+use crate::spellcasting::{
+    Caster, GrantedSpell, Preparation, Progression, ScrollStack, SlotRestorer, Spellcasting,
+};
+use crate::spells::SpellClass;
 use crate::treasury::{gp, Asset, AssetKind, EntrySource, Location, NewEntry, Treasury};
 
 fn class(name: &str, subclass: Option<&str>, level: u32) -> ClassLevel {
@@ -24,6 +29,196 @@ fn pool(id: &str, name: &str, max: u32, recovery: Recovery) -> ResourcePool {
     ResourcePool::new(id, name, max, recovery)
 }
 
+/// Ресурсы с пулами ячеек, вставленными после первых `before` ресурсов.
+fn with_slots(
+    mut resources: Vec<ResourcePool>,
+    before: usize,
+    sc: &Spellcasting,
+) -> Vec<ResourcePool> {
+    let tail = resources.split_off(before.min(resources.len()));
+    resources.extend(sc.slot_pools());
+    resources.extend(tail);
+    resources
+}
+
+fn granted(spell: &str, source: &str, resource: Option<&str>, level: u8) -> GrantedSpell {
+    GrantedSpell {
+        spell_id: spell.into(),
+        source: source.into(),
+        resource_id: resource.map(Into::into),
+        cast_level: level,
+        caster_id: Some("warlock".into()),
+    }
+}
+
+fn scroll(spell: &str, level: u8, count: u32) -> ScrollStack {
+    ScrollStack { spell_id: spell.into(), level, count }
+}
+
+/// Текущая сцена на День 82 (лист персонажей): Вейденбург, штурм красилен у Мясного моста.
+pub const SCENE_LOCATION: &str = "Вейденбург, Мясной мост";
+
+pub fn demo_scene() -> Scene {
+    Scene { day: 82, time: Some("≈11:30".into()), location: SCENE_LOCATION.into() }
+}
+
+/// Колдовство сэра Никиса: Колдун 7 (Исчадие), воззвания, «Затронутый Тенью», Окуляр, свитки.
+fn nikis_spellcasting() -> Spellcasting {
+    let warlock = Caster::new(
+        "warlock",
+        "Колдун",
+        SpellClass::Warlock,
+        Ability::Charisma,
+        7,
+        Progression::Pact,
+        Preparation::Known,
+    )
+    .cantrips(3, &["eldritch-blast", "minor-illusion", "mage-hand"])
+    .known(
+        Some(8),
+        &[
+            "scorching-ray",
+            "hellish-rebuke",
+            "shadow-blade",
+            "armor-of-agathys",
+            "misty-step",
+            "suggestion",
+            "counterspell",
+            "blight",
+        ],
+    )
+    .expanded(
+        "Покровитель: Исчадие",
+        &[
+            "burning-hands",
+            "command",
+            "blindness-deafness",
+            "scorching-ray",
+            "fireball",
+            "stinking-cloud",
+            "fire-shield",
+            "wall-of-fire",
+            "flame-strike",
+            "hallow",
+        ],
+    )
+    .item_bonus(2, "Жезл Хранителя Договора +2");
+
+    Spellcasting {
+        casters: vec![warlock],
+        granted: vec![
+            granted("disguise-self", "Воззвание: Маска многих обличий", None, 1),
+            granted("speak-with-dead", "Воззвание: Шёпот могилы", None, 3),
+            granted(
+                "invisibility",
+                "Черта: Затронутый Тенью",
+                Some("feat.shadow_touched.invisibility"),
+                2,
+            ),
+            granted("cause-fear", "Черта: Затронутый Тенью", Some("feat.shadow_touched.fear"), 1),
+            granted("hunger-of-hadar", "Великий Окуляр", Some("item.ocular.hadar"), 3),
+        ],
+        scrolls: vec![
+            scroll("counterspell", 3, 2),
+            scroll("dispel-magic", 3, 2),
+            scroll("wall-of-water", 3, 1),
+            scroll("fire-shield", 4, 1),
+            scroll("spider-climb", 2, 1),
+            scroll("levitate", 2, 1),
+            scroll("darkness", 2, 1),
+            scroll("gust-of-wind", 2, 1),
+            scroll("fog-cloud", 1, 1),
+            scroll("fog-cloud", 2, 1),
+            scroll("inflict-wounds", 1, 1),
+            scroll("detect-magic", 1, 1),
+            scroll("identify", 1, 1),
+            scroll("wall-of-force", 5, 1),
+            scroll("globe-of-invulnerability", 6, 1),
+        ],
+        restorers: vec![SlotRestorer {
+            resource_id: "item.pact_rod.slot".into(),
+            label: "Жезл Хранителя Договора".into(),
+            max_level: 5,
+            pact_only: true,
+        }],
+        can_prepare: false,
+    }
+}
+
+/// Сир Гюнтер: Паладин 8, Клятва Возмездия. В листе подготовлено 7 заклинаний при лимите 6
+/// (ХАР +2 + половина уровня 4) — движок помечает превышение, а не скрывает его.
+fn gunther_spellcasting() -> Spellcasting {
+    Spellcasting {
+        casters: vec![Caster::new(
+            "paladin",
+            "Паладин",
+            SpellClass::Paladin,
+            Ability::Charisma,
+            8,
+            Progression::Half,
+            Preparation::Prepared,
+        )
+        .prepared(&[
+            "bless",
+            "shield-of-faith",
+            "command",
+            "find-steed",
+            "protection-from-poison",
+            "branding-smite",
+            "magic-weapon",
+        ])
+        .always("Клятва Возмездия", &["bane", "hunters-mark", "hold-person", "misty-step"])],
+        ..Spellcasting::default()
+    }
+}
+
+/// Сестра Валерия: Жрица 8, Домен Могилы. Заговоры в листе не указаны, кроме доменного
+/// «Ухода за умирающим».
+fn valeria_spellcasting() -> Spellcasting {
+    Spellcasting {
+        casters: vec![Caster::new(
+            "cleric",
+            "Жрица",
+            SpellClass::Cleric,
+            Ability::Wisdom,
+            8,
+            Progression::Full,
+            Preparation::Prepared,
+        )
+        .cantrips(5, &["spare-the-dying"])
+        .prepared(&[
+            "banishment",
+            "healing-word",
+            "bless",
+            "spiritual-weapon",
+            "spirit-guardians",
+            "dispel-magic",
+            "remove-curse",
+            "silence",
+        ])
+        .always(
+            "Домен Могилы",
+            &[
+                "bane",
+                "false-life",
+                "gentle-repose",
+                "ray-of-enfeeblement",
+                "revivify",
+                "vampiric-touch",
+                "blight",
+                "death-ward",
+            ],
+        )],
+        restorers: vec![SlotRestorer {
+            resource_id: "item.pearl_of_power".into(),
+            label: "Жемчужина Силы".into(),
+            max_level: 3,
+            pact_only: false,
+        }],
+        ..Spellcasting::default()
+    }
+}
+
 /// Сэр Никис Стрэндж, 10 уровень (Плут 3 / Колдун 7).
 pub fn demo_nikis() -> Character {
     Character {
@@ -41,27 +236,31 @@ pub fn demo_nikis() -> Character {
         hit_points: hp(49, 8),
         armor_class: 18,
         speed_ft: 30,
-        location: "Цитадель Кроу-Рок".into(),
-        resources: vec![
-            ResourcePool::lucky(),
-            pool("warlock.slots", "Ячейки колдуна (4 круг)", 2, Recovery::ShortRest),
-            pool("warlock.dark_ones_luck", "Удача Тёмного", 2, Recovery::LongRest),
-            pool("rogue.wails_from_the_grave", "Вопли из могилы", 4, Recovery::LongRest),
-            pool("item.pact_rod.slot", "Жезл: восстановление ячейки", 1, Recovery::LongRest),
-            pool("item.ocular.hadar", "Окуляр: Голод Хадара", 1, Recovery::Daily),
-            pool(
-                "feat.shadow_touched.invisibility",
-                "Невидимость (Затронутый Тенью)",
-                1,
-                Recovery::LongRest,
-            ),
-            pool(
-                "feat.shadow_touched.fear",
-                "Вызов страха (Затронутый Тенью)",
-                1,
-                Recovery::LongRest,
-            ),
-        ],
+        location: SCENE_LOCATION.into(),
+        resources: with_slots(
+            vec![
+                ResourcePool::lucky(),
+                pool("warlock.dark_ones_luck", "Удача Тёмного", 2, Recovery::LongRest),
+                pool("rogue.wails_from_the_grave", "Вопли из могилы", 4, Recovery::LongRest),
+                pool("item.pact_rod.slot", "Жезл: восстановление ячейки", 1, Recovery::LongRest),
+                pool("item.ocular.hadar", "Окуляр: Голод Хадара", 1, Recovery::Daily),
+                pool(
+                    "feat.shadow_touched.invisibility",
+                    "Невидимость (Затронутый Тенью)",
+                    1,
+                    Recovery::LongRest,
+                ),
+                pool(
+                    "feat.shadow_touched.fear",
+                    "Вызывание страха (Затронутый Тенью)",
+                    1,
+                    Recovery::LongRest,
+                ),
+            ],
+            1,
+            &nikis_spellcasting(),
+        ),
+        spellcasting: Some(nikis_spellcasting()),
     }
 }
 
@@ -80,12 +279,13 @@ pub fn demo_party() -> Vec<Character> {
             hit_points: hp(59, 0),
             armor_class: 19,
             speed_ft: 50,
-            location: "Серебряный Шпиль".into(),
+            location: SCENE_LOCATION.into(),
             resources: vec![
                 pool("monk.ki", "Очки Ци", 8, Recovery::ShortRest),
                 pool("monk.wholeness_of_body", "Целостность тела", 1, Recovery::LongRest),
                 pool("item.ki_beads", "Чётки: восстановить 2 Ци", 1, Recovery::Daily),
             ],
+            spellcasting: None,
         },
         Character {
             id: "npc.gunther".into(),
@@ -99,13 +299,21 @@ pub fn demo_party() -> Vec<Character> {
             armor_class: 22,
             speed_ft: 30,
             location: "Копи Альт-Вардена".into(),
-            resources: vec![
-                pool("paladin.lay_on_hands", "Наложение рук (хиты)", 40, Recovery::LongRest),
-                pool("paladin.channel_divinity", "Канал Божественности", 1, Recovery::ShortRest),
-                pool("paladin.divine_sense", "Божественное чувство", 3, Recovery::LongRest),
-                pool("paladin.slots.1", "Ячейки 1 круга", 4, Recovery::LongRest),
-                pool("paladin.slots.2", "Ячейки 2 круга", 3, Recovery::LongRest),
-            ],
+            resources: with_slots(
+                vec![
+                    pool("paladin.lay_on_hands", "Наложение рук (хиты)", 40, Recovery::LongRest),
+                    pool(
+                        "paladin.channel_divinity",
+                        "Канал Божественности",
+                        1,
+                        Recovery::ShortRest,
+                    ),
+                    pool("paladin.divine_sense", "Божественное чувство", 3, Recovery::LongRest),
+                ],
+                3,
+                &gunther_spellcasting(),
+            ),
+            spellcasting: Some(gunther_spellcasting()),
         },
         Character {
             id: "npc.valeria".into(),
@@ -119,15 +327,16 @@ pub fn demo_party() -> Vec<Character> {
             armor_class: 18,
             speed_ft: 30,
             location: "Цитадель Кроу-Рок".into(),
-            resources: vec![
-                pool("cleric.channel_divinity", "Канал Божественности", 2, Recovery::ShortRest),
-                pool("cleric.sentinel", "Часовой у двери смерти", 4, Recovery::LongRest),
-                pool("cleric.slots.1", "Ячейки 1 круга", 4, Recovery::LongRest),
-                pool("cleric.slots.2", "Ячейки 2 круга", 3, Recovery::LongRest),
-                pool("cleric.slots.3", "Ячейки 3 круга", 3, Recovery::LongRest),
-                pool("cleric.slots.4", "Ячейки 4 круга", 2, Recovery::LongRest),
-                pool("item.pearl_of_power", "Жемчужина Силы", 1, Recovery::Daily),
-            ],
+            resources: with_slots(
+                vec![
+                    pool("cleric.channel_divinity", "Канал Божественности", 2, Recovery::ShortRest),
+                    pool("cleric.sentinel", "Часовой у двери смерти", 4, Recovery::LongRest),
+                    pool("item.pearl_of_power", "Жемчужина Силы", 1, Recovery::Daily),
+                ],
+                2,
+                &valeria_spellcasting(),
+            ),
+            spellcasting: Some(valeria_spellcasting()),
         },
         Character {
             id: "npc.brokk".into(),
@@ -147,6 +356,7 @@ pub fn demo_party() -> Vec<Character> {
                 pool("fighter.action_surge", "Всплеск действий", 1, Recovery::ShortRest),
                 pool("item.titan_helm", "Шлем Горного Титана", 1, Recovery::Daily),
             ],
+            spellcasting: None,
         },
         Character {
             id: "npc.yussach".into(),
@@ -159,8 +369,9 @@ pub fn demo_party() -> Vec<Character> {
             hit_points: hp(7, 0),
             armor_class: 13,
             speed_ft: 40,
-            location: "Цитадель Кроу-Рок".into(),
+            location: SCENE_LOCATION.into(),
             resources: vec![],
+            spellcasting: None,
         },
     ]
 }

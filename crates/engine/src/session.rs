@@ -12,17 +12,23 @@ use crate::character::{Character, CharacterKind, CharacterSheet, HitPoints};
 use crate::check::{roll_d20, D20Roll, Modifier, RollMode};
 use crate::error::EngineError;
 use crate::expr::{DiceExpr, ExprRoll};
-use crate::fixtures::{demo_party, demo_treasury};
+use crate::fixtures::{demo_party, demo_scene, demo_treasury};
 use crate::notation::resolve_player_d20;
 use crate::resource::{ResourcePool, RestKind};
 use crate::rng::{DiceRng, Xoshiro256};
+use crate::spellcasting::{
+    CastOutcome, CastRequest, SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView,
+};
 use crate::treasury::{EntrySource, NewEntry, Treasury, TreasuryView};
 
 /// ID ресурса черты «Везунчик».
 pub const LUCKY_ID: &str = "feat.lucky";
 
 /// Версия формата сохранения.
-pub const SAVE_FORMAT_VERSION: u32 = 1;
+pub const SAVE_FORMAT_VERSION: u32 = 2;
+
+/// Сколько последних записей журнала движка хранится (и передаётся мастеру).
+pub const ENGINE_LOG_LIMIT: usize = 12;
 
 /// Текущая сцена.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -100,6 +106,7 @@ pub struct SaveState {
     pub scene: Scene,
     pub party: Vec<Character>,
     pub treasury: Treasury,
+    pub engine_log: Vec<String>,
 }
 
 /// Состояние сессии.
@@ -109,22 +116,18 @@ pub struct Session {
     scene: Scene,
     party: Vec<Character>,
     treasury: Treasury,
+    /// Последние действия движка с магией: что сотворено, что отклонено и почему.
+    engine_log: Vec<String>,
 }
 
 impl Session {
     pub fn new(rng: Xoshiro256, scene: Scene, party: Vec<Character>, treasury: Treasury) -> Self {
-        Self { rng, scene, party, treasury }
+        Self { rng, scene, party, treasury, engine_log: Vec::new() }
     }
 
     /// Сессия с демо-данными кампании на День 82 (до появления импорта).
     pub fn demo(rng: Xoshiro256) -> Self {
-        let party = demo_party();
-        let location = party
-            .iter()
-            .find(|c| c.kind == CharacterKind::Player)
-            .map(|c| c.location.clone())
-            .unwrap_or_default();
-        Self::new(rng, Scene { day: 82, time: None, location }, party, demo_treasury())
+        Self::new(rng, demo_scene(), demo_party(), demo_treasury())
     }
 
     pub fn scene(&self) -> &Scene {
@@ -140,6 +143,125 @@ impl Session {
             .iter_mut()
             .find(|c| c.kind == CharacterKind::Player)
             .ok_or_else(|| EngineError::CharacterNotFound("персонаж игрока".into()))
+    }
+
+    fn character_mut(&mut self, id: &str) -> Result<&mut Character, EngineError> {
+        self.party
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or_else(|| EngineError::CharacterNotFound(id.to_string()))
+    }
+
+    /// Журнал движка (последние записи, старые — первыми).
+    pub fn engine_log(&self) -> &[String] {
+        &self.engine_log
+    }
+
+    /// Добавляет запись в журнал движка.
+    pub fn log(&mut self, entry: impl Into<String>) {
+        self.engine_log.push(entry.into());
+        let excess = self.engine_log.len().saturating_sub(ENGINE_LOG_LIMIT);
+        self.engine_log.drain(..excess);
+    }
+
+    fn logged<T>(
+        &mut self,
+        result: Result<T, EngineError>,
+        ok: impl FnOnce(&T) -> String,
+        context: impl FnOnce() -> String,
+    ) -> Result<T, EngineError> {
+        match &result {
+            Ok(value) => {
+                let entry = ok(value);
+                self.log(entry);
+            }
+            Err(e) => {
+                let entry = format!("Отказ ({}): {e}", context());
+                self.log(entry);
+            }
+        }
+        result
+    }
+
+    /// Книга заклинаний персонажа.
+    pub fn spellbook(&self, id: &str) -> Result<SpellbookView, EngineError> {
+        let c = self.character(id)?;
+        c.spellbook().ok_or_else(|| EngineError::NotASpellcaster(c.name.clone()))
+    }
+
+    /// Из чего класс персонажа может подготовить заклинания.
+    pub fn preparation_options(
+        &self,
+        id: &str,
+        caster_id: &str,
+    ) -> Result<Vec<SpellEntry>, EngineError> {
+        self.character(id)?.preparation_options(caster_id)
+    }
+
+    /// Подготовка заклинаний. Возвращает обновлённую книгу.
+    pub fn prepare_spells(
+        &mut self,
+        id: &str,
+        caster_id: &str,
+        spells: &[String],
+    ) -> Result<SpellbookView, EngineError> {
+        let c = self.character_mut(id)?;
+        let name = c.name.clone();
+        let result = c.prepare_spells(caster_id, spells);
+        self.logged(
+            result,
+            |_| format!("{name}: подготовлено заклинаний — {}", spells.len()),
+            || format!("подготовка, {name}"),
+        )?;
+        self.spellbook(id)
+    }
+
+    /// Накладывание заклинания с проверкой правил и списанием ячейки.
+    pub fn cast_spell(
+        &mut self,
+        id: &str,
+        request: &CastRequest,
+    ) -> Result<CastOutcome, EngineError> {
+        let c = self.character_mut(id)?;
+        let name = c.name.clone();
+        let result = c.cast_spell(request);
+        self.logged(
+            result,
+            |o| o.summary.clone(),
+            || format!("{name}, заклинание «{}»", request.spell_id),
+        )
+    }
+
+    /// Ручная трата или возврат ячейки. Возвращает обновлённую книгу.
+    pub fn change_slot(
+        &mut self,
+        id: &str,
+        slot: SlotRef,
+        spend: bool,
+    ) -> Result<SpellbookView, EngineError> {
+        let c = self.character_mut(id)?;
+        let name = c.name.clone();
+        let result = c.change_slot(slot, spend);
+        let verb = if spend { "потрачена" } else { "возвращена" };
+        self.logged(
+            result,
+            |p| format!("{name}: ячейка {verb} вручную — {} {}/{}", p.name(), p.current(), p.max()),
+            || format!("ячейка, {name}"),
+        )?;
+        self.spellbook(id)
+    }
+
+    /// Восстановление ячейки предметом.
+    pub fn restore_slot_with(
+        &mut self,
+        id: &str,
+        item_resource_id: &str,
+        slot: SlotRef,
+    ) -> Result<SlotRestoreOutcome, EngineError> {
+        let c = self.character_mut(id)?;
+        let name = c.name.clone();
+        let result = c.restore_slot_with(item_resource_id, slot);
+        self.logged(result, |o| o.summary.clone(), || format!("восстановление ячейки, {name}"))
     }
 
     pub fn character(&self, id: &str) -> Result<&Character, EngineError> {
@@ -283,6 +405,7 @@ impl Session {
             scene: self.scene.clone(),
             party: self.party.clone(),
             treasury: self.treasury.clone(),
+            engine_log: self.engine_log.clone(),
         }
     }
 }
@@ -341,8 +464,11 @@ mod tests {
         assert_eq!(view.scene.day, 82);
         assert_eq!(view.members.len(), 6);
         let by_id = |id: &str| view.members.iter().find(|m| m.id == id).unwrap();
+        assert_eq!(view.scene.location, "Вейденбург, Мясной мост");
         assert!(by_id("pc.nikis").in_scene);
-        assert!(by_id("npc.valeria").in_scene);
+        assert!(by_id("npc.corvus").in_scene);
+        assert!(by_id("npc.yussach").in_scene);
+        assert!(!by_id("npc.valeria").in_scene);
         assert!(!by_id("npc.gunther").in_scene);
         assert_eq!(by_id("npc.corvus").summary, "Монах 8");
         assert_eq!(by_id("npc.yussach").summary, "Исчадие (квазит)");
@@ -410,6 +536,27 @@ mod tests {
         assert_eq!(view.entries[0].reason, "Ужин в «Золотом Фазане»");
         assert!(s.add_manual_treasury_entry("gp", "purse", -10_000, "").is_err());
         assert!(s.add_manual_treasury_entry("gp", "nowhere", 1, "").is_err());
+    }
+
+    #[test]
+    fn spell_actions_are_logged_with_reasons() {
+        let mut s = session(1);
+        let out = s.cast_spell("pc.nikis", &CastRequest::new("misty-step")).unwrap();
+        assert_eq!(s.engine_log().last(), Some(&out.summary));
+        assert!(s.cast_spell("pc.nikis", &CastRequest::new("fireball")).is_err());
+        let refusal = s.engine_log().last().unwrap();
+        assert!(refusal.starts_with("Отказ (Сэр Никис Стрэндж, заклинание «fireball»)"));
+        assert!(s.prepare_spells("npc.valeria", "cleric", &[]).is_err());
+        assert!(s.spellbook("npc.corvus").is_err());
+
+        let book = s.change_slot("npc.valeria", SlotRef::Level(2), true).unwrap();
+        let slot2 = book.slots.iter().find(|x| x.level == 2 && !x.pact).unwrap();
+        assert_eq!(slot2.pool.current(), 2);
+        for _ in 0..20 {
+            s.log("x");
+        }
+        assert_eq!(s.engine_log().len(), ENGINE_LOG_LIMIT);
+        assert_eq!(s.save_state().engine_log.len(), ENGINE_LOG_LIMIT);
     }
 
     #[test]

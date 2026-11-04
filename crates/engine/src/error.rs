@@ -39,6 +39,56 @@ pub enum EngineError {
     InvalidQuantity(i64),
     /// Расход больше остатка.
     InsufficientFunds { asset: String, location: String, held: i64, requested: i64 },
+    /// В каталоге нет заклинания с таким ID.
+    UnknownSpell(String),
+    /// Персонаж не владеет магией.
+    NotASpellcaster(String),
+    /// Заклинание не известно, не подготовлено и не дано чертой или предметом.
+    SpellNotAvailable { character: String, spell: String },
+    /// Способ «заговор» для заклинания с кругом.
+    NotACantrip(String),
+    /// Заговоры не тратят ячеек.
+    CantripNoSlot(String),
+    /// Ячейка ниже круга заклинания.
+    SlotTooLow { spell: String, spell_level: u8, slot_level: u8 },
+    /// Круг ячейки вне 1–9.
+    InvalidSlotLevel(u8),
+    /// Нет свободной ячейки нужного круга (`exact`) или нужного круга и выше.
+    NoSlotAvailable { level: u8, exact: bool },
+    /// У персонажа нет магии договора.
+    NoPactMagic(String),
+    /// Ячейки договора бывают только одного круга.
+    PactSlotLevel { pact_level: u8, requested: u8 },
+    /// Заклинание не ритуальное.
+    NotARitual(String),
+    /// Персонаж не может провести это заклинание как ритуал.
+    RitualNotAllowed { character: String, spell: String },
+    /// Заклинание не дано персонажу чертой или предметом.
+    NotGranted { character: String, spell: String },
+    /// Нет свитка с этим заклинанием.
+    NoScroll(String),
+    /// Заклинания свитка нет в списках классов персонажа.
+    ScrollNotOnList { character: String, spell: String },
+    /// У персонажа нет такого класса-заклинателя.
+    CasterNotFound(String),
+    /// Класс знает заклинания, а не подготавливает их.
+    NotPreparedCaster(String),
+    /// Подготовка возможна только после длительного отдыха.
+    PreparationClosed,
+    /// Заговоры не подготавливают.
+    CantripNotPrepared(String),
+    /// Круг заклинания выше доступного классу.
+    SpellLevelTooHigh { spell: String, level: u8, max: u8 },
+    /// Заклинания нет в списке класса (или в книге волшебника).
+    NotOnClassList { spell: String, list: String },
+    /// Подготовлено больше лимита.
+    PreparedLimit { limit: u32, requested: u32 },
+    /// Все ячейки этого круга и так свободны.
+    SlotFull(String),
+    /// Предмет восстанавливает только ячейки договора.
+    RestorerPactOnly(String),
+    /// Предмет не восстанавливает ячейки такого круга.
+    RestorerLevel { item: String, max: u8, requested: u8 },
 }
 
 impl fmt::Display for EngineError {
@@ -81,6 +131,71 @@ impl fmt::Display for EngineError {
             Self::InsufficientFunds { asset, location, held, requested } => write!(
                 f,
                 "Недостаточно «{asset}» в месте «{location}»: есть {held}, нужно {requested}"
+            ),
+            Self::UnknownSpell(id) => write!(f, "Неизвестное заклинание «{id}»"),
+            Self::NotASpellcaster(name) => write!(f, "{name} не владеет магией"),
+            Self::SpellNotAvailable { character, spell } => write!(
+                f,
+                "«{spell}» не известно и не подготовлено у персонажа {character}, и его не даёт ни черта, ни предмет, ни свиток"
+            ),
+            Self::NotACantrip(spell) => write!(f, "«{spell}» — не заговор, нужна ячейка"),
+            Self::CantripNoSlot(spell) => write!(f, "«{spell}» — заговор, ячейка не нужна"),
+            Self::SlotTooLow { spell, spell_level, slot_level } => write!(
+                f,
+                "«{spell}» — заклинание {spell_level} круга, ячейкой {slot_level} круга его не сотворить"
+            ),
+            Self::InvalidSlotLevel(l) => write!(f, "Недопустимый круг ячейки: {l} (допустимо 1–9)"),
+            Self::NoSlotAvailable { level, exact: true } => {
+                write!(f, "Нет свободных ячеек {level} круга")
+            }
+            Self::NoSlotAvailable { level, exact: false } => {
+                write!(f, "Нет свободных ячеек {level} круга и выше")
+            }
+            Self::NoPactMagic(name) => write!(f, "У персонажа {name} нет ячеек договора"),
+            Self::PactSlotLevel { pact_level, requested } => write!(
+                f,
+                "Ячейки договора всегда {pact_level} круга — ячейку {requested} круга ими не взять"
+            ),
+            Self::NotARitual(spell) => write!(f, "«{spell}» нельзя провести как ритуал"),
+            Self::RitualNotAllowed { character, spell } => write!(
+                f,
+                "{character} не может провести «{spell}» ритуалом: нужен класс с ритуальным колдовством и подготовленное (или записанное в книгу) заклинание"
+            ),
+            Self::NotGranted { character, spell } => {
+                write!(f, "«{spell}» не дано персонажу {character} чертой или предметом")
+            }
+            Self::NoScroll(spell) => write!(f, "Нет свитка «{spell}»"),
+            Self::ScrollNotOnList { character, spell } => write!(
+                f,
+                "{character} не может прочесть свиток «{spell}»: заклинания нет в списках его классов"
+            ),
+            Self::CasterNotFound(id) => write!(f, "У персонажа нет класса-заклинателя «{id}»"),
+            Self::NotPreparedCaster(label) => {
+                write!(f, "{label}: заклинания известны, а не подготавливаются")
+            }
+            Self::PreparationClosed => write!(
+                f,
+                "Подготовить заклинания можно только после длительного отдыха, до первого сотворённого заклинания"
+            ),
+            Self::CantripNotPrepared(spell) => {
+                write!(f, "«{spell}» — заговор, заговоры не подготавливают")
+            }
+            Self::SpellLevelTooHigh { spell, level, max } => write!(
+                f,
+                "«{spell}» — {level} круг, а доступно только до {max} круга"
+            ),
+            Self::NotOnClassList { spell, list } => write!(f, "«{spell}» нет в списке {list}"),
+            Self::PreparedLimit { limit, requested } => write!(
+                f,
+                "Можно подготовить не больше {limit} заклинаний, выбрано {requested}"
+            ),
+            Self::SlotFull(name) => write!(f, "«{name}»: все ячейки и так свободны"),
+            Self::RestorerPactOnly(item) => {
+                write!(f, "{item} восстанавливает только ячейки договора")
+            }
+            Self::RestorerLevel { item, max, requested } => write!(
+                f,
+                "{item} восстанавливает ячейки не выше {max} круга, а нужна ячейка {requested} круга"
             ),
         }
     }
