@@ -29,6 +29,16 @@ pub enum EngineError {
     ZeroAmount,
     /// У персонажа нет ресурса с таким ID.
     ResourceNotFound(String),
+    /// В отряде нет персонажа с таким ID.
+    CharacterNotFound(String),
+    /// В казне нет ценности с таким ID.
+    UnknownAsset(String),
+    /// В казне нет места хранения с таким ID.
+    UnknownLocation(String),
+    /// Недопустимое количество в операции казны.
+    InvalidQuantity(i64),
+    /// Расход больше остатка.
+    InsufficientFunds { asset: String, location: String, held: i64, requested: i64 },
 }
 
 impl fmt::Display for EngineError {
@@ -64,6 +74,14 @@ impl fmt::Display for EngineError {
             }
             Self::ZeroAmount => write!(f, "Количество должно быть больше нуля"),
             Self::ResourceNotFound(id) => write!(f, "У персонажа нет ресурса «{id}»"),
+            Self::CharacterNotFound(id) => write!(f, "В отряде нет персонажа «{id}»"),
+            Self::UnknownAsset(id) => write!(f, "В казне нет ценности «{id}»"),
+            Self::UnknownLocation(id) => write!(f, "В казне нет места хранения «{id}»"),
+            Self::InvalidQuantity(n) => write!(f, "Недопустимое количество: {n}"),
+            Self::InsufficientFunds { asset, location, held, requested } => write!(
+                f,
+                "Недостаточно «{asset}» в месте «{location}»: есть {held}, нужно {requested}"
+            ),
         }
     }
 }

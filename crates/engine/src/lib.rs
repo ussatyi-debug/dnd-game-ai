@@ -12,6 +12,7 @@
 //! - [`resource`] — пулы ресурсов (Везунчик, ячейки, Ци) и восстановление на отдыхе;
 //! - [`character`] — персонаж: исходные данные и вычисляемые значения листа;
 //! - [`fixtures`] — демо-персонаж до появления импорта кампании;
+//! - [`treasury`] — казна отряда с журналом операций;
 //! - [`session`] — сессия, общая для приложения и веб-версии.
 
 pub mod character;
@@ -23,10 +24,11 @@ pub mod notation;
 pub mod resource;
 pub mod rng;
 pub mod session;
+pub mod treasury;
 
 pub use character::{
     ability_modifier, proficiency_bonus, Ability, AbilityLine, AbilityScores, Character,
-    CharacterSheet, ClassLevel, HitPoints,
+    CharacterKind, CharacterSheet, ClassLevel, HitPoints,
 };
 pub use check::{player_d20, roll_d20, AttackResult, D20Roll, Modifier, RollMode, RollSource};
 pub use error::EngineError;
@@ -34,4 +36,11 @@ pub use expr::{DiceExpr, DiceGroupRoll, ExprRoll, Term};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
 pub use resource::{Recovery, ResourcePool, RestKind};
 pub use rng::{DiceRng, Xoshiro256};
-pub use session::{LuckyReroll, RestResult, Session, LUCKY_ID};
+pub use session::{
+    LuckyReroll, PartyMember, PartyView, RestResult, RestedCharacter, SaveState, Scene, Session,
+    LUCKY_ID, SAVE_FORMAT_VERSION,
+};
+pub use treasury::{
+    gp, Asset, AssetKind, Copper, Entry, EntrySource, EntryView, Location, NewEntry, Treasury,
+    TreasuryView,
+};

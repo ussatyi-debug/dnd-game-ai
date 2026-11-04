@@ -21,7 +21,11 @@ use serde_json::{json, Value};
 pub enum Request {
     RollExpression { expression: String, critical: bool },
     LuckyReroll,
-    CharacterSheet,
+    CharacterSheet { id: String },
+    Party,
+    Treasury,
+    SaveState,
+    TreasuryAddManual { asset_id: String, location_id: String, quantity: i64, reason: String },
     TakeRest { kind: RestKind },
 }
 
@@ -43,7 +47,15 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(session.roll_expression(&expression, critical).map_err(|e| e.to_string())?)
         }
         Request::LuckyReroll => to_value(session.lucky_reroll().map_err(|e| e.to_string())?),
-        Request::CharacterSheet => to_value(session.sheet()),
+        Request::CharacterSheet { id } => to_value(session.sheet(&id).map_err(|e| e.to_string())?),
+        Request::Party => to_value(session.party_view()),
+        Request::Treasury => to_value(session.treasury_view()),
+        Request::SaveState => to_value(session.save_state()),
+        Request::TreasuryAddManual { asset_id, location_id, quantity, reason } => to_value(
+            session
+                .add_manual_treasury_entry(&asset_id, &location_id, quantity, &reason)
+                .map_err(|e| e.to_string())?,
+        ),
         Request::TakeRest { kind } => to_value(session.take_rest(kind)),
     }
 }
@@ -53,7 +65,7 @@ fn to_value<T: Serialize>(value: T) -> Result<Value, String> {
 }
 
 thread_local! {
-    static SESSION: RefCell<Session> = RefCell::new(Session::with_demo_character(Xoshiro256::from_seed(0)));
+    static SESSION: RefCell<Session> = RefCell::new(Session::demo(Xoshiro256::from_seed(0)));
     static OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -61,7 +73,7 @@ thread_local! {
 #[no_mangle]
 pub extern "C" fn engine_init(seed_hi: u32, seed_lo: u32) {
     let seed = (u64::from(seed_hi) << 32) | u64::from(seed_lo);
-    SESSION.with(|s| *s.borrow_mut() = Session::with_demo_character(Xoshiro256::from_seed(seed)));
+    SESSION.with(|s| *s.borrow_mut() = Session::demo(Xoshiro256::from_seed(seed)));
 }
 
 /// Выделяет буфер под запрос. Буфер освобождается вызовом [`engine_free`].
@@ -114,7 +126,7 @@ mod tests {
     use super::*;
 
     fn session() -> Session {
-        Session::with_demo_character(Xoshiro256::from_seed(5))
+        Session::demo(Xoshiro256::from_seed(5))
     }
 
     fn call(session: &mut Session, request: Value) -> Value {
@@ -137,7 +149,7 @@ mod tests {
     #[test]
     fn character_sheet_has_lucky_and_derived_values() {
         let mut s = session();
-        let r = call(&mut s, json!({ "cmd": "character_sheet" }));
+        let r = call(&mut s, json!({ "cmd": "character_sheet", "id": "pc.nikis" }));
         let sheet = &r["ok"];
         assert_eq!(sheet["name"], "Сэр Никис Стрэндж");
         assert_eq!(sheet["level"], 10);
@@ -157,8 +169,11 @@ mod tests {
         assert_eq!(r["ok"]["lucky"]["current"], 2);
 
         let rested = call(&mut s, json!({ "cmd": "take_rest", "kind": "long" }));
-        assert_eq!(rested["ok"]["sheet"]["resources"][0]["current"], 3);
-        assert!(rested["ok"]["restored"].as_array().unwrap().iter().any(|v| v == "Везунчик"));
+        let nikis = &rested["ok"]["characters"][0];
+        assert_eq!(nikis["id"], "pc.nikis");
+        assert!(nikis["restored"].as_array().unwrap().iter().any(|v| v == "Везунчик"));
+        let sheet = call(&mut s, json!({ "cmd": "character_sheet", "id": "pc.nikis" }));
+        assert_eq!(sheet["ok"]["resources"][0]["current"], 3);
     }
 
     #[test]
@@ -169,6 +184,33 @@ mod tests {
         }
         let r = call(&mut s, json!({ "cmd": "lucky_reroll" }));
         assert!(r["err"].as_str().unwrap().contains("Везунчик"));
+    }
+
+    #[test]
+    fn party_treasury_and_save() {
+        let mut s = session();
+        let party = call(&mut s, json!({ "cmd": "party" }));
+        assert_eq!(party["ok"]["members"].as_array().unwrap().len(), 6);
+        assert_eq!(party["ok"]["scene"]["day"], 82);
+        let treasury = call(&mut s, json!({ "cmd": "treasury" }));
+        assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
+        assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
+        let save = call(&mut s, json!({ "cmd": "save_state" }));
+        assert_eq!(save["ok"]["format_version"], 1);
+        assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
+        let added = call(
+            &mut s,
+            json!({
+                "cmd": "treasury_add_manual",
+                "assetId": "gp",
+                "locationId": "purse",
+                "quantity": -5,
+                "reason": "Подаяние"
+            }),
+        );
+        assert_eq!(added["ok"]["entries"][0]["source"], "manual");
+        let missing = call(&mut s, json!({ "cmd": "character_sheet", "id": "x" }));
+        assert!(missing["err"].is_string());
     }
 
     #[test]
@@ -194,7 +236,7 @@ mod tests {
     #[test]
     fn ffi_round_trip() {
         engine_init(0, 42);
-        let request = json!({ "cmd": "character_sheet" }).to_string();
+        let request = json!({ "cmd": "character_sheet", "id": "pc.nikis" }).to_string();
         let bytes = request.as_bytes();
         let ptr = engine_alloc(bytes.len());
         unsafe {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { LUCKY_ID, type CharacterSheet, type Recovery, type ResourcePool, type RestKind } from "../lib/engine";
 
 const recoveryLabel: Record<Recovery, string> = {
@@ -31,7 +32,11 @@ interface CharacterSheetPanelProps {
   onRest: (kind: RestKind) => void;
 }
 
+type Tab = "main" | "resources";
+
 export default function CharacterSheetPanel({ sheet, busy, onRest }: CharacterSheetPanelProps) {
+  const [tab, setTab] = useState<Tab>("main");
+
   if (!sheet) {
     return (
       <section className="rounded-xl border border-edge bg-panel p-4 text-sm text-muted">
@@ -56,10 +61,37 @@ export default function CharacterSheetPanel({ sheet, busy, onRest }: CharacterSh
             .join(" / ")}
         </p>
         <p className="text-xs text-muted">
-          Уровень {sheet.level} · Мастерство {signed(sheet.proficiency_bonus)}
+          {sheet.race}
+          {sheet.level > 0 ? ` · Уровень ${sheet.level}` : ""} · Мастерство{" "}
+          {signed(sheet.proficiency_bonus)}
         </p>
+        <p className="mt-1 text-xs text-gold/80">📍 {sheet.location}</p>
       </header>
 
+      <div className="flex gap-1 border-b border-edge p-2" role="tablist">
+        {(
+          [
+            ["main", "Основное"],
+            ["resources", "Ресурсы"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`rounded-md px-3 py-1.5 text-sm ${
+              tab === id ? "bg-gold text-ink" : "text-muted hover:text-parchment"
+            }`}
+          >
+            {label}
+            {id === "resources" && lucky ? ` ◆${lucky.current}` : ""}
+          </button>
+        ))}
+      </div>
+
+      {tab === "main" ? (
       <div className="space-y-4 p-4">
         <div>
           <div className="flex items-baseline justify-between text-sm">
@@ -96,7 +128,9 @@ export default function CharacterSheetPanel({ sheet, busy, onRest }: CharacterSh
             </div>
           ))}
         </dl>
-
+      </div>
+      ) : (
+      <div className="space-y-4 p-4">
         {lucky && (
           <div className="rounded-lg border border-gold/50 bg-gold/5 p-3">
             <div className="flex items-center justify-between">
@@ -110,6 +144,10 @@ export default function CharacterSheetPanel({ sheet, busy, onRest }: CharacterSh
               <span className="text-xs text-muted">{recoveryLabel[lucky.recovery]}</span>
             </div>
           </div>
+        )}
+
+        {others.length === 0 && !lucky && (
+          <p className="text-sm text-muted">У персонажа нет отслеживаемых ресурсов.</p>
         )}
 
         <ul className="space-y-2">
@@ -147,7 +185,9 @@ export default function CharacterSheetPanel({ sheet, busy, onRest }: CharacterSh
             Длительный отдых
           </button>
         </div>
+        <p className="text-[11px] text-muted">Отдых применяется ко всему отряду.</p>
       </div>
+      )}
     </section>
   );
 }

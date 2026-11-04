@@ -142,7 +142,7 @@ export default function DiceTray({ enabled, lucky, onRoll, onLuckyChange, onSend
         ))}
       </div>
 
-      <div className="relative min-h-64 flex-1">
+      <div className="relative min-h-40 flex-1">
         <div ref={containerRef} className="absolute inset-0" />
         {sceneError && (
           <p className="absolute inset-0 grid place-items-center p-4 text-center text-sm text-muted">

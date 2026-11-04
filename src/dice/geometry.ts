@@ -173,13 +173,13 @@ function baseVertices(kind: DieKind): Vec3[] {
 
 /** Размер кубов (радиус описанной сферы) — подобран для одинакового визуального размера. */
 const SIZE: Record<DieKind, number> = {
-  d4: 1.15,
-  d6: 0.95,
-  d8: 1.0,
-  d10: 1.0,
-  d10_tens: 1.0,
-  d12: 1.0,
-  d20: 1.05,
+  d4: 0.86,
+  d6: 0.72,
+  d8: 0.75,
+  d10: 0.75,
+  d10_tens: 0.75,
+  d12: 0.76,
+  d20: 0.8,
 };
 
 const SIDES: Record<DieKind, number> = {

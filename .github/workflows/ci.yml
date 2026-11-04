@@ -145,8 +145,10 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Сборка интерфейса
         run: npm run build
-      - name: Линтер приложения
-        run: cargo clippy -p dnd-game-ai -- -D warnings
+      - name: Линтер и тесты приложения
+        run: |
+          cargo clippy -p dnd-game-ai --all-targets -- -D warnings
+          cargo test -p dnd-game-ai
       - name: Сборка установщика
         run: npx tauri build
       - name: Установщик

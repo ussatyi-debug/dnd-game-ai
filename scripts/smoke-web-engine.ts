@@ -17,6 +17,7 @@ assert.ok(roll.total >= 8 && roll.total <= 48, `8d6: ${roll.total}`);
 
 const sheet = engine.call<{ name: string; level: number; resources: { id: string; current: number }[] }>({
   cmd: "character_sheet",
+  id: "pc.nikis",
 });
 assert.equal(sheet.name, "Сэр Никис Стрэндж");
 assert.equal(sheet.level, 10);
@@ -26,11 +27,16 @@ const reroll = engine.call<{ value: number; lucky: { current: number } }>({ cmd:
 assert.ok(reroll.value >= 1 && reroll.value <= 20);
 assert.equal(reroll.lucky.current, 2);
 
-const rested = engine.call<{ sheet: { resources: { current: number }[] } }>({
+const rested = engine.call<{ characters: { id: string; restored: string[] }[] }>({
   cmd: "take_rest",
   kind: "long",
 });
-assert.equal(rested.sheet.resources[0]?.current, 3);
+assert.ok(rested.characters[0]?.restored.includes("Везунчик"));
+
+const party = engine.call<{ members: unknown[]; treasury_total: number }>({ cmd: "party" });
+assert.equal(party.members.length, 6);
+const treasury = engine.call<{ total: number }>({ cmd: "treasury" });
+assert.equal(treasury.total, party.treasury_total);
 
 assert.throws(
   () => engine.call({ cmd: "roll_expression", expression: "2d7", critical: false }),

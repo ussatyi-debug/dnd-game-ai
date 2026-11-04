@@ -99,18 +99,36 @@ pub struct HitPoints {
     pub temporary: u32,
 }
 
+/// Роль в отряде.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CharacterKind {
+    /// Персонаж игрока.
+    Player,
+    /// Спутник под управлением мастера.
+    Companion,
+    /// Фамильяр.
+    Familiar,
+}
+
 /// Персонаж (исходные данные).
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Character {
     pub id: String,
+    pub kind: CharacterKind,
     pub name: String,
     pub title: String,
+    pub race: String,
     pub classes: Vec<ClassLevel>,
     pub abilities: AbilityScores,
     pub hit_points: HitPoints,
     pub armor_class: i32,
     pub speed_ft: u32,
-    resources: Vec<ResourcePool>,
+    /// Где персонаж сейчас.
+    pub location: String,
+    pub(crate) resources: Vec<ResourcePool>,
 }
 
 /// Строка характеристики в листе.
@@ -128,8 +146,11 @@ pub struct AbilityLine {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CharacterSheet {
     pub id: String,
+    pub kind: CharacterKind,
     pub name: String,
     pub title: String,
+    pub race: String,
+    pub location: String,
     pub classes: Vec<ClassLevel>,
     pub level: u32,
     pub proficiency_bonus: i32,
@@ -142,31 +163,6 @@ pub struct CharacterSheet {
 }
 
 impl Character {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        title: impl Into<String>,
-        classes: Vec<ClassLevel>,
-        abilities: AbilityScores,
-        hit_points: HitPoints,
-        armor_class: i32,
-        speed_ft: u32,
-        resources: Vec<ResourcePool>,
-    ) -> Self {
-        Self {
-            id: id.into(),
-            name: name.into(),
-            title: title.into(),
-            classes,
-            abilities,
-            hit_points,
-            armor_class,
-            speed_ft,
-            resources,
-        }
-    }
-
     /// Общий уровень (сумма уровней классов).
     pub fn level(&self) -> u32 {
         self.classes.iter().map(|c| c.level).sum()
@@ -220,8 +216,11 @@ impl Character {
     pub fn sheet(&self) -> CharacterSheet {
         CharacterSheet {
             id: self.id.clone(),
+            kind: self.kind,
             name: self.name.clone(),
             title: self.title.clone(),
+            race: self.race.clone(),
+            location: self.location.clone(),
             classes: self.classes.clone(),
             level: self.level(),
             proficiency_bonus: self.proficiency_bonus(),
@@ -299,12 +298,14 @@ mod tests {
 
     #[test]
     fn missing_resource_is_an_error() {
-        let mut c = Character::new(
-            "test",
-            "Тест",
-            "",
-            vec![ClassLevel { class: "Воин".into(), subclass: None, level: 1 }],
-            AbilityScores {
+        let mut c = Character {
+            id: "test".into(),
+            kind: CharacterKind::Player,
+            name: "Тест".into(),
+            title: String::new(),
+            race: "Человек".into(),
+            classes: vec![ClassLevel { class: "Воин".into(), subclass: None, level: 1 }],
+            abilities: AbilityScores {
                 strength: 10,
                 dexterity: 10,
                 constitution: 10,
@@ -312,11 +313,12 @@ mod tests {
                 wisdom: 10,
                 charisma: 10,
             },
-            HitPoints { current: 10, max: 10, temporary: 0 },
-            10,
-            30,
-            vec![ResourcePool::new("x", "X", 1, Recovery::Manual)],
-        );
+            hit_points: HitPoints { current: 10, max: 10, temporary: 0 },
+            armor_class: 10,
+            speed_ft: 30,
+            location: "Тестовая".into(),
+            resources: vec![ResourcePool::new("x", "X", 1, Recovery::Manual)],
+        };
         assert_eq!(
             c.resource_mut("feat.lucky"),
             Err(EngineError::ResourceNotFound("feat.lucky".into()))

@@ -71,9 +71,14 @@ function runOnce(kinds: DieKind[], bounds: TrayBounds): Simulation {
   world.allowSleep = true;
 
   const diceMaterial = new CANNON.Material("dice");
-  const trayMaterial = new CANNON.Material("tray");
+  const floorMaterial = new CANNON.Material("floor");
+  const wallMaterial = new CANNON.Material("wall");
   world.addContactMaterial(
-    new CANNON.ContactMaterial(diceMaterial, trayMaterial, { friction: 0.3, restitution: 0.3 }),
+    new CANNON.ContactMaterial(diceMaterial, floorMaterial, { friction: 0.35, restitution: 0.3 }),
+  );
+  // Упругие бортики отбрасывают кубы обратно к центру лотка.
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(diceMaterial, wallMaterial, { friction: 0.05, restitution: 0.75 }),
   );
   world.addContactMaterial(
     new CANNON.ContactMaterial(diceMaterial, diceMaterial, { friction: 0.1, restitution: 0.35 }),
@@ -81,12 +86,12 @@ function runOnce(kinds: DieKind[], bounds: TrayBounds): Simulation {
 
   const { halfWidth: hw, halfDepth: hd } = bounds;
   // Плоскость cannon-es смотрит нормалью в +Z; поворачиваем её внутрь лотка.
-  addPlane(world, trayMaterial, [0, 0, 0], [1, 0, 0], -Math.PI / 2); // пол
-  addPlane(world, trayMaterial, [0, CEILING, 0], [1, 0, 0], Math.PI / 2); // потолок
-  addPlane(world, trayMaterial, [-hw, 0, 0], [0, 1, 0], Math.PI / 2); // левая стенка
-  addPlane(world, trayMaterial, [hw, 0, 0], [0, 1, 0], -Math.PI / 2); // правая стенка
-  addPlane(world, trayMaterial, [0, 0, -hd], [0, 1, 0], 0); // дальняя стенка
-  addPlane(world, trayMaterial, [0, 0, hd], [0, 1, 0], Math.PI); // ближняя стенка
+  addPlane(world, floorMaterial, [0, 0, 0], [1, 0, 0], -Math.PI / 2); // пол
+  addPlane(world, wallMaterial, [0, CEILING, 0], [1, 0, 0], Math.PI / 2); // потолок
+  addPlane(world, wallMaterial, [-hw, 0, 0], [0, 1, 0], Math.PI / 2); // левая стенка
+  addPlane(world, wallMaterial, [hw, 0, 0], [0, 1, 0], -Math.PI / 2); // правая стенка
+  addPlane(world, wallMaterial, [0, 0, -hd], [0, 1, 0], 0); // дальняя стенка
+  addPlane(world, wallMaterial, [0, 0, hd], [0, 1, 0], Math.PI); // ближняя стенка
 
   const columns = 3;
   const rows = Math.ceil(kinds.length / columns);
@@ -108,20 +113,20 @@ function runOnce(kinds: DieKind[], bounds: TrayBounds): Simulation {
     const column = index % columns;
     const row = Math.floor(index / columns);
     body.position.set(
-      -hw + 1.4 + column * 2.2,
-      3 + (index % 2) * 1.6,
-      (row - (rows - 1) / 2) * 2.3 + (Math.random() - 0.5) * 0.4,
+      -hw + 1.1 + column * 1.7,
+      3 + (index % 2) * 1.4,
+      (row - (rows - 1) / 2) * 1.8 + (Math.random() - 0.5) * 0.4,
     );
     body.quaternion.setFromEuler(
       Math.random() * Math.PI * 2,
       Math.random() * Math.PI * 2,
       Math.random() * Math.PI * 2,
     );
-    body.velocity.set(7 + Math.random() * 6, -3 - Math.random() * 3, (Math.random() - 0.5) * 10);
+    body.velocity.set(18 + Math.random() * 10, -6 - Math.random() * 4, (Math.random() - 0.5) * 18);
     body.angularVelocity.set(
-      (Math.random() - 0.5) * 40,
-      (Math.random() - 0.5) * 40,
-      (Math.random() - 0.5) * 40,
+      (Math.random() - 0.5) * 60,
+      (Math.random() - 0.5) * 60,
+      (Math.random() - 0.5) * 60,
     );
     world.addBody(body);
     return { shape, body };
