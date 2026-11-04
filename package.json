@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
     "build:web": "tsc --noEmit && vite build --mode web",
-    "test": "node --experimental-strip-types --no-warnings scripts/test-dice-geometry.ts"
+    "test": "node --experimental-strip-types --no-warnings scripts/test-dice-geometry.ts && node --experimental-strip-types --no-warnings scripts/test-knowledge.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
