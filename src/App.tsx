@@ -334,7 +334,7 @@ export default function App() {
         </p>
       )}
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3 lg:grid-cols-[20rem_minmax(0,1fr)_22rem]">
+      <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 p-3 lg:grid-cols-[20rem_minmax(0,1fr)_24rem]">
         <div className={`${shown("party")} min-h-0 flex-col lg:flex`}>
           <PartyPanel
             party={party}

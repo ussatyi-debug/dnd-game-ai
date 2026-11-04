@@ -303,7 +303,7 @@ export default function SpellbookPanel({ book, onChanged, onNote }: SpellbookPan
       })}
 
       <div className="flex flex-wrap gap-1" role="tablist" aria-label="Фильтр заклинаний">
-        {FILTERS.map((f) => (
+        {FILTERS.filter((f) => f.id !== "scrolls" || book.scrolls.length > 0).map((f) => (
           <button
             key={f.id}
             type="button"

@@ -95,7 +95,7 @@ export default function CharacterSheetPanel({
         <p className="mt-1 text-xs text-gold/80">📍 {sheet.location}</p>
       </header>
 
-      <div className="flex gap-1 border-b border-edge p-2" role="tablist">
+      <div className="flex gap-1 overflow-x-auto border-b border-edge p-2" role="tablist">
         {(
           [
             ["main", "Основное"],
@@ -109,7 +109,7 @@ export default function CharacterSheetPanel({
             role="tab"
             aria-selected={activeTab === id}
             onClick={() => setTab(id)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
+            className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm ${
               activeTab === id ? "bg-gold text-ink" : "text-muted hover:text-parchment"
             }`}
           >
@@ -121,7 +121,7 @@ export default function CharacterSheetPanel({
       </div>
 
       {activeTab === "spells" && book ? (
-        <SpellbookPanel book={book} onChanged={onSpellsChanged} onNote={onEngineNote} />
+        <SpellbookPanel key={book.character_id} book={book} onChanged={onSpellsChanged} onNote={onEngineNote} />
       ) : activeTab === "main" ? (
       <div className="space-y-4 p-4">
         <div>
