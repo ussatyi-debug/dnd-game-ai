@@ -13,6 +13,9 @@
 //! - [`character`] — персонаж: исходные данные и вычисляемые значения листа;
 //! - [`spells`] — каталог заклинаний (метаданные для проверок);
 //! - [`spellcasting`] — книга заклинаний персонажа: подготовка, ячейки, накладывание;
+//! - [`profile`] — полный лист: спасброски, навыки, атаки, умения, владения;
+//! - [`inventory`] — инвентарь по местам хранения;
+//! - [`master_ops`] — действия ИИ-мастера над состоянием и отмена его хода;
 //! - [`fixtures`] — демо-персонаж до появления импорта кампании;
 //! - [`treasury`] — казна отряда с журналом операций;
 //! - [`session`] — сессия, общая для приложения и веб-версии.
@@ -22,10 +25,14 @@ pub mod check;
 pub mod error;
 pub mod expr;
 pub mod fixtures;
+pub mod inventory;
+pub mod master_ops;
 pub mod notation;
+pub mod profile;
 pub mod resource;
 pub mod rng;
 pub mod session;
+mod sheets;
 mod spell_catalog;
 pub mod spellcasting;
 pub mod spells;
@@ -38,7 +45,16 @@ pub use character::{
 pub use check::{player_d20, roll_d20, AttackResult, D20Roll, Modifier, RollMode, RollSource};
 pub use error::EngineError;
 pub use expr::{DiceExpr, DiceGroupRoll, ExprRoll, Term};
+pub use inventory::{
+    Container, ContainerView, Inventory, InventoryView, Item, ItemGroup, ItemLine, NewItem,
+    ON_PERSON,
+};
+pub use master_ops::{Checkpoint, HpChange, MasterNote, NoteLayer, SceneChange, UndoInfo};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
+pub use profile::{
+    Attack, AttackLine, Attunement, Bonus, Feature, HitDice, Proficiency, ProficiencyLine, Profile,
+    SaveLine, SheetDetails, Skill, SkillEntry, SkillLine, CONDITIONS,
+};
 pub use resource::{Recovery, ResourcePool, RestKind};
 pub use rng::{DiceRng, Xoshiro256};
 pub use session::{

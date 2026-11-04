@@ -61,6 +61,32 @@ pub struct Location {
     pub name: String,
 }
 
+fn normalize(s: &str) -> String {
+    s.trim().to_lowercase().replace('ё', "е")
+}
+
+fn find_named<'a, T>(
+    items: &'a [T],
+    query: &str,
+    key: impl Fn(&T) -> (&String, &String),
+) -> Option<&'a T> {
+    let q = normalize(query);
+    if q.is_empty() {
+        return None;
+    }
+    if let Some(exact) = items.iter().find(|i| {
+        let (id, name) = key(i);
+        id == query.trim() || normalize(name) == q
+    }) {
+        return Some(exact);
+    }
+    let mut partial = items.iter().filter(|i| normalize(key(i).1).contains(&q));
+    match (partial.next(), partial.next()) {
+        (Some(one), None) => Some(one),
+        _ => None,
+    }
+}
+
 /// Кто создал запись журнала.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
@@ -202,6 +228,38 @@ impl Treasury {
             .iter()
             .find(|l| l.id == id)
             .ok_or_else(|| EngineError::UnknownLocation(id.to_string()))
+    }
+
+    pub fn assets(&self) -> &[Asset] {
+        &self.assets
+    }
+
+    pub fn locations(&self) -> &[Location] {
+        &self.locations
+    }
+
+    /// Ценность по ID или названию (точное совпадение, затем единственное частичное).
+    pub fn find_asset(&self, query: &str) -> Result<&Asset, EngineError> {
+        find_named(&self.assets, query, |a| (&a.id, &a.name))
+            .ok_or_else(|| EngineError::UnknownAsset(query.to_string()))
+    }
+
+    /// Место хранения по ID или названию.
+    pub fn find_location(&self, query: &str) -> Result<&Location, EngineError> {
+        find_named(&self.locations, query, |l| (&l.id, &l.name))
+            .ok_or_else(|| EngineError::UnknownLocation(query.to_string()))
+    }
+
+    /// Новая ценность (например, трофейный самоцвет). ID должен быть уникальным.
+    pub fn add_asset(&mut self, asset: Asset) -> Result<(), EngineError> {
+        if asset.id.trim().is_empty() || asset.name.trim().is_empty() {
+            return Err(EngineError::UnknownAsset(asset.id));
+        }
+        if self.assets.iter().any(|a| a.id == asset.id) {
+            return Err(EngineError::DuplicateAsset(asset.id));
+        }
+        self.assets.push(asset);
+        Ok(())
     }
 
     /// Количество ценности в месте хранения.

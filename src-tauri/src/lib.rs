@@ -12,9 +12,9 @@ use ai::{
     AiSettings, AiSettingsView, ChatMessage, MasterReply, ModelInfo, Provider, SettingsStore,
 };
 use dnd_engine::{
-    CastMethod, CastOutcome, CastRequest, CharacterSheet, ExprRoll, LuckyReroll, PartyView,
-    RestKind, RestResult, SaveState, Session, SlotRef, SlotRestoreOutcome, SpellEntry,
-    SpellbookView, TreasuryView,
+    CastMethod, CastOutcome, CastRequest, CharacterSheet, ExprRoll, InventoryView, LuckyReroll,
+    MasterNote, PartyView, RestKind, RestResult, SaveState, Session, SheetDetails, SlotRef,
+    SlotRestoreOutcome, SpellEntry, SpellbookView, TreasuryView, UndoInfo,
 };
 use tauri::{Manager, State};
 
@@ -144,6 +144,31 @@ fn engine_log(state: State<'_, SessionState>) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+fn character_details(id: String, state: State<'_, SessionState>) -> Result<SheetDetails, String> {
+    lock(&state)?.details(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn inventory(id: String, state: State<'_, SessionState>) -> Result<InventoryView, String> {
+    lock(&state)?.inventory(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn master_notes(state: State<'_, SessionState>) -> Result<Vec<MasterNote>, String> {
+    Ok(lock(&state)?.notes().to_vec())
+}
+
+#[tauri::command]
+fn master_undo_info(state: State<'_, SessionState>) -> Result<Option<UndoInfo>, String> {
+    Ok(lock(&state)?.master_undo_info())
+}
+
+#[tauri::command]
+fn undo_master_turn(state: State<'_, SessionState>) -> Result<Vec<String>, String> {
+    lock(&state)?.undo_master_turn().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn ai_settings(ai: State<'_, AiState>) -> Result<AiSettingsView, String> {
     Ok(lock(&ai.settings)?.view())
 }
@@ -236,6 +261,11 @@ pub fn run() {
             change_slot,
             restore_slot,
             engine_log,
+            character_details,
+            inventory,
+            master_notes,
+            master_undo_info,
+            undo_master_turn,
             ai_settings,
             ai_set_key,
             ai_select_model,

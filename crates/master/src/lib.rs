@@ -10,7 +10,7 @@ mod directives;
 
 pub use directives::{apply_directives, strip_directives, MasterAction, MasterTurn};
 
-use dnd_engine::{CharacterKind, Session, SpellbookView};
+use dnd_engine::{Character, CharacterKind, Proficiency, Session, SpellbookView};
 use serde_json::{json, Value};
 
 /// Кодекс кампании «Дом Стрэндж».
@@ -71,6 +71,19 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
 - Не утверждай в тексте, сколько ячеек осталось: это покажет движок. Если движок отказал, причина будет в «журнал_движка» на следующем ходу — исправь повествование (заклинание не сработало, нужна другая ячейка и т. п.).
 - Заклинания персонажа игрока тратятся только по его заявке. Если игрок сам нажал «Сотворить» в листе, это уже есть в «журнал_движка» — не списывай повторно.
 - Свиток можно прочесть, только если заклинание есть в списке класса персонажа; движок проверяет это сам.
+
+СОСТОЯНИЕ ОТРЯДА — ДВУСТОРОННЯЯ СВЯЗЬ
+- Ты меняешь лист, инвентарь, казну, сцену и базу знаний только командами движка в том же блоке ```engine. Без команды изменение не сохранится, и на следующем ходу движок покажет старые числа.
+- Хиты: {"cmd":"hp","character":"pc.nikis","damage":12} — урон (сначала снимаются временные хиты); "heal":8 — лечение; "temp":8 — временные хиты. Урон по персонажу игрока — только по его броскам урона противника из «кубы_мастера» или по итогам, которые он сам прислал.
+- Ресурсы (Ци, Везунчик, Канал Божественности, заряды предметов): {"cmd":"resource","character":"npc.corvus","resource":"monk.ki","delta":-1}; delta > 0 — восстановить. id ресурсов — в «листы».
+- Состояния: {"cmd":"condition","character":"npc.gunther","add":"Испуган"} / "remove". Истощение: "add":"Истощение 2".
+- Предметы: {"cmd":"item","character":"pc.nikis","add":"Печать Вернера","quantity":1,"container":"Кольцо Теневого Хранилища","category":"Документы"}; "remove":"Зелье Героизма"; "move":"Звёздный Фокус","to":"Сейф особняка". Деньги и самоцветы — не предметы, это казна.
+- Казна: {"cmd":"treasury","asset":"gp","location":"purse","quantity":-80,"reason":"Ужин в «Золотом Фазане»"} (quantity < 0 — расход); перемещение: {"cmd":"transfer","asset":"gp","quantity":500,"from":"crow_rock_vault","to":"purse","reason":"..."}; новая ценность: {"cmd":"new_asset","name":"Изумруд","kind":"gem","value":500} (kind: coin, gem, ingot, note, valuable; value — ЗМ за штуку), затем запись казны с её id. Места и id ценностей — в «казна».
+- Сцена: {"cmd":"scene","time":"полдень","location":"Серебряный Шпиль"}; "day" — только вперёд. Меняй время и место ТОЛЬКО когда игрок сам сказал, что время прошло или он переместился. Спутника перемещает {"cmd":"move","character":"npc.valeria","location":"..."}.
+- Отдых — только по заявке игрока: {"cmd":"rest","kind":"short"} или "long".
+- База знаний: {"cmd":"note","layer":"player","title":"Пароль тайной гати","text":"..."} — то, что герой узнал (видно игроку в «Записи мастера»); "layer":"master" — твой журнал: тайны, планы NPC, импровизации, которые надо помнить. Записи — в «записи_базы_знаний».
+- Игрок может одной кнопкой отменить весь твой последний ход с командами. Если в «журнал_движка» есть «Отменён ход мастера», перескажи сцену заново по заявке игрока.
+- Чтобы прибавить модификатор к кубу игрока, бери готовые числа из «листы»: спасброски (* — владение), навыки, атаки.
 
 СЦЕНА
 - «сцена» в контексте — факты кампании: день, время, где находится герой, и «situation» — что произошло накануне и что запланировано. Начинай и веди сцену отсюда: не переноси героя в другое место, не придумывай, зачем он пришёл, и не подменяй запланированные события своими.
@@ -150,6 +163,60 @@ fn magic_context(book: &SpellbookView) -> Value {
     })
 }
 
+fn signed(v: i32) -> String {
+    if v >= 0 {
+        format!("+{v}")
+    } else {
+        format!("{v}")
+    }
+}
+
+/// Итоговые числа листа для бросков: спасброски, навыки, атаки, состояния, инвентарь.
+/// Мастер прибавляет модификаторы к кубам игрока, поэтому числа нужны готовыми.
+fn sheet_context(c: &Character) -> Value {
+    let d = c.details();
+    let saves: Vec<String> = d
+        .saves
+        .iter()
+        .map(|s| format!("{} {}{}", s.label, signed(s.total), if s.proficient { "*" } else { "" }))
+        .collect();
+    let skills: Vec<String> = d
+        .skills
+        .iter()
+        .filter(|s| d.skills_listed || s.proficiency != Proficiency::None)
+        .map(|s| {
+            let mut line = format!("{} {}", s.name, signed(s.total));
+            if !s.advantage.is_empty() {
+                line.push_str(&format!(" (преимущество: {})", s.advantage.join("; ")));
+            }
+            line
+        })
+        .collect();
+    let attacks: Vec<String> = d
+        .attacks
+        .iter()
+        .map(|a| {
+            let unknown = if a.proficiency_unknown { ", владение не указано" } else { "" };
+            format!("{}: {} к попаданию, {}{unknown}", a.name, signed(a.to_hit), a.damage)
+        })
+        .collect();
+    let hit_dice: Vec<String> =
+        d.hit_dice.iter().map(|h| format!("{}/{} d{}", h.current, h.total, h.die)).collect();
+    let inventory: serde_json::Map<String, Value> =
+        c.inventory_summary().into_iter().map(|(place, items)| (place, json!(items))).collect();
+    json!({
+        "спасброски": saves,
+        "навыки": if d.skills_listed { json!(skills) } else { json!("в листе не указаны — модификатор характеристики") },
+        "пассивная_внимательность": d.passive_perception,
+        "атаки": attacks,
+        "состояния": d.conditions,
+        "истощение": d.exhaustion,
+        "кости_хитов": hit_dice,
+        "ресурсы": c.resources().iter().map(|r| format!("{} [{}] {}/{}", r.name(), r.id(), r.current(), r.max())).collect::<Vec<_>>(),
+        "инвентарь": inventory,
+    })
+}
+
 /// Контекст хода в JSON.
 pub fn turn_context(session: &mut Session) -> Value {
     let pool = [
@@ -186,12 +253,24 @@ pub fn turn_context(session: &mut Session) -> Value {
             "в_сцене": m.in_scene,
         })).collect::<Vec<_>>(),
         "персонаж_игрока": player,
+        "листы": session.party().iter().map(|c| (c.id.clone(), sheet_context(c))).collect::<serde_json::Map<_, _>>(),
+        "записи_базы_знаний": session.notes().iter().map(|n| json!({
+            "слой": n.layer,
+            "день": n.day,
+            "заголовок": n.title,
+            "текст": n.text,
+        })).collect::<Vec<_>>(),
         "магия": session.party().iter().filter_map(|c| {
             let book = c.spellbook()?;
             Some((c.id.clone(), magic_context(&book)))
         }).collect::<serde_json::Map<_, _>>(),
         "журнал_движка": session.engine_log(),
         "казна_всего_зм": party.treasury_total / 100,
+        "казна": session.treasury_view().locations.iter().filter(|l| !l.lines.is_empty()).map(|l| json!({
+            "место": l.name,
+            "id": l.id,
+            "состав": l.lines.iter().map(|h| format!("{} [{}] ×{}", h.name, h.asset_id, h.quantity)).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
         "кубы_мастера": pool,
     })
 }
@@ -239,6 +318,21 @@ mod tests {
         assert!(context["магия"].get("npc.corvus").is_none());
         assert!(context["журнал_движка"][0].as_str().unwrap().contains("Туманный шаг"));
         assert!(system_text(&context).contains("```engine"));
+    }
+
+    #[test]
+    fn context_contains_sheets_inventory_treasury_and_notes() {
+        let mut session = Session::demo(Xoshiro256::from_seed(1));
+        session.add_note(dnd_engine::NoteLayer::Master, "План Вернера", "Ждёт обоз").unwrap();
+        let context = turn_context(&mut session);
+        let nikis = &context["листы"]["pc.nikis"];
+        assert!(nikis["спасброски"].as_array().unwrap().iter().any(|v| v == "ЛОВ +6*"));
+        assert!(nikis["навыки"].as_array().unwrap().iter().any(|v| v.as_str().unwrap().starts_with("Ловкость рук +15")));
+        assert_eq!(nikis["пассивная_внимательность"], 15);
+        assert!(nikis["инвентарь"]["Кольцо Теневого Хранилища"].is_array());
+        assert!(context["листы"]["npc.valeria"]["навыки"].is_string());
+        assert_eq!(context["записи_базы_знаний"][0]["слой"], "master");
+        assert!(context["казна"].as_array().unwrap().iter().any(|l| l["id"] == "purse"));
     }
 
     #[test]

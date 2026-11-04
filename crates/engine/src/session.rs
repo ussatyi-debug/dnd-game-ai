@@ -13,6 +13,7 @@ use crate::check::{roll_d20, D20Roll, Modifier, RollMode};
 use crate::error::EngineError;
 use crate::expr::{DiceExpr, ExprRoll};
 use crate::fixtures::{demo_party, demo_scene, demo_treasury};
+use crate::master_ops::{MasterNote, UndoPoint};
 use crate::notation::resolve_player_d20;
 use crate::resource::{ResourcePool, RestKind};
 use crate::rng::{DiceRng, Xoshiro256};
@@ -25,7 +26,7 @@ use crate::treasury::{EntrySource, NewEntry, Treasury, TreasuryView};
 pub const LUCKY_ID: &str = "feat.lucky";
 
 /// Версия формата сохранения.
-pub const SAVE_FORMAT_VERSION: u32 = 2;
+pub const SAVE_FORMAT_VERSION: u32 = 3;
 
 /// Сколько последних записей журнала движка хранится (и передаётся мастеру).
 pub const ENGINE_LOG_LIMIT: usize = 12;
@@ -111,22 +112,37 @@ pub struct SaveState {
     pub party: Vec<Character>,
     pub treasury: Treasury,
     pub engine_log: Vec<String>,
+    pub notes: Vec<MasterNote>,
 }
 
 /// Состояние сессии.
 #[derive(Debug, Clone)]
 pub struct Session {
     rng: Xoshiro256,
-    scene: Scene,
-    party: Vec<Character>,
-    treasury: Treasury,
-    /// Последние действия движка с магией: что сотворено, что отклонено и почему.
-    engine_log: Vec<String>,
+    pub(crate) scene: Scene,
+    pub(crate) party: Vec<Character>,
+    pub(crate) treasury: Treasury,
+    /// Последние действия движка: что сделано, что отклонено и почему.
+    pub(crate) engine_log: Vec<String>,
+    /// Записи мастера в базу знаний.
+    pub(crate) notes: Vec<MasterNote>,
+    pub(crate) next_note_id: u64,
+    /// Последний ход мастера, который можно отменить.
+    pub(crate) undo: Option<Box<UndoPoint>>,
 }
 
 impl Session {
     pub fn new(rng: Xoshiro256, scene: Scene, party: Vec<Character>, treasury: Treasury) -> Self {
-        Self { rng, scene, party, treasury, engine_log: Vec::new() }
+        Self {
+            rng,
+            scene,
+            party,
+            treasury,
+            engine_log: Vec::new(),
+            notes: Vec::new(),
+            next_note_id: 1,
+            undo: None,
+        }
     }
 
     /// Сессия с демо-данными кампании на День 82 (до появления импорта).
@@ -149,7 +165,7 @@ impl Session {
             .ok_or_else(|| EngineError::CharacterNotFound("персонаж игрока".into()))
     }
 
-    fn character_mut(&mut self, id: &str) -> Result<&mut Character, EngineError> {
+    pub(crate) fn character_mut(&mut self, id: &str) -> Result<&mut Character, EngineError> {
         self.party
             .iter_mut()
             .find(|c| c.id == id)
@@ -168,7 +184,7 @@ impl Session {
         self.engine_log.drain(..excess);
     }
 
-    fn logged<T>(
+    pub(crate) fn logged<T>(
         &mut self,
         result: Result<T, EngineError>,
         ok: impl FnOnce(&T) -> String,
@@ -410,6 +426,7 @@ impl Session {
             party: self.party.clone(),
             treasury: self.treasury.clone(),
             engine_log: self.engine_log.clone(),
+            notes: self.notes.clone(),
         }
     }
 }

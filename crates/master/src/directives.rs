@@ -12,7 +12,10 @@
 //! итог каждой — успех или причина отказа — показывается в чате и попадает в журнал
 //! движка, который мастер видит на следующем ходу.
 
-use dnd_engine::{all_spells, CastMethod, CastRequest, Character, Session, SlotRef};
+use dnd_engine::{
+    all_spells, AssetKind, CastMethod, CastRequest, Character, HpChange, NoteLayer, RestKind,
+    SceneChange, Session, SlotRef,
+};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -161,8 +164,118 @@ fn method(value: Option<&Value>) -> Result<Option<CastMethod>, String> {
     }))
 }
 
+fn int_field(cmd: &Value, key: &str) -> Option<i64> {
+    cmd.get(key).and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())))
+}
+
+fn opt_text<'a>(cmd: &'a Value, key: &str) -> Option<&'a str> {
+    cmd.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty())
+}
+
+fn positive(cmd: &Value, key: &str) -> Result<Option<u32>, String> {
+    match int_field(cmd, key) {
+        None => Ok(None),
+        Some(n) if n > 0 => u32::try_from(n).map(Some).map_err(|_| format!("«{key}» слишком велико")),
+        Some(n) => Err(format!("«{key}» должно быть больше нуля, а не {n}")),
+    }
+}
+
+fn engine<T>(result: Result<T, dnd_engine::EngineError>) -> Result<T, String> {
+    result.map_err(|e| e.to_string())
+}
+
+fn last_log(session: &Session) -> String {
+    session.engine_log().last().cloned().unwrap_or_default()
+}
+
+/// Команды без персонажа: казна, сцена, отдых, записи в базу знаний.
+fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<String, String>> {
+    let result = match name {
+        "treasury" => (|| -> Result<String, String> {
+            let quantity = int_field(cmd, "quantity").ok_or("нет поля «quantity»")?;
+            let reason = opt_text(cmd, "reason").unwrap_or("Без пояснения");
+            engine(session.master_treasury_entry(
+                text_field(cmd, "asset")?,
+                text_field(cmd, "location")?,
+                quantity,
+                reason,
+            ))?;
+            Ok(last_log(session))
+        })(),
+        "transfer" => (|| -> Result<String, String> {
+            let quantity = int_field(cmd, "quantity").ok_or("нет поля «quantity»")?;
+            let reason = opt_text(cmd, "reason").unwrap_or("Перемещение");
+            engine(session.master_treasury_transfer(
+                text_field(cmd, "asset")?,
+                quantity,
+                text_field(cmd, "from")?,
+                text_field(cmd, "to")?,
+                reason,
+            ))?;
+            Ok(last_log(session))
+        })(),
+        "new_asset" => (|| -> Result<String, String> {
+            let kind = match opt_text(cmd, "kind").unwrap_or("valuable") {
+                "coin" => AssetKind::Coin,
+                "gem" => AssetKind::Gem,
+                "ingot" => AssetKind::Ingot,
+                "note" => AssetKind::Note,
+                "valuable" => AssetKind::Valuable,
+                other => return Err(format!("неизвестный вид ценности «{other}»")),
+            };
+            let value = int_field(cmd, "value").unwrap_or(0).max(0);
+            let id = engine(session.master_new_asset(text_field(cmd, "name")?, kind, value))?;
+            Ok(format!("{} [id: {id}]", last_log(session)))
+        })(),
+        "scene" => (|| -> Result<String, String> {
+            let day = match int_field(cmd, "day") {
+                Some(d) => Some(u32::try_from(d).map_err(|_| format!("неверный день {d}"))?),
+                None => None,
+            };
+            let change = SceneChange {
+                day,
+                time: opt_text(cmd, "time").map(Into::into),
+                location: opt_text(cmd, "location").map(Into::into),
+                situation: opt_text(cmd, "situation").map(Into::into),
+            };
+            engine(session.change_scene(change))?;
+            Ok(last_log(session))
+        })(),
+        "rest" => (|| -> Result<String, String> {
+            let kind = match opt_text(cmd, "kind").unwrap_or("long") {
+                "short" => RestKind::Short,
+                "long" => RestKind::Long,
+                other => return Err(format!("неизвестный отдых «{other}»")),
+            };
+            let lines = session.master_rest(kind);
+            let mut text = last_log(session);
+            if !lines.is_empty() {
+                text.push_str(": ");
+                text.push_str(&lines.join("; "));
+            }
+            Ok(text)
+        })(),
+        "note" => (|| -> Result<String, String> {
+            let layer = match opt_text(cmd, "layer").unwrap_or("player") {
+                "player" => NoteLayer::Player,
+                "master" => NoteLayer::Master,
+                other => return Err(format!("неизвестный слой «{other}»")),
+            };
+            let title = opt_text(cmd, "title").unwrap_or("");
+            let text = opt_text(cmd, "text").unwrap_or("");
+            engine(session.add_note(layer, title, text))?;
+            Ok(last_log(session))
+        })(),
+        _ => return None,
+    };
+    Some(result)
+}
+
 fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
     let name = text_field(cmd, "cmd")?;
+    if let Some(result) = run_global(session, name, cmd) {
+        return result;
+    }
     let character = find_character(session, text_field(cmd, "character")?)?;
     match name {
         "cast" => {
@@ -182,7 +295,7 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
             let slot = slot_ref(cmd.get("level"))?.ok_or("нет поля «level»")?;
             let spend = cmd.get("spend").and_then(Value::as_bool).unwrap_or(true);
             session.change_slot(&character, slot, spend).map_err(|e| e.to_string())?;
-            Ok(session.engine_log().last().cloned().unwrap_or_default())
+            Ok(last_log(session))
         }
         "restore" => {
             let item = text_field(cmd, "item")?;
@@ -203,15 +316,72 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
                 .map(find_spell)
                 .collect();
             session.prepare_spells(&character, caster, &spells).map_err(|e| e.to_string())?;
-            Ok(session.engine_log().last().cloned().unwrap_or_default())
+            Ok(last_log(session))
+        }
+        "hp" => {
+            let change = if let Some(n) = positive(cmd, "damage")? {
+                HpChange::Damage(n)
+            } else if let Some(n) = positive(cmd, "heal")? {
+                HpChange::Heal(n)
+            } else if let Some(n) = positive(cmd, "temp")? {
+                HpChange::Temporary(n)
+            } else {
+                return Err("нужно поле «damage», «heal» или «temp»".into());
+            };
+            engine(session.change_hp(&character, change))?;
+            Ok(last_log(session))
+        }
+        "resource" => {
+            let delta = int_field(cmd, "delta").ok_or("нет поля «delta»")?;
+            let delta = i32::try_from(delta).map_err(|_| format!("неверное «delta» {delta}"))?;
+            engine(session.adjust_resource(&character, text_field(cmd, "resource")?, delta))?;
+            Ok(last_log(session))
+        }
+        "condition" => {
+            if let Some(c) = opt_text(cmd, "add") {
+                engine(session.set_condition(&character, c, true))?;
+            } else if let Some(c) = opt_text(cmd, "remove") {
+                engine(session.set_condition(&character, c, false))?;
+            } else {
+                return Err("нужно поле «add» или «remove»".into());
+            }
+            Ok(last_log(session))
+        }
+        "item" => {
+            let quantity = positive(cmd, "quantity")?;
+            if let Some(item) = opt_text(cmd, "add") {
+                engine(session.add_item(
+                    &character,
+                    item,
+                    quantity.unwrap_or(1),
+                    opt_text(cmd, "container"),
+                    opt_text(cmd, "category").unwrap_or(""),
+                    opt_text(cmd, "notes").unwrap_or(""),
+                ))?;
+            } else if let Some(item) = opt_text(cmd, "remove") {
+                engine(session.remove_item(&character, item, quantity.unwrap_or(1)))?;
+            } else if let Some(item) = opt_text(cmd, "move") {
+                let to = text_field(cmd, "to")?;
+                engine(session.move_item(&character, item, quantity.unwrap_or(0), to))?;
+            } else {
+                return Err("нужно поле «add», «remove» или «move»".into());
+            }
+            Ok(last_log(session))
+        }
+        "move" => {
+            engine(session.move_character(&character, text_field(cmd, "location")?))?;
+            Ok(last_log(session))
         }
         other => Err(format!("неизвестная команда «{other}»")),
     }
 }
 
 /// Выполняет команды из ответа мастера и возвращает текст без них с итогами команд.
+///
+/// Перед командами снимается точка отмены: весь ход мастера можно откатить одной кнопкой.
 pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     let (text, blocks) = split(reply);
+    let before = session.checkpoint();
     let mut actions = Vec::new();
     for block in blocks {
         for cmd in commands(&block) {
@@ -228,6 +398,8 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
             });
         }
     }
+    let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
+    session.commit_master_turn(before, summaries);
     MasterTurn { text, actions }
 }
 
@@ -293,5 +465,54 @@ mod tests {
         assert!(turn.actions[0].ok, "{:?}", turn.actions[0]);
         assert!(!turn.actions[1].ok);
         assert!(turn.actions[1].summary.contains("длительного отдыха"));
+    }
+
+    #[test]
+    fn state_commands_and_undo() {
+        let mut s = session();
+        let reply = concat!(
+            "Удар.\n```engine\n",
+            "{\"cmd\":\"hp\",\"character\":\"nikis\",\"damage\":12}\n",
+            "{\"cmd\":\"resource\",\"character\":\"pc.nikis\",\"resource\":\"Везунчик\",\"delta\":-1}\n",
+            "{\"cmd\":\"condition\",\"character\":\"corvus\",\"add\":\"Отравлен\"}\n",
+            "{\"cmd\":\"item\",\"character\":\"pc.nikis\",\"add\":\"Печать Вернера\",\"container\":\"Кольцо Теневого\"}\n",
+            "{\"cmd\":\"treasury\",\"asset\":\"gp\",\"location\":\"При себе\",\"quantity\":-50,\"reason\":\"Взятка\"}\n",
+            "{\"cmd\":\"transfer\",\"asset\":\"gp\",\"quantity\":100,\"from\":\"crow_rock_vault\",\"to\":\"purse\"}\n",
+            "{\"cmd\":\"scene\",\"time\":\"полдень\"}\n",
+            "{\"cmd\":\"move\",\"character\":\"valeria\",\"location\":\"Серебряный Шпиль\"}\n",
+            "{\"cmd\":\"note\",\"layer\":\"player\",\"title\":\"Пароль гати\",\"text\":\"Серый рассвет\"}\n",
+            "{\"cmd\":\"hp\",\"character\":\"nikis\",\"damage\":0}\n",
+            "```"
+        );
+        let turn = apply_directives(&mut s, reply);
+        assert_eq!(turn.text, "Удар.");
+        let ok: Vec<_> = turn.actions.iter().filter(|a| a.ok).collect();
+        assert_eq!(ok.len(), 9, "{:?}", turn.actions);
+        assert!(!turn.actions[9].ok);
+        let nikis = s.character("pc.nikis").unwrap();
+        assert_eq!(nikis.hit_points.current, 45);
+        assert_eq!(nikis.hit_points.temporary, 0);
+        assert_eq!(s.scene().time.as_deref(), Some("полдень"));
+        assert_eq!(s.notes().len(), 1);
+        let info = s.master_undo_info().unwrap();
+        assert_eq!(info.actions.len(), 9);
+        s.undo_master_turn().unwrap();
+        let nikis = s.character("pc.nikis").unwrap();
+        assert_eq!(nikis.hit_points.current, 49);
+        assert!(s.notes().is_empty());
+        assert_eq!(s.scene().time.as_deref(), Some("утро"));
+    }
+
+    #[test]
+    fn rest_and_new_asset_commands() {
+        let mut s = session();
+        let turn = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"new_asset\",\"name\":\"Изумруд\",\"kind\":\"gem\",\"value\":500}\n{\"cmd\":\"rest\",\"kind\":\"short\"}\n{\"cmd\":\"scene\",\"day\":3}\n```",
+        );
+        assert!(turn.actions[0].ok, "{:?}", turn.actions[0]);
+        assert!(turn.actions[0].summary.contains("[id: new."));
+        assert!(turn.actions[1].ok);
+        assert!(!turn.actions[2].ok);
     }
 }

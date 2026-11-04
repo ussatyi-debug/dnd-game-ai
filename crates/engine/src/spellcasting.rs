@@ -302,6 +302,9 @@ pub struct ScrollStack {
     /// Круг, на котором записан свиток.
     pub level: u8,
     pub count: u32,
+    /// Контейнер инвентаря; `None` — «При себе».
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub container: Option<String>,
 }
 
 /// Предмет или умение, восстанавливающее ячейку (Жезл хранителя договора, Жемчужина силы).
@@ -1484,6 +1487,7 @@ mod tests {
             spell_id: "heal".into(),
             level: 6,
             count: 1,
+            container: None,
         });
         let out = valeria.cast_spell(&CastRequest::new("heal")).unwrap();
         assert_eq!(out.method, CastMethod::Scroll);

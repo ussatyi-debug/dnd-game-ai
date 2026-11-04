@@ -39,6 +39,28 @@ pub enum EngineError {
     InvalidQuantity(i64),
     /// Расход больше остатка.
     InsufficientFunds { asset: String, location: String, held: i64, requested: i64 },
+    /// Неизвестное состояние.
+    UnknownCondition(String),
+    /// Нет такого места хранения в инвентаре.
+    UnknownContainer(String),
+    /// Нет такого предмета.
+    UnknownItem(String),
+    /// Под название подходит несколько предметов.
+    AmbiguousItem { query: String, options: Vec<String> },
+    /// Предметов меньше, чем требуется.
+    NotEnoughItems { item: String, held: u32, requested: u32 },
+    /// Предмет уже лежит в этом месте.
+    SameContainer,
+    /// День сцены нельзя вернуть назад.
+    DayInPast { current: u32, requested: u32 },
+    /// Пустая запись в базу знаний.
+    EmptyNote,
+    /// Ценность с таким ID уже есть.
+    DuplicateAsset(String),
+    /// После хода мастера состояние менялось — отмена вернула бы и чужие изменения.
+    UndoStale,
+    /// Нечего отменять: мастер ещё ничего не менял.
+    NothingToUndo,
     /// В каталоге нет заклинания с таким ID.
     UnknownSpell(String),
     /// Персонаж не владеет магией.
@@ -151,6 +173,29 @@ impl fmt::Display for EngineError {
             Self::NoSlotAvailable { level, exact: false } => {
                 write!(f, "Нет свободных ячеек {level} круга и выше")
             }
+            Self::UnknownCondition(name) => write!(f, "Неизвестное состояние «{name}»"),
+            Self::UnknownContainer(name) => write!(f, "Нет места хранения «{name}»"),
+            Self::UnknownItem(name) => write!(f, "Нет предмета «{name}»"),
+            Self::AmbiguousItem { query, options } => write!(
+                f,
+                "«{query}» подходит к нескольким предметам: {} — уточните название",
+                options.join(", ")
+            ),
+            Self::NotEnoughItems { item, held, requested } => {
+                write!(f, "«{item}»: есть {held} шт., а нужно {requested}")
+            }
+            Self::SameContainer => write!(f, "Предмет уже лежит в этом месте"),
+            Self::DayInPast { current, requested } => write!(
+                f,
+                "Сейчас День {current} — вернуться в День {requested} нельзя"
+            ),
+            Self::EmptyNote => write!(f, "Пустая запись: нужен заголовок или текст"),
+            Self::DuplicateAsset(id) => write!(f, "Ценность «{id}» уже есть в казне"),
+            Self::UndoStale => write!(
+                f,
+                "После хода мастера состояние уже менялось — отменить его действия нельзя"
+            ),
+            Self::NothingToUndo => write!(f, "Нечего отменять: мастер ничего не менял"),
             Self::NoPactMagic(name) => write!(f, "У персонажа {name} нет ячеек договора"),
             Self::PactSlotLevel { pact_level, requested } => write!(
                 f,

@@ -6,6 +6,7 @@
 use crate::character::{Ability, AbilityScores, Character, CharacterKind, ClassLevel, HitPoints};
 use crate::resource::{Recovery, ResourcePool};
 use crate::session::Scene;
+use crate::sheets;
 use crate::spellcasting::{
     Caster, GrantedSpell, Preparation, Progression, ScrollStack, SlotRestorer, Spellcasting,
 };
@@ -59,7 +60,7 @@ fn feat_spell(spell: &str, source: &str, resource: &str, level: u8) -> GrantedSp
 }
 
 fn scroll(spell: &str, level: u8, count: u32) -> ScrollStack {
-    ScrollStack { spell_id: spell.into(), level, count }
+    ScrollStack { spell_id: spell.into(), level, count, container: None }
 }
 
 /// Где начинается День 82. Строка «Текущая сцена: Мясной мост» в листе персонажей осталась
@@ -161,8 +162,11 @@ fn nikis_spellcasting() -> Spellcasting {
             scroll("inflict-wounds", 1, 1),
             scroll("detect-magic", 1, 1),
             scroll("identify", 1, 1),
-            scroll("wall-of-force", 5, 1),
-            scroll("globe-of-invulnerability", 6, 1),
+            ScrollStack { container: Some("shadow_ring".into()), ..scroll("wall-of-force", 5, 1) },
+            ScrollStack {
+                container: Some("shadow_ring".into()),
+                ..scroll("globe-of-invulnerability", 6, 1)
+            },
         ],
         restorers: vec![SlotRestorer {
             resource_id: "item.pact_rod.slot".into(),
@@ -290,6 +294,8 @@ pub fn demo_nikis() -> Character {
             &nikis_spellcasting(),
         ),
         spellcasting: Some(nikis_spellcasting()),
+        profile: sheets::nikis_profile(),
+        inventory: sheets::nikis_inventory(),
     }
 }
 
@@ -315,6 +321,8 @@ pub fn demo_party() -> Vec<Character> {
                 pool("item.ki_beads", "Чётки: восстановить 2 Ци", 1, Recovery::Daily),
             ],
             spellcasting: None,
+            profile: sheets::corvus_profile(),
+            inventory: sheets::corvus_inventory(),
         },
         Character {
             id: "npc.gunther".into(),
@@ -343,6 +351,8 @@ pub fn demo_party() -> Vec<Character> {
                 &gunther_spellcasting(),
             ),
             spellcasting: Some(gunther_spellcasting()),
+            profile: sheets::gunther_profile(),
+            inventory: sheets::gunther_inventory(),
         },
         Character {
             id: "npc.valeria".into(),
@@ -366,6 +376,8 @@ pub fn demo_party() -> Vec<Character> {
                 &valeria_spellcasting(),
             ),
             spellcasting: Some(valeria_spellcasting()),
+            profile: sheets::valeria_profile(),
+            inventory: sheets::valeria_inventory(),
         },
         Character {
             id: "npc.brokk".into(),
@@ -386,6 +398,8 @@ pub fn demo_party() -> Vec<Character> {
                 pool("item.titan_helm", "Шлем Горного Титана", 1, Recovery::Daily),
             ],
             spellcasting: None,
+            profile: sheets::brokk_profile(),
+            inventory: sheets::brokk_inventory(),
         },
         Character {
             id: "npc.yussach".into(),
@@ -401,6 +415,8 @@ pub fn demo_party() -> Vec<Character> {
             location: SCENE_LOCATION.into(),
             resources: vec![],
             spellcasting: None,
+            profile: sheets::yussach_profile(),
+            inventory: sheets::empty_inventory(),
         },
     ]
 }

@@ -70,6 +70,19 @@ pub enum Request {
         slot: SlotRef,
     },
     EngineLog,
+    /// Полный лист персонажа: спасброски, навыки, атаки, умения.
+    CharacterDetails {
+        id: String,
+    },
+    /// Инвентарь по местам хранения.
+    Inventory {
+        id: String,
+    },
+    /// Записи мастера в базу знаний.
+    MasterNotes,
+    /// Последний ход мастера, который можно отменить.
+    MasterUndoInfo,
+    UndoMasterTurn,
     /// Выполняет команды движка из ответа мастера и возвращает текст без них.
     MasterApply {
         text: String,
@@ -125,6 +138,15 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(session.restore_slot_with(&id, &item_id, slot).map_err(|e| e.to_string())?)
         }
         Request::EngineLog => to_value(session.engine_log()),
+        Request::CharacterDetails { id } => {
+            to_value(session.details(&id).map_err(|e| e.to_string())?)
+        }
+        Request::Inventory { id } => to_value(session.inventory(&id).map_err(|e| e.to_string())?),
+        Request::MasterNotes => to_value(session.notes()),
+        Request::MasterUndoInfo => to_value(session.master_undo_info()),
+        Request::UndoMasterTurn => {
+            to_value(session.undo_master_turn().map_err(|e| e.to_string())?)
+        }
         Request::MasterApply { text } => to_value(dnd_master::apply_directives(session, &text)),
     }
 }
@@ -322,7 +344,7 @@ mod tests {
         assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
         assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
         let save = call(&mut s, json!({ "cmd": "save_state" }));
-        assert_eq!(save["ok"]["format_version"], 2);
+        assert_eq!(save["ok"]["format_version"], 3);
         assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
         let added = call(
             &mut s,

@@ -4,6 +4,8 @@
 //! модификаторы, бонус мастерства и инициатива вычисляются, поэтому не могут разойтись.
 
 use crate::error::EngineError;
+use crate::inventory::Inventory;
+use crate::profile::Profile;
 use crate::resource::{ResourcePool, RestKind};
 use crate::spellcasting::Spellcasting;
 
@@ -132,6 +134,9 @@ pub struct Character {
     pub(crate) resources: Vec<ResourcePool>,
     /// Колдовство; `None` — персонаж не владеет магией.
     pub spellcasting: Option<Spellcasting>,
+    /// Полный лист: спасброски, навыки, атаки, умения, владения.
+    pub profile: Profile,
+    pub inventory: Inventory,
 }
 
 /// Строка характеристики в листе.
@@ -202,6 +207,14 @@ impl Character {
             self.hit_points.current = self.hit_points.max;
             if let Some(sc) = self.spellcasting.as_mut() {
                 sc.can_prepare = true;
+            }
+            // Длительный отдых возвращает половину костей хитов (не меньше одной).
+            let total: u32 = self.profile.hit_dice.iter().map(|d| d.total).sum();
+            let mut budget = (total / 2).max(1);
+            for dice in self.profile.hit_dice.iter_mut() {
+                let gained = (dice.total - dice.current).min(budget);
+                dice.current += gained;
+                budget -= gained;
             }
         }
         self.resources
@@ -325,6 +338,8 @@ mod tests {
             location: "Тестовая".into(),
             resources: vec![ResourcePool::new("x", "X", 1, Recovery::Manual)],
             spellcasting: None,
+            profile: Profile::default(),
+            inventory: Inventory::default(),
         };
         assert_eq!(
             c.resource_mut("feat.lucky"),
