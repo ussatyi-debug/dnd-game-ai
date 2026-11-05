@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   KB_BY_ID,
   KB_ENTRIES,
@@ -13,13 +13,16 @@ import {
 import {
   errorText,
   isEngineAvailable,
+  kbOverrides,
   masterNotes,
   partyView,
+  type KbOverride,
   type MasterNote,
   type NoteLayer,
   type PartyView,
 } from "../lib/engine";
 import { FullSheet, PartySection } from "./FullSheet";
+import { NoteList } from "./KbNotes";
 import Modal from "./Modal";
 
 interface KnowledgeBaseProps {
@@ -27,6 +30,8 @@ interface KnowledgeBaseProps {
   /** Открыть сразу полный лист этого персонажа. */
   initialCharacterId?: string | null;
   onOpenTreasury?: () => void;
+  /** Записи изменены — обновить состояние приложения. */
+  onChanged?: () => void;
 }
 
 /** Разделы с живыми данными движка (не из файлов базы). */
@@ -51,26 +56,6 @@ const SPOILER_TEXT: Partial<Record<KbLayer, string>> = {
   world: "Лор, локации, NPC и фракции мира. Здесь есть сведения, которых герой может ещё не знать.",
 };
 
-function NoteList({ notes }: { notes: MasterNote[] }) {
-  if (notes.length === 0) return <p className="text-sm text-muted">Записей пока нет — мастер добавит их по ходу игры.</p>;
-  return (
-    <ul className="space-y-2">
-      {[...notes].reverse().map((n) => (
-        <li key={n.id} className="rounded-lg border border-edge p-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-medium">{n.title}</span>
-            <span className="shrink-0 text-[11px] text-muted">
-              День {n.day}
-              {n.time ? `, ${n.time}` : ""}
-            </span>
-          </div>
-          {n.text && <p className="mt-1 whitespace-pre-line text-sm leading-snug">{n.text}</p>}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 const statusClass: Record<KbStatus, string> = {
   active: "border-crit/60 text-crit",
   ally: "border-crit/60 text-crit",
@@ -93,13 +78,27 @@ const layerAccent: Record<KbLayer, string> = {
   master: "bg-blood text-parchment",
 };
 
-function Badges({ entry }: { entry: KbEntry }) {
+function isStatus(s: string): s is KbStatus {
+  return s in STATUS_LABEL;
+}
+
+function Badges({ entry, override }: { entry: KbEntry; override?: KbOverride }) {
+  const status = override && isStatus(override.status) ? override.status : entry.status;
   return (
     <span className="flex flex-wrap gap-1">
-      {entry.status && (
-        <span className={`rounded border px-1.5 py-0.5 text-[10px] ${statusClass[entry.status]}`}>
+      {status && (
+        <span className={`rounded border px-1.5 py-0.5 text-[10px] ${statusClass[status]}`}>
+          {STATUS_LABEL[status]}
+          {override
+            ? ` · с Дня ${override.day}${override.note ? `: ${override.note}` : ""}`
+            : entry.statusNote
+              ? ` · ${entry.statusNote}`
+              : ""}
+        </span>
+      )}
+      {override && entry.status && entry.status !== status && (
+        <span className="rounded border border-edge px-1.5 py-0.5 text-[10px] text-muted line-through">
           {STATUS_LABEL[entry.status]}
-          {entry.statusNote ? ` · ${entry.statusNote}` : ""}
         </span>
       )}
       {entry.draft && (
@@ -116,7 +115,17 @@ function Badges({ entry }: { entry: KbEntry }) {
   );
 }
 
-function EntryCard({ entry, onOpen }: { entry: KbEntry; onOpen: (id: string) => void }) {
+function EntryCard({
+  entry,
+  onOpen,
+  override,
+  noteCount = 0,
+}: {
+  entry: KbEntry;
+  onOpen: (id: string) => void;
+  override?: KbOverride;
+  noteCount?: number;
+}) {
   return (
     <li>
       <button
@@ -130,8 +139,9 @@ function EntryCard({ entry, onOpen }: { entry: KbEntry; onOpen: (id: string) => 
         </div>
         {entry.subtitle && <div className="text-xs text-muted">{entry.subtitle}</div>}
         <p className="mt-1.5 text-sm leading-snug text-parchment/90">{entry.summary}</p>
-        <div className="mt-2">
-          <Badges entry={entry} />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Badges entry={entry} override={override} />
+          {noteCount > 0 && <span className="text-[10px] text-arcane">записей: {noteCount}</span>}
         </div>
       </button>
     </li>
@@ -142,10 +152,16 @@ function EntryDetail({
   entry,
   onOpen,
   onBack,
+  override,
+  notes,
+  onNotesChanged,
 }: {
   entry: KbEntry;
   onOpen: (id: string) => void;
   onBack: () => void;
+  override?: KbOverride;
+  notes: MasterNote[];
+  onNotesChanged: () => void;
 }) {
   const related = (entry.related ?? []).map((id) => KB_BY_ID.get(id)).filter((e): e is KbEntry => !!e);
   const layer = KB_LAYERS.find((l) => l.id === entry.layer);
@@ -162,7 +178,7 @@ function EntryDetail({
         </div>
         <h3 className="font-serif text-2xl text-parchment">{entry.title}</h3>
         {entry.subtitle && <p className="text-sm text-muted">{entry.subtitle}</p>}
-        <Badges entry={entry} />
+        <Badges entry={entry} override={override} />
       </header>
 
       <p className="leading-relaxed">{entry.summary}</p>
@@ -221,6 +237,17 @@ function EntryDetail({
         </section>
       )}
 
+      <section className="space-y-2">
+        <h4 className="font-serif text-lg text-gold">Записи по ходу игры</h4>
+        <NoteList
+          notes={notes}
+          layer={entry.layer === "master" ? "master" : "player"}
+          card={entry.id}
+          emptyText="К этой карточке записей пока нет."
+          onChanged={onNotesChanged}
+        />
+      </section>
+
       {(entry.tags?.length || entry.source) && (
         <footer className="space-y-1 border-t border-edge pt-3 text-xs text-muted">
           {entry.tags && entry.tags.length > 0 && <div>Метки: {entry.tags.join(", ")}</div>}
@@ -231,7 +258,12 @@ function EntryDetail({
   );
 }
 
-export default function KnowledgeBase({ onClose, initialCharacterId = null, onOpenTreasury }: KnowledgeBaseProps) {
+export default function KnowledgeBase({
+  onClose,
+  initialCharacterId = null,
+  onOpenTreasury,
+  onChanged,
+}: KnowledgeBaseProps) {
   const [layerId, setLayerId] = useState<KbLayer>("player");
   const [sectionId, setSectionId] = useState<string>(PARTY_SECTION.id);
   const [query, setQuery] = useState("");
@@ -241,17 +273,29 @@ export default function KnowledgeBase({ onClose, initialCharacterId = null, onOp
   const [revealed, setRevealed] = useState<ReadonlySet<KbLayer>>(new Set(["player"]));
   const [party, setParty] = useState<PartyView | null>(null);
   const [notes, setNotes] = useState<MasterNote[]>([]);
+  const [overrides, setOverrides] = useState<KbOverride[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     if (!isEngineAvailable()) return;
-    Promise.all([partyView(), masterNotes()])
-      .then(([p, n]) => {
+    Promise.all([partyView(), masterNotes(), kbOverrides()])
+      .then(([p, n, o]) => {
         setParty(p);
         setNotes(n);
+        setOverrides(o);
       })
       .catch((e: unknown) => setLoadError(errorText(e)));
   }, []);
+
+  useEffect(reload, [reload]);
+
+  function notesChanged() {
+    reload();
+    onChanged?.();
+  }
+
+  const overrideOf = (id: string) => overrides.find((o) => o.card_id === id);
+  const notesOf = (id: string) => notes.filter((n) => n.card === id);
 
   const baseLayer = KB_LAYERS.find((l) => l.id === layerId) ?? KB_LAYERS[0];
   const layer = useMemo(() => {
@@ -339,8 +383,10 @@ export default function KnowledgeBase({ onClose, initialCharacterId = null, onOp
 
   function liveSection() {
     if (sectionId === PARTY_SECTION.id) return <PartySection party={party} onOpen={setSheetId} />;
-    if (sectionId === NOTES_SECTION.player.id) return <NoteList notes={layerNotes("player")} />;
-    if (sectionId === NOTES_SECTION.master.id) return <NoteList notes={layerNotes("master")} />;
+    if (sectionId === NOTES_SECTION.player.id)
+      return <NoteList notes={layerNotes("player")} layer="player" onChanged={notesChanged} onOpenCard={open} />;
+    if (sectionId === NOTES_SECTION.master.id)
+      return <NoteList notes={layerNotes("master")} layer="master" onChanged={notesChanged} onOpenCard={open} />;
     return null;
   }
 
@@ -385,7 +431,14 @@ export default function KnowledgeBase({ onClose, initialCharacterId = null, onOp
       ) : sheetId ? (
         <FullSheet id={sheetId} onBack={() => setSheetId(null)} onOpenTreasury={onOpenTreasury} />
       ) : opened ? (
-        <EntryDetail entry={opened} onOpen={open} onBack={back} />
+        <EntryDetail
+          entry={opened}
+          onOpen={open}
+          onBack={back}
+          override={overrideOf(opened.id)}
+          notes={notesOf(opened.id)}
+          onNotesChanged={notesChanged}
+        />
       ) : (
         <>
           {layerId === "master" && (
@@ -408,10 +461,10 @@ export default function KnowledgeBase({ onClose, initialCharacterId = null, onOp
                 <p className="p-4 text-center text-sm text-muted">Ничего не найдено</p>
               ) : (
                 <>
-                  {noteResults.length > 0 && <NoteList notes={noteResults} />}
+                  {noteResults.length > 0 && <NoteList notes={noteResults} onChanged={notesChanged} onOpenCard={open} />}
                   <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                     {results.map((e) => (
-                      <EntryCard key={e.id} entry={e} onOpen={open} />
+                      <EntryCard key={e.id} entry={e} onOpen={open} override={overrideOf(e.id)} noteCount={notesOf(e.id).length} />
                     ))}
                   </ul>
                 </>
@@ -447,7 +500,7 @@ export default function KnowledgeBase({ onClose, initialCharacterId = null, onOp
                         <h3 className="mb-2 font-serif text-gold">{group}</h3>
                         <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                           {entries.map((e) => (
-                            <EntryCard key={e.id} entry={e} onOpen={open} />
+                            <EntryCard key={e.id} entry={e} onOpen={open} override={overrideOf(e.id)} noteCount={notesOf(e.id).length} />
                           ))}
                         </ul>
                       </section>

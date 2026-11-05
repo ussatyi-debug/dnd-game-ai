@@ -4,6 +4,7 @@ import CharacterSheetPanel from "./components/CharacterSheetPanel";
 import ChatPanel, { type ChatMessage, type MasterMode } from "./components/ChatPanel";
 import DiceDrawer from "./components/DiceDrawer";
 import KnowledgeBase from "./components/KnowledgeBase";
+import LoadWindow, { type ParsedSave } from "./components/LoadWindow";
 import MainMenu, { type MenuAction } from "./components/MainMenu";
 import PartyPanel from "./components/PartyPanel";
 import SaveWindow from "./components/SaveWindow";
@@ -26,9 +27,11 @@ import {
   masterApply,
   masterContext,
   partyView,
+  setKbCards,
   spellbook,
   takeRest,
   type InventoryView,
+  type LoadReport,
   type MasterAction,
   type SheetDetails,
   type UndoInfo,
@@ -47,13 +50,16 @@ import {
   sampleErrorText,
   type ClaudeTier,
 } from "./lib/claude";
+import { kbExtraFor, kbIndex } from "./data/kb/index.ts";
 import type { RollResult, TrayRoll } from "./lib/rolls";
 
 const MAX_ROLLS = 200;
 const PLAYER_ID = "pc.nikis";
+/** Сколько последних сообщений чата получает мастер; остальное — в базе знаний. */
+const MASTER_HISTORY = 40;
 
 type Tab = "party" | "dialog" | "character";
-type Overlay = "knowledge" | "save" | "models" | "treasury" | null;
+type Overlay = "knowledge" | "save" | "load" | "models" | "treasury" | null;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "party", label: "Отряд" },
@@ -142,7 +148,11 @@ export default function App() {
 
   useEffect(() => {
     if (!engineAvailable) return;
-    refresh().catch((e: unknown) => addMessage("system", `Не удалось загрузить отряд: ${errorText(e)}`));
+    // Указатель базы знаний — чтобы мастер видел оглавление базы и ссылался на карточки.
+    setKbCards(kbIndex())
+      .catch(() => undefined)
+      .then(refresh)
+      .catch((e: unknown) => addMessage("system", `Не удалось загрузить отряд: ${errorText(e)}`));
   }, [engineAvailable, refresh, addMessage]);
 
   useEffect(() => {
@@ -239,6 +249,7 @@ export default function App() {
   function historyWith(playerMessage: ChatMessage) {
     return [...messages, playerMessage]
       .filter((m) => m.author === "player" || m.author === "master")
+      .slice(-MASTER_HISTORY)
       .map((m) => ({ role: m.author === "player" ? ("player" as const) : ("master" as const), text: m.text }));
   }
 
@@ -257,7 +268,7 @@ export default function App() {
     const controller = new AbortController();
     abortRef.current = controller;
     setThinking(true);
-    aiChat(historyWith(playerMessage))
+    aiChat(historyWith(playerMessage), kbExtraFor(text))
       .then((reply) => {
         if (controller.signal.aborted) return;
         addMessage("master", reply.text, reply.model);
@@ -283,7 +294,7 @@ export default function App() {
       );
     };
     setThinking(true);
-    masterContext()
+    masterContext(playerMessage.text, kbExtraFor(playerMessage.text))
       .then((system) => claudeMasterReply(fn, system, historyWith(playerMessage), tier, show, controller.signal))
       // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
       .then((text) => masterApply(text))
@@ -349,6 +360,19 @@ export default function App() {
         addMessage("system", errorText(e));
         refresh().catch(() => undefined);
       });
+  }
+
+  function loaded(save: ParsedSave, report: LoadReport) {
+    const maxId = Math.max(0, ...save.chat.map((m) => m.id), ...save.rolls.map((r) => r.id));
+    nextId.current = maxId + 1;
+    setMessages(save.chat);
+    setRolls(save.rolls);
+    setActiveId(PLAYER_ID);
+    setOpenWindow(null);
+    const extra =
+      report.supplemented.length > 0 ? ` Дополнено из приложения: ${report.supplemented.join("; ")}.` : "";
+    addMessage("system", `Загружено сохранение: День ${report.day}, ${report.location}.${extra}`);
+    refresh().catch((e: unknown) => addMessage("system", errorText(e)));
   }
 
   function openFullSheet(id: string) {
@@ -470,7 +494,13 @@ export default function App() {
           initialCharacterId={kbCharacter}
           onClose={() => setOpenWindow(null)}
           onOpenTreasury={() => setOpenWindow("treasury")}
+          onChanged={() => {
+            refresh().catch(() => undefined);
+          }}
         />
+      )}
+      {openWindow === "load" && (
+        <LoadWindow onClose={() => setOpenWindow(null)} onSaveFirst={() => setOpenWindow("save")} onLoaded={loaded} />
       )}
       {openWindow === "save" && <SaveWindow onClose={() => setOpenWindow(null)} messages={messages} rolls={rolls} />}
       {openWindow === "treasury" && (

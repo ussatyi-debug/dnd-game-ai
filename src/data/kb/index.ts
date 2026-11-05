@@ -45,3 +45,58 @@ export function matchesQuery(entry: KbEntry, query: string): boolean {
       return text.includes(stem);
     });
 }
+
+/** Указатель карточек для движка: мастер видит оглавление базы и ссылается на карточки. */
+export function kbIndex(): { id: string; title: string; layer: string; status: string | null }[] {
+  return KB_ENTRIES.map((e) => ({ id: e.id, title: e.title, layer: e.layer, status: e.status ?? null }));
+}
+
+function stems(text: string): string[] {
+  const words = text
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 4)
+    .map((w) => (w.length > 5 ? w.slice(0, -2) : w.length > 4 ? w.slice(0, -1) : w));
+  return [...new Set(words)];
+}
+
+/**
+ * Карточки, подходящие к заявке игрока: совпадения слов в названии весят больше, чем
+ * в тексте. Возвращает лучшие `limit` карточек.
+ */
+export function relevantEntries(query: string, limit = 4): KbEntry[] {
+  const words = stems(query);
+  if (words.length === 0) return [];
+  const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е");
+  return KB_ENTRIES.map((entry) => {
+    const title = norm(`${entry.title} ${entry.subtitle ?? ""} ${(entry.tags ?? []).join(" ")}`);
+    const body = searchText(entry);
+    const score = words.reduce((sum, w) => sum + (title.includes(w) ? 3 : body.includes(w) ? 1 : 0), 0);
+    return { entry, score };
+  })
+    .filter((x) => x.score >= 3)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((x) => x.entry);
+}
+
+/** Полный текст карточки для мастера (обрезается до `max` символов). */
+export function entryText(entry: KbEntry, max = 2500): string {
+  const parts = [
+    `${entry.title} [${entry.id}] (${entry.layer})`,
+    entry.subtitle ?? "",
+    entry.summary,
+    ...(entry.facts ?? []).map((f) => `${f.label}: ${f.value}`),
+    ...(entry.body ?? []).flatMap((b) => [b.heading ?? "", ...b.paragraphs]),
+  ].filter(Boolean);
+  const text = parts.join("\n");
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** Подходящие к заявке карточки одним текстом для контекста мастера. */
+export function kbExtraFor(query: string): string {
+  return relevantEntries(query)
+    .map((e) => entryText(e))
+    .join("\n\n---\n\n");
+}

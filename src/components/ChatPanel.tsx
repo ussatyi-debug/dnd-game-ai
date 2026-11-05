@@ -80,6 +80,17 @@ export default function ChatPanel({
   // Сообщения пришли, пока окно диалога было скрыто (вкладка на телефоне): прокрутить при показе.
   const pendingScroll = useRef(false);
 
+  // Опорное сообщение для кнопки — последний ответ мастера после последней заявки игрока
+  // (строки ⚙ движка после ответа не в счёт), иначе просто последнее сообщение.
+  const anchorId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (!m || m.author === "player") break;
+      if (m.author === "master") return m.id;
+    }
+    return lastId;
+  })();
+
   /** Элемент последнего сообщения в ленте. */
   const lastElement = useCallback((): HTMLElement | null => {
     const list = listRef.current;
@@ -87,23 +98,32 @@ export default function ChatPanel({
     return list.querySelector<HTMLElement>(`[data-message-id="${lastId}"]`);
   }, [lastId]);
 
-  /** Кнопка «к последнему сообщению» — если его начало дальше полутора экранов. */
+  const anchorElement = useCallback((): HTMLElement | null => {
+    const list = listRef.current;
+    if (!list || anchorId === undefined) return null;
+    return list.querySelector<HTMLElement>(`[data-message-id="${anchorId}"]`);
+  }, [anchorId]);
+
+  /**
+   * Кнопка «к последнему сообщению» — только когда последний ответ целиком ушёл ниже экрана
+   * (игрок листает старые сообщения). Пока видна хоть часть ответа, кнопки нет.
+   */
   const updateJump = useCallback(() => {
     const list = listRef.current;
-    const last = lastElement();
-    if (!list || !last) {
+    const anchor = anchorElement();
+    if (!list || !anchor || list.clientHeight === 0) {
       setShowJump(false);
       return;
     }
-    const distance = last.offsetTop - list.scrollTop;
-    setShowJump(Math.abs(distance) > list.clientHeight * 1.5);
-  }, [lastElement]);
+    const belowScreen = anchor.offsetTop - (list.scrollTop + list.clientHeight);
+    setShowJump(belowScreen > list.clientHeight * 0.25);
+  }, [anchorElement]);
 
   const jumpToLast = useCallback(() => {
     const list = listRef.current;
-    const last = lastElement();
-    if (list && last) list.scrollTo({ top: Math.max(0, last.offsetTop - 8), behavior: "smooth" });
-  }, [lastElement]);
+    const anchor = anchorElement();
+    if (list && anchor) list.scrollTo({ top: Math.max(0, anchor.offsetTop - 8), behavior: "smooth" });
+  }, [anchorElement]);
 
   // Лента не прилипает к концу ответа: она прокручивается один раз — когда игрок
   // отправил заявку (к его сообщению) и когда начался ответ мастера (к началу ответа),

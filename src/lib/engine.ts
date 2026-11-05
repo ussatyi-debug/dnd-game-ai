@@ -236,8 +236,8 @@ export function saveState(): Promise<unknown> {
 }
 
 /** Кодекс мастера и состояние игры на этот ход (с новыми кубами мастера). */
-export function masterContext(): Promise<string> {
-  return call<string>("master_context");
+export function masterContext(query: string, kbExtra: string): Promise<string> {
+  return call<string>("master_context", { query, kbExtra });
 }
 
 export function takeRest(kind: RestKind): Promise<RestResult> {
@@ -527,6 +527,67 @@ export interface MasterNote {
   time: string | null;
   title: string;
   text: string;
+  /** Карточка базы знаний, к которой относится запись. */
+  card: string | null;
+  /** Запись сделал игрок. */
+  by_player: boolean;
+}
+
+/** Статус карточки, изменённый по ходу игры. */
+export interface KbOverride {
+  card_id: string;
+  status: string;
+  note: string;
+  day: number;
+}
+
+/** Карточка в указателе базы для движка. */
+export interface KbCardIndex {
+  id: string;
+  title: string;
+  layer: string;
+  status: string | null;
+}
+
+export interface LoadReport {
+  format_version: number;
+  day: number;
+  location: string;
+  supplemented: string[];
+}
+
+export function setKbCards(cards: KbCardIndex[]): Promise<boolean> {
+  return call<boolean>("set_kb_cards", { cards });
+}
+
+export function kbOverrides(): Promise<KbOverride[]> {
+  return call<KbOverride[]>("kb_overrides");
+}
+
+export function addNote(layer: NoteLayer, title: string, text: string, card: string | null): Promise<number> {
+  return call<number>("add_note", { layer, title, text, card });
+}
+
+export function updateNote(
+  id: number,
+  edit: { title?: string; text?: string; card?: string; layer?: NoteLayer },
+): Promise<MasterNote> {
+  return call<MasterNote>("update_note", {
+    id,
+    title: edit.title ?? null,
+    text: edit.text ?? null,
+    card: edit.card ?? null,
+    layer: edit.layer ?? null,
+  });
+}
+
+export function deleteNote(id: number): Promise<boolean> {
+  return call<boolean>("delete_note", { id });
+}
+
+/** Загрузка сохранения: передаётся часть `engine` файла. */
+export function loadState(save: unknown): Promise<LoadReport> {
+  return call<LoadReport>("load_state", { save });
 }
 
 export interface UndoInfo {
@@ -617,8 +678,8 @@ export function aiListModels(provider: Provider): Promise<ModelInfo[]> {
   return invoke<ModelInfo[]>("ai_list_models", { provider });
 }
 
-export function aiChat(history: { role: ChatRole; text: string }[]): Promise<MasterReply> {
-  return invoke<MasterReply>("ai_chat", { history });
+export function aiChat(history: { role: ChatRole; text: string }[], kbExtra: string): Promise<MasterReply> {
+  return invoke<MasterReply>("ai_chat", { history, kbExtra });
 }
 
 /** Сообщение об ошибке из ответа движка. */
