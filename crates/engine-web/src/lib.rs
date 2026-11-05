@@ -160,6 +160,16 @@ pub enum Request {
     /// Выполняет команды движка из ответа мастера и возвращает текст без них.
     MasterApply {
         text: String,
+        /// Значения кубов, брошенных движком за мастера в этом ходу.
+        #[serde(default)]
+        rolled: Vec<u32>,
+        /// Заявка игрока: числа из неё — его собственные броски.
+        #[serde(default)]
+        player: String,
+    },
+    /// Выполняет запросы бросков мастера; `null` — запросов в ответе нет.
+    MasterRolls {
+        text: String,
     },
 }
 
@@ -304,7 +314,12 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(session.load(data).map_err(|e| e.to_string())?)
         }
         Request::UndoMasterTurn => to_value(session.undo_master_turn().map_err(|e| e.to_string())?),
-        Request::MasterApply { text } => to_value(dnd_master::apply_directives(session, &text)),
+        Request::MasterApply { text, rolled, player } => {
+            let mut turn = dnd_master::apply_directives(session, &text);
+            turn.fabricated = dnd_master::fabricated_rolls(&turn.text, &rolled, &player);
+            to_value(turn)
+        }
+        Request::MasterRolls { text } => to_value(dnd_master::run_rolls(session, &text)),
     }
 }
 
@@ -525,7 +540,7 @@ mod tests {
         let text = r["ok"].as_str().unwrap();
         assert!(text.starts_with("Ты — Мастер"));
         assert!(text.contains("Сэр Никис Стрэндж"));
-        assert!(text.contains("кубы_мастера"));
+        assert!(text.contains("\"cmd\":\"roll\""));
     }
 
     #[test]

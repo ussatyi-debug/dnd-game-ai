@@ -35,11 +35,13 @@ pub struct MasterTurn {
     /// Текст для игрока, без блоков команд.
     pub text: String,
     pub actions: Vec<MasterAction>,
+    /// Броски d20 в тексте, которых движок не делал (заполняет вызывающий код).
+    pub fabricated: Vec<String>,
 }
 
 /// Делит текст на повествование и содержимое блоков `engine`. Незакрытый блок (ответ ещё
 /// печатается) тоже вырезается.
-fn split(text: &str) -> (String, Vec<String>) {
+pub(crate) fn split(text: &str) -> (String, Vec<String>) {
     let mut prose = String::new();
     let mut blocks = Vec::new();
     let mut rest = text;
@@ -83,7 +85,7 @@ pub fn strip_directives(text: &str) -> String {
 }
 
 /// Команды блока: JSON-объект на строку или JSON-массив целиком.
-fn commands(block: &str) -> Vec<Result<Value, String>> {
+pub(crate) fn commands(block: &str) -> Vec<Result<Value, String>> {
     let trimmed = block.trim();
     if trimmed.is_empty() {
         return Vec::new();
@@ -249,6 +251,10 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             engine(session.change_scene(change))?;
             Ok(last_log(session))
         })(),
+        "roll" => {
+            Err("лимит бросков за ход исчерпан — броски запрашивай отдельным ответом до рассказа"
+                .into())
+        }
         "rest" => (|| -> Result<String, String> {
             let kind = match opt_text(cmd, "kind").unwrap_or("long") {
                 "short" => RestKind::Short,
@@ -493,7 +499,7 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     }
     let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
     session.commit_master_turn(before, summaries);
-    MasterTurn { text, actions }
+    MasterTurn { text, actions, fabricated: Vec::new() }
 }
 
 #[cfg(test)]

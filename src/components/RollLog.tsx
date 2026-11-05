@@ -37,17 +37,25 @@ export default function RollLog({ rolls, onClear, onSendToChat }: RollLogProps) 
                 <span className="font-medium">{rollTitle(roll)}</span>
                 <time className="shrink-0 text-xs text-muted">{roll.time}</time>
               </div>
-              <p className="mt-0.5 font-mono text-lg break-words">{rollDetail(roll)}</p>
-              <div className="mt-1.5 flex gap-2">
-                <CopyButton text={rollCopyText(roll)} />
-                <button
-                  type="button"
-                  onClick={() => onSendToChat(rollCopyText(roll))}
-                  className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-gold hover:text-parchment"
-                >
-                  В чат
-                </button>
-              </div>
+              {roll.master ? (
+                <p className="mt-0.5 font-mono text-sm break-words">
+                  {roll.master.line.slice(roll.master.line.indexOf(": ") + 2)}
+                </p>
+              ) : (
+                <p className="mt-0.5 font-mono text-lg break-words">{rollDetail(roll)}</p>
+              )}
+              {!roll.master && (
+                <div className="mt-1.5 flex gap-2">
+                  <CopyButton text={rollCopyText(roll)} />
+                  <button
+                    type="button"
+                    onClick={() => onSendToChat(rollCopyText(roll))}
+                    className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-gold hover:text-parchment"
+                  >
+                    В чат
+                  </button>
+                </div>
+              )}
             </li>
           ))
         )}

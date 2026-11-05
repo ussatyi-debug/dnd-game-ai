@@ -31,6 +31,7 @@ import {
   LUCKY_ID,
   masterApply,
   masterContext,
+  masterRolls,
   partyView,
   setKbCards,
   spellbook,
@@ -38,6 +39,7 @@ import {
   type InventoryView,
   type LoadReport,
   type MasterAction,
+  type MasterRoll,
   type SheetDetails,
   type UndoInfo,
   type SpellbookView,
@@ -62,6 +64,8 @@ import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from
 import type { RollResult, TrayRoll } from "./lib/rolls";
 
 const MAX_ROLLS = 200;
+/** Раундов запросов бросков мастера за ход (как в движке). */
+const MAX_ROLL_ROUNDS = 3;
 const PLAYER_ID = "pc.nikis";
 /** Сколько последних сообщений чата получает мастер; остальное — в базе знаний. */
 const MASTER_HISTORY = 40;
@@ -255,6 +259,21 @@ export default function App() {
       .catch(() => undefined);
   }, [engineAvailable]);
 
+  /** Открытые броски мастера — в лог кубов; тайные игрок не видит. */
+  const logMasterRolls = useCallback((list: MasterRoll[]) => {
+    const shown = list.filter((r) => !r.hidden);
+    if (shown.length === 0) return;
+    const entries: TrayRoll[] = shown.map((r) => ({
+      id: nextId.current++,
+      time: now(),
+      die: r.d20 !== null ? "d20" : "d6",
+      values: r.d20 !== null ? [r.d20] : r.dice,
+      total: r.total,
+      master: { who: r.who, what: r.what, line: r.line, outcome: r.outcome },
+    }));
+    setRolls((prev) => [...entries.reverse(), ...prev].slice(0, MAX_ROLLS));
+  }, []);
+
   const engineNotes = useCallback(
     (actions: MasterAction[]) => {
       for (const a of actions) addMessage("engine", a.ok ? a.summary : `Отказ: ${a.summary}`);
@@ -347,7 +366,11 @@ export default function App() {
           setFailed({ playerId: playerMessage.id, partialId: null });
           return;
         }
-        addMessage("master", reply.text, reply.model);
+        const message = addMessage("master", reply.text, reply.model);
+        if (reply.fabricated.length > 0) {
+          setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, fabricated: reply.fabricated } : m)));
+        }
+        logMasterRolls(reply.rolls);
         engineNotes(reply.actions);
         afterMasterTurn();
       })
@@ -383,12 +406,35 @@ export default function App() {
       );
     };
     setThinking(true);
+    const rolled: MasterRoll[] = [];
+    // Запросы бросков: движок бросает, мастер получает результаты и дописывает ход.
+    const withRolls = async (system: string) => {
+      const history = historyWith(playerMessage);
+      for (let round = 0; ; round++) {
+        const text = await claudeMasterReply(fn, system, history, tier, show, controller.signal);
+        const r = round < MAX_ROLL_ROUNDS ? await masterRolls(text) : null;
+        if (!r) return text;
+        show("");
+        rolled.push(...r.rolls);
+        history.push({ role: "master", text }, { role: "player", text: r.feedback });
+      }
+    };
     masterContext(playerMessage.text, kbExtraFor(playerMessage.text))
-      .then((system) => claudeMasterReply(fn, system, historyWith(playerMessage), tier, show, controller.signal))
+      .then(withRolls)
       // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
-      .then((text) => masterApply(text))
+      .then((text) =>
+        masterApply(
+          text,
+          rolled.flatMap((r) => r.dice),
+          playerMessage.text,
+        ),
+      )
       .then((turn) => {
         show(turn.text);
+        if (turn.fabricated.length > 0) {
+          setMessages((prev) => prev.map((m) => (m.id === reply.id ? { ...m, fabricated: turn.fabricated } : m)));
+        }
+        logMasterRolls(rolled);
         engineNotes(turn.actions);
         afterMasterTurn();
       })

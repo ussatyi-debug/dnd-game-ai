@@ -12,6 +12,8 @@ export interface ChatMessage {
   time: string;
   /** Модель, давшая ответ мастера. */
   model?: string;
+  /** Броски d20 в ответе мастера, которых движок не делал. */
+  fabricated?: string[];
 }
 
 export type MasterMode = "provider" | "claude" | "none";
@@ -263,6 +265,11 @@ export default function ChatPanel({
             {m.author === "master" && (
               <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-edge bg-ink px-4 py-3">
                 <MasterText text={masterDisplayText(m.text)} />
+                {m.fabricated && m.fabricated.length > 0 && (
+                  <p className="mt-2 text-xs text-fumble" title="Мастер назвал значение куба, которого движок не бросал">
+                    ⚠ Бросок не из движка: {m.fabricated.join(", ")}
+                  </p>
+                )}
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted">
                   <span className="flex items-center gap-1.5">
                     <button

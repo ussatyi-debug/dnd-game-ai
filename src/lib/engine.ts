@@ -361,6 +361,34 @@ export interface MasterAction {
 export interface MasterTurn {
   text: string;
   actions: MasterAction[];
+  /** Броски d20 в тексте, которых движок не делал. */
+  fabricated: string[];
+}
+
+/** Бросок, сделанный движком по запросу мастера. */
+export interface MasterRoll {
+  who: string;
+  what: string;
+  expression: string;
+  dice: number[];
+  total: number;
+  target: string | null;
+  outcome: string | null;
+  /** Тайный бросок: игроку не показывается. */
+  hidden: boolean;
+  line: string;
+  d20: number | null;
+}
+
+export interface RollRound {
+  rolls: MasterRoll[];
+  /** Сообщение мастеру с результатами. */
+  feedback: string;
+}
+
+/** Выполняет запросы бросков из ответа мастера (веб-версия); `null` — запросов нет. */
+export function masterRolls(text: string): Promise<RollRound | null> {
+  return call<RollRound | null>("master_rolls", { text });
 }
 
 export function spellbook(id: string): Promise<SpellbookView> {
@@ -394,8 +422,8 @@ export function restoreSlot(id: string, itemId: string, slot: SlotRef): Promise<
 }
 
 /** Выполняет команды движка из ответа мастера (веб-версия; в приложении — на стороне Rust). */
-export function masterApply(text: string): Promise<MasterTurn> {
-  return call<MasterTurn>("master_apply", { text });
+export function masterApply(text: string, rolled: number[], player: string): Promise<MasterTurn> {
+  return call<MasterTurn>("master_apply", { text, rolled, player });
 }
 
 /** Текст ответа мастера без блоков команд движка (в т.ч. незакрытого, пока ответ печатается). */
@@ -805,6 +833,9 @@ export interface MasterReply {
   provider: Provider;
   model: string;
   actions: MasterAction[];
+  /** Броски движка по запросам мастера за этот ход. */
+  rolls: MasterRoll[];
+  fabricated: string[];
 }
 
 /** Доступен ли ИИ-мастер (только в приложении). */

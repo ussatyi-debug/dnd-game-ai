@@ -7,8 +7,13 @@
 //! (мастер на Claude), поэтому правила мастера везде одинаковые.
 
 mod directives;
+mod rolls;
 
 pub use directives::{apply_directives, strip_directives, MasterAction, MasterTurn};
+pub use rolls::{
+    fabricated_rolls, has_roll_requests, rolled_faces, run_rolls, MasterRoll, RollRound,
+    MAX_ROLL_ROUNDS,
+};
 
 use dnd_engine::{
     Character, CharacterKind, MasterNote, NoteLayer, Proficiency, Session, SpellbookView,
@@ -33,9 +38,11 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
 - Преимущество и помеху игрок заявляет сам или согласует с тобой.
 
 КУБЫ МАСТЕРА
-- Для бросков противников, NPC и спутников используй ТОЛЬКО значения из списка «кубы_мастера» в контексте — по порядку, каждое один раз. Не придумывай свои числа.
-- Указывай, какой куб использован: «Атака стражника: d20 14 + 5 = 19».
-- Если значений не хватило, попроси игрока прислать следующий ход, не выдумывая числа.
+- Кубы за противников, NPC и спутников бросает движок. Ты НИКОГДА не придумываешь числа на кубах.
+- Нужен бросок — ответь ТОЛЬКО блоком ```engine с запросами, без рассказа: {"cmd":"roll","who":"Стражник","what":"атака по Никису","dice":"1d20+5","vs":"ac:18"}. "vs": "ac:N" — против КД, "dc:N" — против КС; "adv":true — преимущество, "dis":true — помеха; "hidden":true — тайный бросок (Скрытность врага, проверки, о которых герой не знает). Запрашивай сразу все броски, которые нужны (все атаки противников за раунд, урон — после попадания).
+- Движок пришлёт сообщение «[ДВИЖОК] Результаты бросков». Продолжай ход строго по ним и называй результат: «Атака стражника: d20 14 + 5 = 19 — попадание». Тайные броски не раскрывай игроку числами.
+- Не больше трёх запросов бросков за ход. Другие команды (hp, condition…) пиши уже в итоговом ответе.
+- Броски героя присылает игрок — их числа берёшь из его заявки.
 
 ВРЕМЯ И СВОБОДА ИГРОКА
 - Не перематывай время и сцены без прямой команды игрока («вы уже выплыли», «прошло три часа» — запрещено).
@@ -78,7 +85,7 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
 
 СОСТОЯНИЕ ОТРЯДА — ДВУСТОРОННЯЯ СВЯЗЬ
 - Ты меняешь лист, инвентарь, казну, сцену и базу знаний только командами движка в том же блоке ```engine. Без команды изменение не сохранится, и на следующем ходу движок покажет старые числа.
-- Хиты: {"cmd":"hp","character":"pc.nikis","damage":12} — урон (сначала снимаются временные хиты); "heal":8 — лечение; "temp":8 — временные хиты. Урон по персонажу игрока — только по его броскам урона противника из «кубы_мастера» или по итогам, которые он сам прислал.
+- Хиты: {"cmd":"hp","character":"pc.nikis","damage":12} — урон (сначала снимаются временные хиты); "heal":8 — лечение; "temp":8 — временные хиты. Урон по персонажу игрока — только по броскам урона из «[ДВИЖОК] Результаты бросков» или по итогам, которые игрок сам прислал.
 - Ресурсы (Ци, Везунчик, Канал Божественности, заряды предметов): {"cmd":"resource","character":"npc.corvus","resource":"monk.ki","delta":-1}; delta > 0 — восстановить. id ресурсов — в «листы».
 - Состояния: {"cmd":"condition","character":"npc.gunther","add":"Испуган"} / "remove". Истощение: "add":"Истощение 2".
 - Предметы: {"cmd":"item","character":"pc.nikis","add":"Печать Вернера","quantity":1,"container":"Кольцо Теневого Хранилища","category":"Документы"}; "remove":"Зелье Героизма"; "move":"Звёздный Фокус","to":"Сейф особняка". Деньги и самоцветы — не предметы, это казна.
@@ -346,24 +353,6 @@ fn notes_context(session: &Session, query: &str) -> Value {
 /// `query` — последняя заявка игрока (по ней подбираются старые записи журнала мастера);
 /// `kb_extra` — полный текст карточек базы, подходящих к заявке (подбирает интерфейс).
 pub fn turn_context(session: &mut Session, query: &str, kb_extra: &str) -> Value {
-    let pool = [
-        ("d20", 8u32, 20u32),
-        ("d4", 4, 4),
-        ("d6", 8, 6),
-        ("d8", 6, 8),
-        ("d10", 4, 10),
-        ("d12", 4, 12),
-    ]
-    .into_iter()
-    .map(|(name, count, sides)| {
-        let values = session
-            .roll_expression(&format!("{count}d{sides}"), false)
-            .map(|r| r.groups.into_iter().flat_map(|g| g.values).collect::<Vec<_>>())
-            .unwrap_or_default();
-        (name.to_string(), json!(values))
-    })
-    .collect::<serde_json::Map<_, _>>();
-
     let party = session.party_view();
     let player =
         session.party().iter().find(|c| c.kind == CharacterKind::Player).map(|c| c.sheet());
@@ -401,7 +390,6 @@ pub fn turn_context(session: &mut Session, query: &str, kb_extra: &str) -> Value
             "id": l.id,
             "состав": l.lines.iter().map(|h| format!("{} [{}] ×{}", h.name, h.asset_id, h.quantity)).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
-        "кубы_мастера": pool,
     })
 }
 
@@ -426,12 +414,10 @@ mod tests {
         assert!(context["сцена"]["situation"].as_str().unwrap().contains("Кроу-Рок"));
         assert_eq!(context["отряд"].as_array().unwrap().len(), 6);
         assert_eq!(context["персонаж_игрока"]["name"], "Сэр Никис Стрэндж");
-        let d20 = context["кубы_мастера"]["d20"].as_array().unwrap();
-        assert_eq!(d20.len(), 8);
-        assert!(d20.iter().all(|v| (1..=20).contains(&v.as_u64().unwrap())));
+        assert!(context.get("кубы_мастера").is_none());
         let text = system_text(&context);
         assert!(text.starts_with("Ты — Мастер"));
-        assert!(text.contains("кубы_мастера"));
+        assert!(text.contains("\"cmd\":\"roll\""));
     }
 
     #[test]
@@ -503,13 +489,5 @@ mod tests {
         let context = turn_context(&mut session, "", "");
         let line = context["карточки_базы"]["игрок"][0].as_str().unwrap();
         assert!(line.contains("выполнено (изменено"), "{line}");
-    }
-
-    #[test]
-    fn each_turn_gets_fresh_dice() {
-        let mut session = Session::demo(Xoshiro256::from_seed(2));
-        let a = turn_context(&mut session, "", "")["кубы_мастера"].clone();
-        let b = turn_context(&mut session, "", "")["кубы_мастера"].clone();
-        assert_ne!(a, b);
     }
 }

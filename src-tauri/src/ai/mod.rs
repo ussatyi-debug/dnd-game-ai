@@ -76,6 +76,10 @@ pub struct MasterReply {
     pub model: String,
     /// Итоги команд движка из ответа мастера (ячейки, заклинания).
     pub actions: Vec<dnd_master::MasterAction>,
+    /// Броски, сделанные движком по запросам мастера (и тайные — интерфейс их не показывает).
+    pub rolls: Vec<dnd_master::MasterRoll>,
+    /// Броски d20 в тексте, которых движок не делал.
+    pub fabricated: Vec<String>,
 }
 
 /// Настройки ИИ. Хранятся в папке настроек приложения на ПК.
@@ -234,7 +238,14 @@ pub async fn chat(
         Provider::OpenAi => openai::generate(client, key, &model, system, history).await?,
         Provider::Local => return Err(LOCAL_NOT_READY.into()),
     };
-    Ok(MasterReply { text, provider: settings.provider, model, actions: Vec::new() })
+    Ok(MasterReply {
+        text,
+        provider: settings.provider,
+        model,
+        actions: Vec::new(),
+        rolls: Vec::new(),
+        fabricated: Vec::new(),
+    })
 }
 
 #[cfg(test)]

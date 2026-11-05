@@ -425,10 +425,36 @@ async fn ai_chat(
         let kb_extra = kb_extra.as_deref().unwrap_or("");
         dnd_master::system_text(&dnd_master::turn_context(&mut session, query, kb_extra))
     };
-    let mut reply = ai::chat(&ai.client, &settings, &system, &history).await?;
+    let player_text = history
+        .iter()
+        .rev()
+        .find(|m| m.role == ai::Role::Player)
+        .map(|m| m.text.clone())
+        .unwrap_or_default();
+    let mut history = history;
+    let mut rolls = Vec::new();
+    let mut round = 0;
+    let mut reply = loop {
+        let reply = ai::chat(&ai.client, &settings, &system, &history).await?;
+        // Запросы бросков: движок бросает, мастер получает результаты и продолжает ход.
+        if round < dnd_master::MAX_ROLL_ROUNDS {
+            let rolled = dnd_master::run_rolls(&mut *lock(&session)?, &reply.text);
+            if let Some(r) = rolled {
+                round += 1;
+                history.push(ai::ChatMessage { role: ai::Role::Master, text: reply.text });
+                history.push(ai::ChatMessage { role: ai::Role::Player, text: r.feedback });
+                rolls.extend(r.rolls);
+                continue;
+            }
+        }
+        break reply;
+    };
     let turn = dnd_master::apply_directives(&mut *lock(&session)?, &reply.text);
+    reply.fabricated =
+        dnd_master::fabricated_rolls(&turn.text, &dnd_master::rolled_faces(&rolls), &player_text);
     reply.text = turn.text;
     reply.actions = turn.actions;
+    reply.rolls = rolls;
     Ok(reply)
 }
 
