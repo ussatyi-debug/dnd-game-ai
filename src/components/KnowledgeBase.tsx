@@ -26,6 +26,7 @@ import {
   type PartyView,
 } from "../lib/engine";
 import { FullSheet, PartySection } from "./FullSheet";
+import KbArtifacts from "./KbArtifacts";
 import { CardForm, customEntry } from "./KbCards";
 import { LinkedText, NoteList, type CardOption, type CardTitle } from "./KbNotes";
 import Modal from "./Modal";
@@ -53,7 +54,12 @@ const NOTES_SECTION: Record<NoteLayer, { id: string; title: string; description:
     description: "Тайны, планы NPC и импровизации, которые мастер записал, чтобы помнить",
   },
 };
-const LIVE_IDS = new Set([PARTY_SECTION.id, NOTES_SECTION.player.id]);
+const ARTIFACTS_SECTION = {
+  id: "artifacts_known",
+  title: "Артефакты",
+  description: "Магические предметы отряда и известные герою артефакты кампании",
+};
+const LIVE_IDS = new Set([PARTY_SECTION.id, NOTES_SECTION.player.id, ARTIFACTS_SECTION.id]);
 
 /** Слои под спойлером: содержимое скрыто, пока игрок сам не откроет слой. */
 const SPOILER_TEXT: Partial<Record<KbLayer, string>> = {
@@ -390,7 +396,9 @@ export default function KnowledgeBase({
     if (!baseLayer) return undefined;
     // Записи журнала мастера показываются в разделе «Журнал мастера» слоя мастера.
     const sections =
-      baseLayer.id === "player" ? [PARTY_SECTION, ...baseLayer.sections, NOTES_SECTION.player] : baseLayer.sections;
+      baseLayer.id === "player"
+        ? [PARTY_SECTION, ...baseLayer.sections, ARTIFACTS_SECTION, NOTES_SECTION.player]
+        : baseLayer.sections;
     return { ...baseLayer, sections };
   }, [baseLayer]);
 
@@ -459,6 +467,7 @@ export default function KnowledgeBase({
 
   const counts = (id: string) => {
     if (id === PARTY_SECTION.id) return party?.members.length ?? 0;
+    if (id === ARTIFACTS_SECTION.id) return entries.filter((e) => e.layer === "world" && e.section === "artifacts").length;
     if (id === NOTES_SECTION.player.id) return layerNotes("player").length;
     const cards = entries.filter((e) => e.layer === layerId && e.section === id).length;
     return layerId === "master" && id === "journal" ? cards + layerNotes("master").length : cards;
@@ -469,6 +478,7 @@ export default function KnowledgeBase({
 
   function liveSection() {
     if (sectionId === PARTY_SECTION.id) return <PartySection party={party} onOpen={setSheetId} />;
+    if (sectionId === ARTIFACTS_SECTION.id) return <KbArtifacts party={party} onOpen={open} />;
     if (sectionId === NOTES_SECTION.player.id)
       return (
         <NoteList
@@ -523,7 +533,7 @@ export default function KnowledgeBase({
           </button>
         </div>
       ) : sheetId ? (
-        <FullSheet id={sheetId} onBack={() => setSheetId(null)} onOpenTreasury={onOpenTreasury} />
+        <FullSheet id={sheetId} onBack={() => setSheetId(null)} onOpenTreasury={onOpenTreasury} onChanged={onChanged} />
       ) : opened ? (
         <EntryDetail
           entry={opened}

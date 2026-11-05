@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { stripEngineBlocks, type UndoInfo } from "../lib/engine";
+import { stripEngineBlocks, type SheetProposal, type UndoInfo } from "../lib/engine";
 import { stripSpeakerTag } from "../lib/tts";
 import CopyButton from "./CopyButton";
 
@@ -37,6 +37,9 @@ interface ChatPanelProps {
   /** Заявка, на которую мастер не ответил из-за сбоя, — под ней кнопка повтора. */
   failedId: number | null;
   onRetry: () => void;
+  /** Предложения мастера изменить лист — ждут решения игрока. */
+  proposals: SheetProposal[];
+  onResolveProposal: (id: number, accept: boolean) => void;
 }
 
 /** Текст ответа мастера для показа и копирования: без команд движка и пометок голосов. */
@@ -89,6 +92,8 @@ export default function ChatPanel({
   onSpeak,
   failedId,
   onRetry,
+  proposals,
+  onResolveProposal,
 }: ChatPanelProps) {
   const listRef = useRef<HTMLOListElement>(null);
   const [showJump, setShowJump] = useState(false);
@@ -315,6 +320,21 @@ export default function ChatPanel({
         </button>
       )}
       </div>
+
+      {proposals.map((p) => (
+        <div key={p.id} className="flex flex-wrap items-center gap-2 border-t border-gold/40 bg-gold/5 px-3 py-1.5 text-xs">
+          <span className="min-w-0 flex-1">
+            <span className="text-gold">Мастер предлагает изменить лист</span> · {p.character_name}: {p.summary}
+            {p.reason && <span className="text-muted"> — {p.reason}</span>}
+          </span>
+          <button type="button" onClick={() => onResolveProposal(p.id, true)} className="rounded-md bg-gold px-2 py-1 text-ink">
+            Принять
+          </button>
+          <button type="button" onClick={() => onResolveProposal(p.id, false)} className="rounded-md border border-edge px-2 py-1 text-muted hover:text-parchment">
+            Отклонить
+          </button>
+        </div>
+      ))}
 
       {undo?.available && !thinking && (
         <div className="flex items-center justify-between gap-2 border-t border-arcane/40 bg-arcane/5 px-3 py-1.5 text-xs">

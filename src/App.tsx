@@ -20,6 +20,9 @@ import {
   characterSheet,
   inventory as loadInventory,
   masterUndoInfo,
+  resolveProposal,
+  sheetProposals,
+  type SheetProposal,
   undoMasterTurn,
   errorText,
   isAiAvailable,
@@ -120,6 +123,7 @@ export default function App() {
   const [details, setDetails] = useState<SheetDetails | null>(null);
   const [inv, setInv] = useState<InventoryView | null>(null);
   const [undo, setUndo] = useState<UndoInfo | null>(null);
+  const [proposals, setProposals] = useState<SheetProposal[]>([]);
   const [kbCharacter, setKbCharacter] = useState<string | null>(null);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("tts");
   const [tts, setTts] = useState<TtsSettings>(loadTtsSettings);
@@ -176,14 +180,16 @@ export default function App() {
   }, [autosave]);
 
   const refresh = useCallback(async () => {
-    const [nextParty, nextPlayer, nextUndo] = await Promise.all([
+    const [nextParty, nextPlayer, nextUndo, nextProposals] = await Promise.all([
       partyView(),
       characterSheet(PLAYER_ID),
       masterUndoInfo(),
+      sheetProposals(),
     ]);
     setParty(nextParty);
     setPlayerSheet(nextPlayer);
     setUndo(nextUndo);
+    setProposals(nextProposals);
   }, []);
 
   useEffect(() => {
@@ -547,6 +553,15 @@ export default function App() {
             onSpeak={speak}
             failedId={failed?.playerId ?? null}
             onRetry={retry}
+            proposals={proposals}
+            onResolveProposal={(id, accept) => {
+              resolveProposal(id, accept)
+                .then(() => {
+                  addMessage("engine", accept ? "Правка листа принята" : "Правка листа отклонена");
+                  return refresh();
+                })
+                .catch((e: unknown) => addMessage("system", errorText(e)));
+            }}
           />
         </div>
 

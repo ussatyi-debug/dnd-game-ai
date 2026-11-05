@@ -14,6 +14,7 @@ import {
   type SheetDetails,
   type SpellbookView,
 } from "../lib/engine";
+import SheetEditor from "./SheetEditor";
 import SheetSections, { Block, SheetFacts, StatusLine } from "./SheetSections";
 
 interface Loaded {
@@ -63,17 +64,21 @@ export function FullSheet({
   id,
   onBack,
   onOpenTreasury,
+  onChanged,
 }: {
   id: string;
   onBack: () => void;
   onOpenTreasury?: () => void;
+  /** Лист изменён — обновить панели приложения. */
+  onChanged?: () => void;
 }) {
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setData(null);
     setError(null);
     Promise.all([
       characterSheet(id),
@@ -88,7 +93,7 @@ export function FullSheet({
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, version]);
 
   return (
     <article className="space-y-3 p-4">
@@ -130,6 +135,31 @@ export function FullSheet({
               </div>
             ))}
           </dl>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing((v) => !v)}
+              className="rounded-md border border-gold/60 px-3 py-1.5 text-sm text-gold hover:bg-gold/10"
+            >
+              {editing ? "Готово" : "✎ Редактировать лист"}
+            </button>
+            {data.details.edited.length > 0 && (
+              <span className="text-xs text-arcane">изменено игроком: {data.details.edited.length}</span>
+            )}
+          </div>
+
+          {editing && (
+            <SheetEditor
+              sheet={data.sheet}
+              details={data.details}
+              attacks={data.details.raw_attacks}
+              onChanged={() => {
+                setVersion((v) => v + 1);
+                onChanged?.();
+              }}
+            />
+          )}
 
           <StatusLine details={data.details} />
           <SheetFacts details={data.details} />

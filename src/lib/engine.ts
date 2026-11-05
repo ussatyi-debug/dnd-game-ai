@@ -487,6 +487,62 @@ export interface SheetDetails {
   conditions: string[];
   exhaustion: number;
   notes: string[];
+  /** Ключи полей, изменённых игроком. */
+  edited: string[];
+  raw_attacks: AttackInput[];
+}
+
+/** Атака, как она записана в листе. */
+export interface AttackInput {
+  name: string;
+  ability: Ability | null;
+  caster_id: string | null;
+  proficient: boolean | null;
+  magic: number;
+  damage_dice: string;
+  damage_type: string;
+  add_ability_to_damage: boolean;
+  damage_bonus: number;
+  extra: string;
+  range: string;
+  notes: string;
+}
+
+/** Правка листа игроком (или предложенная мастером). */
+export type SheetEditInput =
+  | { op: "text"; field: string; value: string }
+  | { op: "number"; field: string; value: number }
+  | { op: "ability"; ability: Ability; score: number }
+  | { op: "save"; ability: Ability; proficient: boolean }
+  | { op: "skill"; skill: string; proficiency: ProficiencyLevel; source?: string }
+  | { op: "proficiency"; kind: string; text: string }
+  | { op: "feature"; name: string; source: string; text: string }
+  | { op: "attunement"; name: string; effect: string; remove: boolean }
+  | { op: "attack"; attack: AttackInput; remove: boolean };
+
+export interface SheetProposal {
+  id: number;
+  character_id: string;
+  character_name: string;
+  edit: SheetEditInput;
+  summary: string;
+  reason: string;
+}
+
+export function editSheet(id: string, edit: SheetEditInput): Promise<boolean> {
+  return call<boolean>("edit_sheet", { id, edit });
+}
+
+export function revertSheetEdit(id: string, key: string): Promise<boolean> {
+  return call<boolean>("revert_sheet_edit", { id, key });
+}
+
+export function sheetProposals(): Promise<SheetProposal[]> {
+  return call<SheetProposal[]>("sheet_proposals");
+}
+
+export function resolveProposal(id: number, accept: boolean): Promise<boolean> {
+  return call<boolean>("resolve_proposal", { id, accept });
 }
 
 export interface ItemLine {

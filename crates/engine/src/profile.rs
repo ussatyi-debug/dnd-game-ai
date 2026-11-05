@@ -320,6 +320,8 @@ pub struct SheetDetails {
     pub notes: Vec<String>,
     /// Поля, изменённые игроком (ключи правок).
     pub edited: Vec<String>,
+    /// Атаки как они записаны в листе (для правки).
+    pub raw_attacks: Vec<Attack>,
 }
 
 fn signed(v: i32) -> String {
@@ -483,6 +485,7 @@ impl Character {
             exhaustion: p.exhaustion,
             notes: p.notes.clone(),
             edited: self.edited_keys(),
+            raw_attacks: p.attacks.clone(),
         }
     }
 
