@@ -8,8 +8,8 @@
 
 use crate::character::{Character, HitPoints};
 use crate::error::EngineError;
-use crate::fixtures::demo_party;
-use crate::inventory::Inventory;
+use crate::fixtures::{demo_party, VALERIA_PREPARED};
+use crate::inventory::{Inventory, NewItem, ON_PERSON};
 use crate::knowledge::{CustomCard, KbOverride, MasterNote};
 use crate::profile::HitDice;
 use crate::resource::ResourcePool;
@@ -214,6 +214,46 @@ fn apply_character(c: &mut Character, saved: SavedCharacter, report: &mut Vec<St
     }
 }
 
+/// Разовые исправления сохранений до 0.8.0 (формат 4): лист Валерии приведён к правилам —
+/// подготовленные заклинания по листу и Палочка военного мага у неё, а не в сейфе особняка.
+fn migrate_to_v5(party: &mut [Character]) -> Vec<String> {
+    const WAND: &str = "Палочка военного мага +1";
+    let mut report = Vec::new();
+    let Some(vi) = party.iter().position(|c| c.id == "npc.valeria") else {
+        return report;
+    };
+    let cleric = party[vi]
+        .spellcasting
+        .as_mut()
+        .and_then(|sc| sc.casters.iter_mut().find(|c| c.id == "cleric"));
+    if let Some(caster) = cleric {
+        caster.prepared = VALERIA_PREPARED.iter().map(|s| (*s).to_string()).collect();
+        report.push("Валерия: подготовленные заклинания — по исправленному листу (0.8.0)".into());
+    }
+    if party[vi].inventory.items.iter().any(|i| i.name == WAND) {
+        return report;
+    }
+    let item = NewItem {
+        name: WAND.into(),
+        quantity: 1,
+        container: ON_PERSON.into(),
+        category: "Снаряжение".into(),
+        notes: "настроена; +1 к атакам заклинаниями".into(),
+    };
+    if party[vi].inventory.add(item).is_err() {
+        return report;
+    }
+    if let Some(nikis) = party.iter_mut().find(|c| c.id == "pc.nikis") {
+        let wand = nikis.inventory.items.iter().find(|i| i.name == WAND).map(|i| i.id.clone());
+        if let Some(id) = wand {
+            // Одна из палочек сейфа теперь у Валерии.
+            let _ = nikis.inventory.remove(&id, 1);
+        }
+    }
+    report.push(format!("Валерия: {WAND} теперь у неё (из сейфа особняка)"));
+    report
+}
+
 impl Session {
     /// Загружает сохранение вместо текущей игры. При ошибке игра не меняется.
     /// Генератор кубов и указатель базы знаний остаются текущими, отмена хода сбрасывается.
@@ -244,6 +284,9 @@ impl Session {
         }
         for s in saved_party {
             report.push(format!("Персонаж «{}» из файла не найден в приложении — пропущен", s.id));
+        }
+        if save.format_version < 5 {
+            report.extend(migrate_to_v5(&mut party));
         }
 
         let mut notes = save.notes;
@@ -396,6 +439,79 @@ mod tests {
         assert!(text.contains("ресурсы — из приложения"));
         assert!(text.contains("Брокк"));
         assert!(text.contains("npc.ghost"));
+    }
+
+    #[test]
+    fn old_saves_get_valeria_fixes_once() {
+        const WAND: &str = "Палочка военного мага +1";
+        let s = session();
+        let mut save = round_trip(&s);
+        save.format_version = 4;
+        let wands = |save: &mut SaveData, id: &str| -> u32 {
+            let c = save.party.iter_mut().find(|c| c.id == id).unwrap();
+            c.inventory
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .filter(|i| i.name == WAND)
+                .map(|i| i.quantity)
+                .sum()
+        };
+        // Как в файле 0.7.0: палочек в сейфе две, у Валерии нет, подготовлено старое.
+        let valeria = save.party.iter_mut().find(|c| c.id == "npc.valeria").unwrap();
+        valeria.inventory.as_mut().unwrap().items.retain(|i| i.name != WAND);
+        valeria.spellcasting.as_mut().unwrap().casters[0].prepared =
+            vec!["bless".into(), "remove-curse".into()];
+        let nikis = save.party.iter_mut().find(|c| c.id == "pc.nikis").unwrap();
+        nikis
+            .inventory
+            .as_mut()
+            .unwrap()
+            .items
+            .iter_mut()
+            .find(|i| i.name == WAND)
+            .unwrap()
+            .quantity = 2;
+        assert_eq!(wands(&mut save, "pc.nikis"), 2);
+
+        let mut loaded = session();
+        let report = loaded.load(save).unwrap();
+        assert!(report.supplemented.iter().any(|r| r.contains("Палочка")));
+        let valeria = loaded.character("npc.valeria").unwrap();
+        assert!(valeria.inventory.find_item(WAND).is_ok());
+        let prepared = &valeria.spellcasting.as_ref().unwrap().casters[0].prepared;
+        assert_eq!(prepared.len(), 13);
+        assert!(!prepared.contains(&"remove-curse".to_string()));
+        let nikis = loaded.character("pc.nikis").unwrap();
+        assert_eq!(nikis.inventory.find_item(WAND).unwrap().quantity, 1);
+
+        // Новый формат повторно не исправляется.
+        let again = round_trip(&loaded);
+        let report = session().load(again).unwrap();
+        assert!(report.supplemented.is_empty(), "{:?}", report.supplemented);
+    }
+
+    #[test]
+    fn valeria_sheet_matches_rules() {
+        let s = session();
+        let v = s.character("npc.valeria").unwrap();
+        let d = v.details();
+        let attack = |name: &str| d.attacks.iter().find(|a| a.name == name).unwrap().clone();
+        assert_eq!(attack("Кадило-булава").to_hit, 4);
+        assert_eq!(attack("Кадило-булава").damage, "1d6+1 дробящий");
+        let toll = attack("Погребальный звон");
+        assert_eq!(toll.save_dc, Some(16));
+        assert!(toll.damage.starts_with("2d8+5 некротический"));
+        let book = v.spellbook().unwrap();
+        assert_eq!(book.casters[0].save_dc, 16);
+        assert_eq!(book.casters[0].attack_bonus, 9);
+        assert_eq!(book.casters[0].prepared_count, Some(13));
+        assert_eq!(v.skill_total(crate::Skill::Perception), 8);
+        assert_eq!(v.skill_total(crate::Skill::Religion), 4);
+        assert_eq!(v.skill_total(crate::Skill::Persuasion), 3);
+        assert_eq!(v.resource("cleric.sentinel").unwrap().max(), 5);
+        assert_eq!(v.resource("cleric.eyes_of_grave").unwrap().max(), 5);
     }
 
     #[test]

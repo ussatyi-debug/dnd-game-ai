@@ -169,15 +169,21 @@ function Attacks({ details }: { details: SheetDetails }) {
         <li key={a.name} className="text-sm">
           <div className="flex items-baseline justify-between gap-2">
             <span className="font-medium">{a.name}</span>
-            <span className="shrink-0 font-mono" title={breakdownText(a.to_hit_breakdown, a.to_hit)}>
-              {signed(a.to_hit)}
-            </span>
+            {a.save_dc !== null ? (
+              <span className="shrink-0 font-mono" title={`Спасбросок ${a.save_label ?? ""} цели против КС ${a.save_dc}`}>
+                КС {a.save_dc} {a.save_label}
+              </span>
+            ) : (
+              <span className="shrink-0 font-mono" title={breakdownText(a.to_hit_breakdown, a.to_hit)}>
+                {signed(a.to_hit)}
+              </span>
+            )}
           </div>
           <div className="text-xs">
             {a.damage}
             {a.range && <span className="text-muted"> · {a.range}</span>}
           </div>
-          <div className="text-[11px] text-muted">{breakdownText(a.to_hit_breakdown, a.to_hit)}</div>
+          {a.save_dc === null && <div className="text-[11px] text-muted">{breakdownText(a.to_hit_breakdown, a.to_hit)}</div>}
           {a.proficiency_unknown && (
             <div className="text-[11px] text-fumble">Владение в листе не указано — бонус мастерства не прибавлен.</div>
           )}

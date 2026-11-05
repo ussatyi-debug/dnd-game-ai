@@ -205,8 +205,25 @@ fn gunther_spellcasting() -> Spellcasting {
     }
 }
 
-/// Сестра Валерия: Жрица 8, Домен Могилы. Заговоры в листе не указаны, кроме доменного
-/// «Ухода за умирающим».
+/// Подготовленные заклинания Валерии по листу (13 = МДР 5 + уровень 8).
+pub(crate) const VALERIA_PREPARED: &[&str] = &[
+    "healing-word",
+    "bless",
+    "detect-magic",
+    "detect-poison-and-disease",
+    "zone-of-truth",
+    "locate-object",
+    "silence",
+    "spiritual-weapon",
+    "dispel-magic",
+    "spirit-guardians",
+    "sending",
+    "divination",
+    "banishment",
+];
+
+/// Сестра Валерия: Жрица 8, Домен Могилы. «Уход за умирающими» — доменный заговор сверх
+/// четырёх жреческих.
 fn valeria_spellcasting() -> Spellcasting {
     Spellcasting {
         casters: vec![Caster::new(
@@ -218,17 +235,9 @@ fn valeria_spellcasting() -> Spellcasting {
             Progression::Full,
             Preparation::Prepared,
         )
-        .cantrips(5, &["spare-the-dying"])
-        .prepared(&[
-            "banishment",
-            "healing-word",
-            "bless",
-            "spiritual-weapon",
-            "spirit-guardians",
-            "dispel-magic",
-            "remove-curse",
-            "silence",
-        ])
+        .cantrips(5, &["spare-the-dying", "toll-the-dead", "sacred-flame", "guidance", "light"])
+        .prepared(VALERIA_PREPARED)
+        .attack_item_bonus(1, "Палочка военного мага +1")
         .always(
             "Домен Могилы",
             &[
@@ -372,10 +381,11 @@ pub fn demo_party() -> Vec<Character> {
             resources: with_slots(
                 vec![
                     pool("cleric.channel_divinity", "Канал Божественности", 2, Recovery::ShortRest),
-                    pool("cleric.sentinel", "Часовой у двери смерти", 4, Recovery::LongRest),
+                    pool("cleric.sentinel", "Часовой у двери смерти", 5, Recovery::LongRest),
+                    pool("cleric.eyes_of_grave", "Взгляд за грань", 5, Recovery::LongRest),
                     pool("item.pearl_of_power", "Жемчужина Силы", 1, Recovery::Daily),
                 ],
-                2,
+                3,
                 &valeria_spellcasting(),
             ),
             spellcasting: Some(valeria_spellcasting()),

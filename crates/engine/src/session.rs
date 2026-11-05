@@ -28,7 +28,7 @@ use crate::treasury::{EntrySource, NewEntry, Treasury, TreasuryView};
 pub const LUCKY_ID: &str = "feat.lucky";
 
 /// Версия формата сохранения.
-pub const SAVE_FORMAT_VERSION: u32 = 4;
+pub const SAVE_FORMAT_VERSION: u32 = 5;
 
 /// Самый старый формат, который загружается (сохранения 0.5.0).
 pub const MIN_SAVE_FORMAT: u32 = 3;

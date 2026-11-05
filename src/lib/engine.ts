@@ -437,6 +437,10 @@ export interface AttackLine {
   range: string;
   notes: string;
   proficiency_unknown: boolean;
+  /** КС спасброска для заклинаний без броска атаки. */
+  save_dc: number | null;
+  /** «МДР», «ЛОВ» — спасбросок цели. */
+  save_label: string | null;
 }
 
 export interface Feature {
@@ -506,6 +510,8 @@ export interface AttackInput {
   extra: string;
   range: string;
   notes: string;
+  /** Заклинание со спасброском цели вместо броска атаки. */
+  save?: Ability | null;
 }
 
 /** Правка листа игроком (или предложенная мастером). */

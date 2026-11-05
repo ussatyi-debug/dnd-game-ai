@@ -161,6 +161,10 @@ pub struct Attack {
     pub extra: String,
     pub range: String,
     pub notes: String,
+    /// Заклинание со спасброском вместо броска атаки: цель спасается этой характеристикой
+    /// против КС класса `caster_id`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub save: Option<Ability>,
 }
 
 /// Умение класса, расы, черта или воззвание.
@@ -289,6 +293,10 @@ pub struct AttackLine {
     pub notes: String,
     /// Владение не указано в листе.
     pub proficiency_unknown: bool,
+    /// КС спасброска для заклинаний без броска атаки.
+    pub save_dc: Option<i32>,
+    /// «МДР», «ЛОВ» — характеристика спасброска цели.
+    pub save_label: Option<String>,
 }
 
 /// Вычисленный полный лист.
@@ -403,16 +411,23 @@ impl Character {
         let pb = self.proficiency_bonus();
         let mut breakdown = Vec::new();
         let mut damage_mod = 0;
+        let mut save_dc = None;
         if let Some(caster_id) = &attack.caster_id {
             let caster = self
                 .spellcasting
                 .as_ref()
                 .and_then(|sc| sc.casters.iter().find(|c| &c.id == caster_id));
             if let Some(c) = caster {
+                if attack.save.is_some() {
+                    save_dc = Some(self.caster_numbers(c).0);
+                }
                 breakdown.push(self.ability_bonus(c.ability));
                 breakdown.push(Bonus::new("владение", pb));
                 if c.item_bonus != 0 {
                     breakdown.push(Bonus::new(&c.item_bonus_source, c.item_bonus));
+                }
+                if c.attack_item_bonus != 0 {
+                    breakdown.push(Bonus::new(&c.attack_item_bonus_source, c.attack_item_bonus));
                 }
                 if attack.add_ability_to_damage {
                     damage_mod += self.abilities.modifier(c.ability);
@@ -450,6 +465,11 @@ impl Character {
             range: attack.range.clone(),
             notes: attack.notes.clone(),
             proficiency_unknown: attack.caster_id.is_none() && attack.proficient.is_none(),
+            save_dc,
+            save_label: attack
+                .save
+                .filter(|_| save_dc.is_some())
+                .map(|a| a.short_name().to_string()),
         }
     }
 

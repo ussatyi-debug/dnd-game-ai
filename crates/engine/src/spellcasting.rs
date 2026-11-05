@@ -132,6 +132,11 @@ pub struct Caster {
     /// Бонус предметов к КС спасброска и к атакам заклинаниями.
     pub item_bonus: i32,
     pub item_bonus_source: String,
+    /// Бонус предметов только к атакам заклинаниями (Палочка военного мага).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub attack_item_bonus: i32,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub attack_item_bonus_source: String,
 }
 
 fn ids(list: &[&str]) -> Vec<String> {
@@ -167,6 +172,8 @@ impl Caster {
             expanded_source: String::new(),
             item_bonus: 0,
             item_bonus_source: String::new(),
+            attack_item_bonus: 0,
+            attack_item_bonus_source: String::new(),
         }
     }
 
@@ -203,6 +210,25 @@ impl Caster {
         self.item_bonus = bonus;
         self.item_bonus_source = source.into();
         self
+    }
+
+    /// Бонус предмета только к броскам атаки заклинаниями (КС не меняется).
+    pub fn attack_item_bonus(mut self, bonus: i32, source: &str) -> Self {
+        self.attack_item_bonus = bonus;
+        self.attack_item_bonus_source = source.into();
+        self
+    }
+
+    /// Источники бонусов предметов для подписи в книге заклинаний.
+    pub fn item_bonus_sources(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        if self.item_bonus != 0 {
+            parts.push(self.item_bonus_source.clone());
+        }
+        if self.attack_item_bonus != 0 {
+            parts.push(format!("{} (только атаки)", self.attack_item_bonus_source));
+        }
+        (!parts.is_empty()).then(|| parts.join(", "))
     }
 
     /// Высший круг заклинаний, доступный этому классу.
@@ -633,7 +659,7 @@ impl Character {
     /// КС спасброска и бонус атаки заклинаниями класса.
     pub fn caster_numbers(&self, caster: &Caster) -> (i32, i32) {
         let base = self.proficiency_bonus() + self.abilities.modifier(caster.ability);
-        (8 + base + caster.item_bonus, base + caster.item_bonus)
+        (8 + base + caster.item_bonus, base + caster.item_bonus + caster.attack_item_bonus)
     }
 
     /// Высший круг, который персонаж может сотворить своими ячейками.
@@ -723,7 +749,7 @@ impl Character {
                     ability_label: c.ability.short_name(),
                     save_dc,
                     attack_bonus,
-                    item_bonus_source: (c.item_bonus != 0).then(|| c.item_bonus_source.clone()),
+                    item_bonus_source: c.item_bonus_sources(),
                     preparation: c.preparation,
                     progression: c.progression,
                     max_spell_level: c.max_spell_level(),
@@ -1419,14 +1445,13 @@ mod tests {
         let blight = cleric.spells.iter().find(|s| s.id == "blight").unwrap();
         assert!(blight.always);
         assert_eq!(blight.tag.as_deref(), Some("Домен Могилы"));
-        assert_eq!(cleric.prepared_count, Some(8));
+        assert_eq!(cleric.prepared_count, Some(13));
         valeria.cast_spell(&CastRequest::new("blight")).unwrap();
     }
 
     #[test]
     fn ritual_casting_rules() {
         let mut valeria = member("npc.valeria");
-        valeria.spellcasting.as_mut().unwrap().casters[0].prepared.push("detect-magic".into());
         let out = valeria
             .cast_spell(&CastRequest::new("detect-magic").with_method(CastMethod::Ritual))
             .unwrap();

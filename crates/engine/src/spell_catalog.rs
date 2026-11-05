@@ -308,6 +308,7 @@ pub(crate) static SPELLS: &[SpellMeta] = &[
     SpellMeta { id: "thunderwave", name: "Волна грома", level: 1, ritual: false, concentration: false, classes: C_BARD | C_DRUID | C_SORCERER | C_WIZARD, srd: true },
     SpellMeta { id: "time-stop", name: "Остановка времени", level: 9, ritual: false, concentration: false, classes: C_SORCERER | C_WIZARD, srd: true },
     SpellMeta { id: "tiny-hut", name: "Крошечная хижина", level: 3, ritual: true, concentration: false, classes: C_BARD | C_WIZARD, srd: true },
+    SpellMeta { id: "toll-the-dead", name: "Погребальный звон", level: 0, ritual: false, concentration: false, classes: C_CLERIC | C_WARLOCK | C_WIZARD, srd: false },
     SpellMeta { id: "tongues", name: "Языки", level: 3, ritual: false, concentration: false, classes: C_BARD | C_CLERIC | C_SORCERER | C_WARLOCK | C_WIZARD, srd: true },
     SpellMeta { id: "transport-via-plants", name: "Перемещение через растения", level: 6, ritual: false, concentration: false, classes: C_DRUID, srd: true },
     SpellMeta { id: "tree-stride", name: "Древесный путь", level: 5, ritual: false, concentration: true, classes: C_DRUID | C_RANGER, srd: true },

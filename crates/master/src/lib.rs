@@ -220,7 +220,12 @@ fn sheet_context(c: &Character) -> Value {
         .map(|a| {
             let unknown =
                 if a.proficiency_unknown { ", владение не указано" } else { "" };
-            format!("{}: {} к попаданию, {}{unknown}", a.name, signed(a.to_hit), a.damage)
+            match (a.save_dc, &a.save_label) {
+                (Some(dc), Some(save)) => {
+                    format!("{}: спасбросок {save} КС {dc}, {}", a.name, a.damage)
+                }
+                _ => format!("{}: {} к попаданию, {}{unknown}", a.name, signed(a.to_hit), a.damage),
+            }
         })
         .collect();
     let hit_dice: Vec<String> =
