@@ -61,7 +61,14 @@ assert.equal(applied.actions[0]?.ok, true);
 
 const context = engine.call<string>({ cmd: "master_context" });
 assert.ok(context.includes("журнал_движка") && context.includes("misty-step"));
-assert.ok(context.startsWith("Ты — Мастер") && context.includes("кубы_мастера"));
+assert.ok(context.startsWith("Ты — Мастер") && context.includes('"cmd":"roll"'));
+const rolls = engine.call<{ rolls: { total: number; d20: number }[]; feedback: string }>({
+  cmd: "master_rolls",
+  text: '```engine\n{"cmd":"roll","who":"Стражник","what":"атака","dice":"1d20+5","vs":"ac:18"}\n```',
+});
+assert.equal(rolls.rolls[0]?.total, (rolls.rolls[0]?.d20 ?? 0) + 5);
+assert.ok(rolls.feedback.includes("Стражник — атака"));
+assert.equal(engine.call<null>({ cmd: "master_rolls", text: "Просто рассказ." }), null);
 
 assert.throws(
   () => engine.call({ cmd: "roll_expression", expression: "2d7", critical: false }),
