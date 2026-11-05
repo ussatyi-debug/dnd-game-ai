@@ -44,9 +44,10 @@ const PROVIDER_INFO: Record<Provider, { short: string; keyPlaceholder: string; k
   },
   local: {
     short: "Локальная",
-    keyPlaceholder: "",
-    keyNote: "",
-    filter: "",
+    keyPlaceholder: "http://localhost:11434 или http://192.168.1.25:11434",
+    keyNote:
+      "Ollama на этом ПК или на другом компьютере в домашней сети. Бесплатно и без интернета; для доступа по сети на компьютере с Ollama нужны OLLAMA_HOST=0.0.0.0 и разрешение в брандмауэре.",
+    filter: "Фильтр: qwen, gemma…",
   },
 };
 
@@ -116,7 +117,11 @@ export default function AiSettingsWindow({
       setKey("");
       const list = await aiListModels(provider);
       setTabModels(provider, list);
-      setStatus(`Ключ сохранён, доступно моделей: ${list.length}`);
+      setStatus(
+        provider === "local"
+          ? `Связь с Ollama есть, установлено моделей: ${list.length}`
+          : `Ключ сохранён, доступно моделей: ${list.length}`,
+      );
     });
   }
 
@@ -170,7 +175,7 @@ export default function AiSettingsWindow({
           </ul>
           <p className="text-xs text-muted">
             Модель можно сменить и прямо в шапке диалога — контекст сцены сохраняется. В приложении для ПК
-            доступны Gemini и ChatGPT со своим ключом, позже — локальная модель.
+            доступны Gemini и ChatGPT со своим ключом и локальная модель через Ollama.
           </p>
         </div>
       ) : !available ? (
@@ -208,48 +213,50 @@ export default function AiSettingsWindow({
                       ? "скоро"
                       : settings?.provider === p.provider
                         ? "ведёт мастера"
-                        : p.has_key
-                          ? `ключ ${p.key_hint}`
-                          : "нет ключа"}
+                        : p.provider === "local"
+                          ? "Ollama"
+                          : p.has_key
+                            ? `ключ ${p.key_hint}`
+                            : "нет ключа"}
                   </span>
                 </button>
               ))}
             </div>
           </section>
 
-          {providerView && !providerView.ready ? (
-            <section className="space-y-2 rounded-lg border border-edge p-3 text-sm">
-              <p className="font-medium">Локальная модель — в разработке</p>
-              <p className="text-muted">
-                Мастер будет работать на этом ПК через Ollama, без интернета и без оплаты: модель уровня Qwen3 14B
-                или Gemma 3 12B на видеокарте RTX 5070. Подключение появится в одной из следующих версий; сейчас
-                выберите Gemini или ChatGPT.
-              </p>
-            </section>
-          ) : (
-          <>
           <form onSubmit={saveKey} className="space-y-2">
-            <h3 className="font-medium">API-ключ {providerView?.label ?? ""}</h3>
+            <h3 className="font-medium">
+              {tab === "local" ? "Адрес сервера Ollama" : `API-ключ ${providerView?.label ?? ""}`}
+            </h3>
             <div className="flex gap-2">
               <input
-                type="password"
+                type={tab === "local" ? "text" : "password"}
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
-                placeholder={providerView?.has_key ? `Ввести новый ключ (сейчас ${providerView.key_hint})` : info.keyPlaceholder}
-                aria-label={`API-ключ ${providerView?.label ?? ""}`}
+                placeholder={
+                  tab === "local"
+                    ? `Сейчас ${providerView?.key_hint ?? "http://localhost:11434"}`
+                    : providerView?.has_key
+                      ? `Ввести новый ключ (сейчас ${providerView.key_hint})`
+                      : info.keyPlaceholder
+                }
+                aria-label={tab === "local" ? "Адрес сервера Ollama" : `API-ключ ${providerView?.label ?? ""}`}
                 autoComplete="off"
                 className="min-w-0 flex-1 rounded-md border border-edge bg-ink px-3 py-2 text-parchment placeholder:text-muted/70 focus:border-gold focus:outline-none"
               />
               <button
                 type="submit"
-                disabled={busy || key.trim() === ""}
+                disabled={busy || (key.trim() === "" && tab !== "local")}
                 className="rounded-md bg-blood px-4 py-2 text-parchment disabled:opacity-40"
               >
-                Сохранить
+                {tab === "local" ? "Проверить связь" : "Сохранить"}
               </button>
             </div>
             <p className="text-xs text-muted">
-              Ключ хранится в папке настроек приложения на этом ПК и не передаётся на телефон. {info.keyNote}
+              {tab === "local"
+                ? "Пустое поле — Ollama на этом ПК. "
+                : "Ключ хранится в папке настроек приложения на этом ПК и не передаётся на телефон. "}
+              {info.keyNote}
             </p>
           </form>
 
@@ -302,8 +309,6 @@ export default function AiSettingsWindow({
               <p className="text-sm text-muted">Нажмите «Обновить список», чтобы загрузить модели.</p>
             )}
           </section>
-          </>
-          )}
 
           {status && <p className="text-sm text-crit">{status}</p>}
           {error && <p className="text-sm text-fumble">{error}</p>}

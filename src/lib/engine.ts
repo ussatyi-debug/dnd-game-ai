@@ -815,7 +815,7 @@ export interface AiSettingsView {
 export interface ProviderView {
   provider: Provider;
   label: string;
-  /** Подключён ли провайдер в этой версии (локальная модель — пока нет). */
+  /** Подключён ли провайдер в этой версии. */
   ready: boolean;
   has_key: boolean;
   key_hint: string | null;

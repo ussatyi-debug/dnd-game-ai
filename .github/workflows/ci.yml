@@ -199,6 +199,7 @@ jobs:
       - name: Сборка интерфейса
         run: npm run build
       - name: Линтер и тесты приложения
+        shell: bash
         run: |
           cargo clippy -p dnd-game-ai --all-targets -- -D warnings
           cargo test -p dnd-game-ai

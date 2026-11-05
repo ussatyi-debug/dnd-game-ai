@@ -197,6 +197,8 @@ fn add_note(
         .map_err(|e| e.to_string())
 }
 
+// Поля команды приходят из интерфейса отдельными аргументами.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 fn update_note(
     id: u64,
@@ -386,9 +388,6 @@ fn ai_select_model(
     model: String,
     ai: State<'_, AiState>,
 ) -> Result<AiSettingsView, String> {
-    if !provider.ready() {
-        return Err(ai::LOCAL_NOT_READY.into());
-    }
     let mut settings = lock(&ai.settings)?;
     settings.provider = provider;
     settings.model = Some(model);

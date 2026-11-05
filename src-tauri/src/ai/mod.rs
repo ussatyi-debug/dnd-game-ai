@@ -5,6 +5,7 @@
 //! можно сменить посреди сцены — следующий ответ даст новая модель с тем же контекстом.
 
 pub mod gemini;
+pub mod ollama;
 pub mod openai;
 
 use std::fs;
@@ -20,13 +21,9 @@ pub enum Provider {
     Gemini,
     #[serde(rename = "openai")]
     OpenAi,
-    /// Локальная модель на ПК (Ollama) — ещё не подключена.
+    /// Локальная модель через Ollama (на этом ПК или в локальной сети).
     Local,
 }
-
-/// Сообщение-заглушка для локальной модели.
-pub const LOCAL_NOT_READY: &str =
-    "Локальная модель (Ollama на этом ПК) появится в следующей версии — пока выберите Gemini или ChatGPT";
 
 impl Provider {
     pub const ALL: [Provider; 3] = [Provider::Gemini, Provider::OpenAi, Provider::Local];
@@ -41,7 +38,7 @@ impl Provider {
 
     /// Подключён ли провайдер в этой версии.
     pub fn ready(self) -> bool {
-        !matches!(self, Provider::Local)
+        true
     }
 }
 
@@ -90,6 +87,9 @@ pub struct AiSettings {
     pub gemini_api_key: Option<String>,
     #[serde(default)]
     pub openai_api_key: Option<String>,
+    /// Адрес сервера Ollama; по умолчанию — этот ПК.
+    #[serde(default)]
+    pub local_url: Option<String>,
 }
 
 /// Состояние одного провайдера для интерфейса.
@@ -115,6 +115,15 @@ pub struct AiSettingsView {
     pub providers: Vec<ProviderView>,
 }
 
+fn hint_for(provider: Provider, key: &str) -> String {
+    // Адрес локального сервера не секрет — показывается целиком.
+    if provider == Provider::Local {
+        key.to_string()
+    } else {
+        hint(key)
+    }
+}
+
 fn hint(key: &str) -> String {
     let tail: String = key.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
     format!("…{tail}")
@@ -128,7 +137,7 @@ impl AiSettings {
             provider_label: self.provider.label(),
             model: self.model.clone(),
             has_key: key.is_some(),
-            key_hint: key.map(hint),
+            key_hint: key.map(|k| hint_for(self.provider, k)),
             providers: Provider::ALL
                 .into_iter()
                 .map(|p| {
@@ -138,7 +147,7 @@ impl AiSettings {
                         label: p.label(),
                         ready: p.ready(),
                         has_key: key.is_some(),
-                        key_hint: key.map(hint),
+                        key_hint: key.map(|k| hint_for(p, k)),
                     }
                 })
                 .collect(),
@@ -150,7 +159,7 @@ impl AiSettings {
         let key = match provider {
             Provider::Gemini => self.gemini_api_key.as_deref(),
             Provider::OpenAi => self.openai_api_key.as_deref(),
-            Provider::Local => None,
+            Provider::Local => Some(self.local_url.as_deref().unwrap_or(ollama::DEFAULT_URL)),
         };
         key.filter(|k| !k.is_empty())
     }
@@ -166,7 +175,7 @@ impl AiSettings {
         match provider {
             Provider::Gemini => self.gemini_api_key = value,
             Provider::OpenAi => self.openai_api_key = value,
-            Provider::Local => return Err(LOCAL_NOT_READY.into()),
+            Provider::Local => self.local_url = Some(ollama::normalize_url(key)?),
         }
         Ok(())
     }
@@ -208,16 +217,13 @@ pub async fn list_models(
     settings: &AiSettings,
     provider: Provider,
 ) -> Result<Vec<ModelInfo>, String> {
-    if !provider.ready() {
-        return Err(LOCAL_NOT_READY.into());
-    }
     let key = settings
         .key_for(provider)
         .ok_or_else(|| format!("Сначала введите API-ключ: {}", provider.label()))?;
     match provider {
         Provider::Gemini => gemini::list_models(client, key).await,
         Provider::OpenAi => openai::list_models(client, key).await,
-        Provider::Local => Err(LOCAL_NOT_READY.into()),
+        Provider::Local => ollama::list_models(client, key).await,
     }
 }
 
@@ -228,15 +234,12 @@ pub async fn chat(
     system: &str,
     history: &[ChatMessage],
 ) -> Result<MasterReply, String> {
-    if !settings.provider.ready() {
-        return Err(LOCAL_NOT_READY.into());
-    }
     let model = settings.model.clone().ok_or("Выберите модель в меню «Модели ИИ»")?;
     let key = settings.key().ok_or("Введите API-ключ в меню «Модели ИИ»")?;
     let text = match settings.provider {
         Provider::Gemini => gemini::generate(client, key, &model, system, history).await?,
         Provider::OpenAi => openai::generate(client, key, &model, system, history).await?,
-        Provider::Local => return Err(LOCAL_NOT_READY.into()),
+        Provider::Local => ollama::generate(client, key, &model, system, history).await?,
     };
     Ok(MasterReply {
         text,
@@ -267,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn keys_are_per_provider_and_local_is_a_stub() {
+    fn keys_are_per_provider_and_local_is_a_server_url() {
         let mut s = AiSettings::default();
         s.set_key(Provider::OpenAi, "sk-proj-Secret9876").unwrap();
         assert!(s.key().is_none(), "активен Gemini без ключа");
@@ -276,10 +279,13 @@ mod tests {
         let view = s.view();
         assert_eq!(view.key_hint.as_deref(), Some("…9876"));
         assert_eq!(view.providers.len(), 3);
-        assert!(!view.providers[2].ready);
+        assert!(view.providers[2].ready);
+        assert_eq!(view.providers[2].key_hint.as_deref(), Some(ollama::DEFAULT_URL));
         assert!(view.providers[1].has_key);
         assert!(!serde_json::to_string(&view).unwrap().contains("Secret"));
-        assert!(s.set_key(Provider::Local, "x").is_err());
+        s.set_key(Provider::Local, "192.168.1.25:11434").unwrap();
+        assert_eq!(s.key_for(Provider::Local), Some("http://192.168.1.25:11434"));
+        assert!(s.set_key(Provider::Local, "http://a b").is_err());
         assert_eq!(serde_json::to_string(&Provider::OpenAi).unwrap(), "\"openai\"");
         // Старые настройки без ключа OpenAI читаются.
         let old: AiSettings =
