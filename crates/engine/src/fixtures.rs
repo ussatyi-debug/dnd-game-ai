@@ -296,6 +296,7 @@ pub fn demo_nikis() -> Character {
         spellcasting: Some(nikis_spellcasting()),
         profile: sheets::nikis_profile(),
         inventory: sheets::nikis_inventory(),
+        edits: Vec::new(),
     }
 }
 
@@ -323,6 +324,7 @@ pub fn demo_party() -> Vec<Character> {
             spellcasting: None,
             profile: sheets::corvus_profile(),
             inventory: sheets::corvus_inventory(),
+            edits: Vec::new(),
         },
         Character {
             id: "npc.gunther".into(),
@@ -353,6 +355,7 @@ pub fn demo_party() -> Vec<Character> {
             spellcasting: Some(gunther_spellcasting()),
             profile: sheets::gunther_profile(),
             inventory: sheets::gunther_inventory(),
+            edits: Vec::new(),
         },
         Character {
             id: "npc.valeria".into(),
@@ -378,6 +381,7 @@ pub fn demo_party() -> Vec<Character> {
             spellcasting: Some(valeria_spellcasting()),
             profile: sheets::valeria_profile(),
             inventory: sheets::valeria_inventory(),
+            edits: Vec::new(),
         },
         Character {
             id: "npc.brokk".into(),
@@ -400,6 +404,7 @@ pub fn demo_party() -> Vec<Character> {
             spellcasting: None,
             profile: sheets::brokk_profile(),
             inventory: sheets::brokk_inventory(),
+            edits: Vec::new(),
         },
         Character {
             id: "npc.yussach".into(),
@@ -417,6 +422,7 @@ pub fn demo_party() -> Vec<Character> {
             spellcasting: None,
             profile: sheets::yussach_profile(),
             inventory: sheets::empty_inventory(),
+            edits: Vec::new(),
         },
     ]
 }

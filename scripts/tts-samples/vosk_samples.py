@@ -2,16 +2,14 @@ import sys, pathlib, time, os
 from vosk_tts import Model, Synth
 text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip()
 out = pathlib.Path(sys.argv[2]); out.mkdir(parents=True, exist_ok=True)
-model = None
-for name in ["vosk-model-tts-ru-0.10-multi", "vosk-model-tts-ru-0.9-multi", "vosk-model-tts-ru-0.8-multi", "vosk-model-tts-ru-0.7-multi"]:
-    try:
-        model = Model(model_name=name)
-        print("модель", name)
-        break
-    except Exception as e:
-        print("нет модели", name, e)
-if model is None:
-    raise SystemExit("ни одна модель Vosk TTS не загрузилась")
+import json, urllib.request
+models = json.load(urllib.request.urlopen("https://alphacephei.com/vosk/models/model-list.json"))
+tts = [m for m in models if m.get("type") == "tts" and m.get("lang") == "ru" and not m.get("obsolete") == "true"]
+for m in tts:
+    print("доступна:", m["name"], m.get("size_text"), m.get("version"))
+name = sorted(tts, key=lambda m: m.get("version", ""))[-1]["name"]
+print("модель", name)
+model = Model(model_name=name)
 synth = Synth(model)
 for sid in range(5):
     t = time.time()

@@ -369,6 +369,18 @@ impl Character {
                             i.name.clone()
                         }
                     })
+                    .chain(
+                        self.spellcasting
+                            .iter()
+                            .flat_map(|sc| sc.scrolls.iter())
+                            .filter(|s| s.count > 0)
+                            .filter(|s| s.container.as_deref().unwrap_or(ON_PERSON) == c.id)
+                            .map(|s| {
+                                let name = spells::spell(&s.spell_id)
+                                    .map_or_else(|| s.spell_id.clone(), |m| m.name.to_string());
+                                format!("Свиток: {name} ({} круг) ×{}", s.level, s.count)
+                            }),
+                    )
                     .collect();
                 (!items.is_empty()).then(|| (c.name.clone(), items))
             })

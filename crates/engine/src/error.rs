@@ -69,6 +69,12 @@ pub enum EngineError {
     NotCustomCard(String),
     /// Неизвестный слой или раздел базы.
     UnknownSection(String),
+    /// Неизвестное поле листа.
+    UnknownSheetField(String),
+    /// Недопустимое значение в листе.
+    InvalidSheetValue(String),
+    /// Нет предложения мастера с таким номером.
+    UnknownProposal(u64),
     /// Сохранение не подходит.
     InvalidSave(String),
     /// Ценность с таким ID уже есть.
@@ -221,6 +227,9 @@ impl fmt::Display for EngineError {
                 "Карточку «{id}» нельзя изменить: менять и удалять можно только карточки, созданные по ходу игры (статус — командой card)"
             ),
             Self::UnknownSection(what) => write!(f, "Неизвестный раздел базы: {what}"),
+            Self::UnknownSheetField(field) => write!(f, "В листе нет поля «{field}»"),
+            Self::InvalidSheetValue(v) => write!(f, "Недопустимое значение в листе: {v}"),
+            Self::UnknownProposal(id) => write!(f, "Нет предложения мастера № {id} (уже решено?)"),
             Self::InvalidSave(reason) => write!(f, "Сохранение не загружено: {reason}"),
             Self::DuplicateAsset(id) => write!(f, "Ценность «{id}» уже есть в казне"),
             Self::UndoStale => write!(

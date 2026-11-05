@@ -318,6 +318,8 @@ pub struct SheetDetails {
     pub conditions: Vec<String>,
     pub exhaustion: u8,
     pub notes: Vec<String>,
+    /// Поля, изменённые игроком (ключи правок).
+    pub edited: Vec<String>,
 }
 
 fn signed(v: i32) -> String {
@@ -480,6 +482,7 @@ impl Character {
             conditions: p.conditions.clone(),
             exhaustion: p.exhaustion,
             notes: p.notes.clone(),
+            edited: self.edited_keys(),
         }
     }
 

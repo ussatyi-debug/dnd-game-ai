@@ -14,6 +14,7 @@ use crate::knowledge::{CustomCard, KbOverride, MasterNote};
 use crate::profile::HitDice;
 use crate::resource::ResourcePool;
 use crate::session::{Scene, Session, MIN_SAVE_FORMAT, SAVE_FORMAT_VERSION};
+use crate::sheet_edits::{rebuild, SheetEdit, SheetProposal};
 use crate::spellcasting::ScrollStack;
 use crate::spells;
 use crate::treasury::Treasury;
@@ -74,6 +75,9 @@ pub struct SavedCharacter {
     pub profile: Option<SavedProfile>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub inventory: Option<Inventory>,
+    /// Правки листа игроком.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub edits: Vec<SheetEdit>,
 }
 
 /// Состояние движка из файла сохранения.
@@ -95,6 +99,8 @@ pub struct SaveData {
     pub custom_cards: Vec<CustomCard>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub turns_without_notes: u32,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub proposals: Vec<SheetProposal>,
 }
 
 /// Итог загрузки.
@@ -110,6 +116,11 @@ pub struct LoadReport {
 
 fn apply_character(c: &mut Character, saved: SavedCharacter, report: &mut Vec<String>) {
     let name = c.name.clone();
+    // Сначала правки листа игроком (они могут менять максимум хитов), затем то, что менялось в игре.
+    if !saved.edits.is_empty() {
+        c.edits = saved.edits.clone();
+        report.extend(rebuild(c));
+    }
 
     match saved.hit_points {
         Some(hp) => {
@@ -249,6 +260,8 @@ impl Session {
         self.kb_overrides = save.kb_overrides;
         self.custom_cards = save.custom_cards;
         self.turns_without_notes = save.turns_without_notes;
+        self.next_proposal_id = save.proposals.iter().map(|p| p.id).max().unwrap_or(0) + 1;
+        self.proposals = save.proposals;
         self.undo = None;
         self.log(format!("Загружено сохранение: День {}", self.scene.day));
 
@@ -307,6 +320,7 @@ mod tests {
                         hit_dice: c.profile.hit_dice.clone(),
                     }),
                     inventory: Some(c.inventory.clone()),
+                    edits: c.edits.clone(),
                 })
                 .collect(),
             treasury: state.treasury,
@@ -315,6 +329,7 @@ mod tests {
             kb_overrides: state.kb_overrides,
             custom_cards: state.custom_cards,
             turns_without_notes: state.turns_without_notes,
+            proposals: state.proposals,
         }
     }
 
@@ -368,6 +383,7 @@ mod tests {
             spellcasting: None,
             profile: None,
             inventory: None,
+            edits: Vec::new(),
         });
         let mut loaded = session();
         let report = loaded.load(save).unwrap();
