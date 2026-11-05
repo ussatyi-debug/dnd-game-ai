@@ -7,7 +7,7 @@ models = json.load(urllib.request.urlopen("https://alphacephei.com/vosk/models/m
 tts = [m for m in models if m.get("type") == "tts" and m.get("lang") == "ru" and not m.get("obsolete") == "true"]
 for m in tts:
     print("доступна:", m["name"], m.get("size_text"), m.get("version"))
-for name, speakers in [("vosk-model-tts-ru-0.9-multi", range(5)), ("vosk-model-tts-ru-0.4-irina", [0]), ("vosk-model-tts-ru-0.4-natasha", [0])]:
+for name, speakers in [("vosk-model-tts-ru-0.9-multi", [2, 4])]:
     try:
         model = Model(model_name=name)
         synth = Synth(model)
@@ -18,7 +18,7 @@ for name, speakers in [("vosk-model-tts-ru-0.9-multi", range(5)), ("vosk-model-t
     for sid in speakers:
         try:
             t = time.time()
-            synth.synth(text, str(out / f"vosk-{short}-speaker{sid}.wav"), speaker_id=sid)
+            synth.synth(text, str(out / f"long-vosk-speaker{sid}.wav"), speaker_id=sid)
             print(f"vosk {short} speaker {sid}: {time.time()-t:.1f} c")
         except BaseException as e:
             print("ошибка", short, sid, e)

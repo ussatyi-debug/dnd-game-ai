@@ -11,10 +11,10 @@ for mid in ["v5_5_ru", "v5_ru", "v4_ru"]:
     except Exception as e:
         print("нет модели", mid, e)
 torch.set_num_threads(4)
-for spk in ["aidar", "eugene", "baya", "kseniya", "xenia"]:
+for spk in ["aidar", "xenia"]:
     t = time.time()
     audio = model.apply_tts(text=text.replace("120", "сто двадцать"), speaker=spk, sample_rate=48000)
     pcm = (audio.clamp(-1, 1) * 32767).to(torch.int16).numpy().tobytes()
-    with wave.open(str(out / f"silero-{spk}.wav"), "wb") as w:
+    with wave.open(str(out / f"long-silero-{spk}.wav"), "wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(48000); w.writeframes(pcm)
     print(f"silero {spk}: {time.time()-t:.1f} c")
