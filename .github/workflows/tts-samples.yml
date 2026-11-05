@@ -22,7 +22,7 @@ jobs:
             piper) pip install piper-tts ;;
             vosk) pip install vosk-tts ;;
             silero) pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install numpy omegaconf ;;
-            xtts) pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install 'coqui-tts[codec]' ;;
+            xtts) pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install 'coqui-tts[codec]' six ;;
           esac
       - name: Синтез
         run: python scripts/tts-samples/${{ matrix.engine }}_samples.py scripts/tts-samples/phrase.txt out
