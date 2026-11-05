@@ -457,6 +457,12 @@ async fn ai_chat(
     Ok(reply)
 }
 
+/// «Выход» на главном экране.
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -475,6 +481,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             roll_expression,
+            exit_app,
             lucky_reroll,
             character_sheet,
             party,

@@ -869,3 +869,13 @@ export function errorText(error: unknown): string {
   if (error instanceof Error) return error.message;
   return "Неизвестная ошибка движка";
 }
+
+/** Можно ли закрыть приложение кнопкой «Выход» (ПК; на Android выходят системной кнопкой). */
+export function canExitApp(): boolean {
+  return isTauri() && !/android/i.test(navigator.userAgent);
+}
+
+/** Закрыть приложение. */
+export function exitApp(): Promise<void> {
+  return invoke<void>("exit_app", {});
+}

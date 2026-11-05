@@ -7,12 +7,16 @@ import LoadWindow, { parseSave, type ParsedSave } from "./components/LoadWindow"
 import MiniPlayer from "./components/MiniPlayer";
 import SettingsWindow, { type SettingsTab } from "./components/SettingsWindow";
 import ContinueWindow from "./components/ContinueWindow";
+import HomeScreen, { type HomeAction } from "./components/HomeScreen";
+import ReferenceWindow from "./components/ReferenceWindow";
 import MainMenu, { type MenuAction } from "./components/MainMenu";
 import PartyPanel from "./components/PartyPanel";
 import SaveWindow from "./components/SaveWindow";
 import TreasuryWindow from "./components/TreasuryWindow";
 import {
   aiChat,
+  canExitApp,
+  exitApp,
   aiListModels,
   aiSelectModel,
   aiSettings,
@@ -58,7 +62,7 @@ import {
   type ClaudeTier,
 } from "./lib/claude";
 import { kbExtraFor, kbIndex } from "./data/kb/index.ts";
-import { AUTOSAVE_EVERY, listAutosaves, writeAutosave, type AutosaveInfo } from "./lib/autosave";
+import { AUTOSAVE_EVERY, listAutosaves, readAutosave, writeAutosave, type AutosaveInfo } from "./lib/autosave";
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
 import type { RollResult, TrayRoll } from "./lib/rolls";
@@ -71,7 +75,7 @@ const PLAYER_ID = "pc.nikis";
 const MASTER_HISTORY = 40;
 
 type Tab = "party" | "dialog" | "character";
-type Overlay = "knowledge" | "save" | "load" | "settings" | "treasury" | "continue" | null;
+type Overlay = "knowledge" | "save" | "load" | "settings" | "treasury" | "continue" | "reference" | null;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "party", label: "Отряд" },
@@ -136,6 +140,10 @@ export default function App() {
   /** Заявка без ответа из-за сбоя и оборванный ответ мастера, который заменит повтор. */
   const [failed, setFailed] = useState<{ playerId: number; partialId: number | null } | null>(null);
   const [autosaves, setAutosaves] = useState<AutosaveInfo[]>([]);
+  /** Главный экран поверх игры. */
+  const [home, setHome] = useState(true);
+  /** Игра уже начата или загружена в этом запуске. */
+  const [played, setPlayed] = useState(false);
   /** Ходов мастера с последнего автосохранения. */
   const [sinceAutosave, setSinceAutosave] = useState<number | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -167,8 +175,9 @@ export default function App() {
   const sceneMood = party?.scene.mood;
   const sceneTime = party?.scene.time ?? null;
   useEffect(() => {
-    if (sceneMood) musicPlayer.setMood(moodForScene(sceneMood, sceneTime));
-  }, [sceneMood, sceneTime]);
+    if (home) musicPlayer.setMood("menu");
+    else if (sceneMood) musicPlayer.setMood(moodForScene(sceneMood, sceneTime));
+  }, [home, sceneMood, sceneTime]);
   useEffect(() => {
     rollsRef.current = rolls;
   }, [rolls]);
@@ -251,10 +260,13 @@ export default function App() {
 
   useEffect(() => {
     if (!engineAvailable) return;
+    // Есть сохранение — игра сразу продолжается с последнего; нет — главный экран.
     listAutosaves()
-      .then((list) => {
+      .then(async (list) => {
         setAutosaves(list);
-        if (list.length > 0) setOpenWindow((w) => w ?? "continue");
+        const last = list[0];
+        if (!last) return;
+        continueFrom(await readAutosave(last.slot));
       })
       .catch(() => undefined);
   }, [engineAvailable]);
@@ -507,6 +519,8 @@ export default function App() {
     setRolls(save.rolls);
     setActiveId(PLAYER_ID);
     setOpenWindow(null);
+    setHome(false);
+    setPlayed(true);
     const extra =
       report.supplemented.length > 0 ? ` Дополнено из приложения: ${report.supplemented.join("; ")}.` : "";
     addMessage("system", `Загружено сохранение: День ${report.day}, ${report.location}.${extra}`);
@@ -521,9 +535,46 @@ export default function App() {
   }
 
   function menu(action: MenuAction) {
+    if (action === "home") {
+      setHome(true);
+      return;
+    }
     if (action === "knowledge") setKbCharacter(null);
     if (action === "settings") setSettingsTab("tts");
     setOpenWindow(action);
+  }
+
+  function homeAction(action: HomeAction) {
+    switch (action) {
+      case "continue": {
+        const last = autosaves[0];
+        if (played || !last) {
+          setHome(false);
+          setPlayed(true);
+          return;
+        }
+        readAutosave(last.slot)
+          .then(continueFrom)
+          .catch((e: unknown) => addMessage("system", `Автосохранение не загрузилось: ${errorText(e)}`));
+        return;
+      }
+      case "campaign":
+        setOpenWindow("continue");
+        return;
+      case "load":
+        setOpenWindow("load");
+        return;
+      case "settings":
+        setSettingsTab("tts");
+        setOpenWindow("settings");
+        return;
+      case "reference":
+        setOpenWindow("reference");
+        return;
+      case "exit":
+        void exitApp();
+        return;
+    }
   }
 
   function speak(m: ChatMessage) {
@@ -718,8 +769,18 @@ export default function App() {
         <ContinueWindow
           autosaves={autosaves}
           onContinue={continueFrom}
-          onNewGame={() => setOpenWindow(null)}
+          canStartNew={!played}
+          onClose={() => setOpenWindow(null)}
+          onNewGame={() => {
+            setOpenWindow(null);
+            setHome(false);
+            setPlayed(true);
+          }}
         />
+      )}
+      {openWindow === "reference" && <ReferenceWindow onClose={() => setOpenWindow(null)} />}
+      {home && (
+        <HomeScreen last={autosaves[0] ?? null} inGame={played} canExit={canExitApp()} onAction={homeAction} />
       )}
     </div>
   );

@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 
-export type MenuAction = "knowledge" | "save" | "load" | "settings";
+export type MenuAction = "home" | "knowledge" | "reference" | "save" | "load" | "settings";
 
 interface MainMenuProps {
   onAction: (action: MenuAction) => void;
 }
 
-const ITEMS: { id: MenuAction | "home"; label: string; hint?: string }[] = [
-  { id: "home", label: "Главный экран", hint: "появится позже" },
+const ITEMS: { id: MenuAction; label: string; hint?: string }[] = [
+  { id: "home", label: "Главный экран" },
   { id: "save", label: "Выгрузить сохранение" },
   { id: "load", label: "Загрузить сохранение" },
   { id: "knowledge", label: "База знаний" },
-  { id: "settings", label: "Настройки", hint: "озвучка, ИИ-мастер" },
+  { id: "reference", label: "Справочник", hint: "заклинания, правила" },
+  { id: "settings", label: "Настройки", hint: "озвучка, музыка, ИИ" },
 ];
 
 export default function MainMenu({ onAction }: MainMenuProps) {
@@ -51,15 +52,12 @@ export default function MainMenu({ onAction }: MainMenuProps) {
           className="absolute left-0 z-50 mt-1 w-60 overflow-hidden rounded-lg border border-edge bg-panel shadow-xl shadow-black/60"
         >
           {ITEMS.map((item) => {
-            const disabled = item.id === "home";
             return (
               <li key={item.id}>
                 <button
                   type="button"
                   role="menuitem"
-                  disabled={disabled}
                   onClick={() => {
-                    if (item.id === "home") return;
                     setOpen(false);
                     onAction(item.id);
                   }}
