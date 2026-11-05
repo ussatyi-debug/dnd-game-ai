@@ -504,6 +504,10 @@ class TtsPlayer {
     const speech = systemSpeech();
     if (!speech) return;
     speech.cancel();
+    if (!speech.getVoices().some((v) => v.lang.toLowerCase().startsWith("ru"))) {
+      this.set({ ...IDLE, error: "Озвучка: на этом устройстве нет системного голоса для русского языка." });
+      return;
+    }
     parts.slice(from).forEach((p, k) => {
       const u = new SpeechSynthesisUtterance(p.text);
       u.lang = "ru-RU";
