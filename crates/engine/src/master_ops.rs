@@ -9,6 +9,7 @@ use crate::knowledge::{CustomCard, KbOverride, MasterNote};
 use crate::profile::SheetDetails;
 use crate::resource::{ResourcePool, RestKind};
 use crate::session::{Scene, Session};
+use crate::sheet_edits::SheetProposal;
 use crate::treasury::{Asset, AssetKind, EntrySource, NewEntry, Treasury};
 
 /// Изменение хитов.
@@ -42,6 +43,8 @@ pub struct Checkpoint {
     next_note_id: u64,
     kb_overrides: Vec<KbOverride>,
     custom_cards: Vec<CustomCard>,
+    proposals: Vec<SheetProposal>,
+    next_proposal_id: u64,
 }
 
 /// Отменяемый ход мастера.
@@ -109,6 +112,8 @@ impl Session {
             next_note_id: self.next_note_id,
             kb_overrides: self.kb_overrides.clone(),
             custom_cards: self.custom_cards.clone(),
+            proposals: self.proposals.clone(),
+            next_proposal_id: self.next_proposal_id,
         }
     }
 
@@ -121,6 +126,8 @@ impl Session {
         self.next_note_id = c.next_note_id;
         self.kb_overrides = c.kb_overrides;
         self.custom_cards = c.custom_cards;
+        self.proposals = c.proposals;
+        self.next_proposal_id = c.next_proposal_id;
     }
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.

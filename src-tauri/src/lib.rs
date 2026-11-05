@@ -15,7 +15,8 @@ use dnd_engine::{
     CardDraft, CastMethod, CastOutcome, CastRequest, CharacterSheet, CustomCard, ExprRoll,
     InventoryView, KbCard, KbOverride, LoadReport, LuckyReroll, MasterNote, NewNote, NoteEdit,
     NoteKind, NoteLayer, PartyView, RestKind, RestResult, SaveData, SaveState, Session,
-    SheetDetails, SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView, TreasuryView, UndoInfo,
+    SheetDetails, SheetEdit, SheetProposal, SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView,
+    TreasuryView, UndoInfo,
 };
 use tauri::{Manager, State};
 
@@ -210,6 +211,30 @@ fn update_note(
 ) -> Result<MasterNote, String> {
     let edit = NoteEdit { title, text, card, layer, kind, due_day: due_day.map(Some), done };
     lock(&state)?.update_note(id, edit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn edit_sheet(id: String, edit: SheetEdit, state: State<'_, SessionState>) -> Result<bool, String> {
+    lock(&state)?.edit_sheet(&id, edit).map(|()| true).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn revert_sheet_edit(
+    id: String,
+    key: String,
+    state: State<'_, SessionState>,
+) -> Result<bool, String> {
+    lock(&state)?.revert_sheet_edit(&id, &key).map(|()| true).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn sheet_proposals(state: State<'_, SessionState>) -> Result<Vec<SheetProposal>, String> {
+    Ok(lock(&state)?.sheet_proposals().to_vec())
+}
+
+#[tauri::command]
+fn resolve_proposal(id: u64, accept: bool, state: State<'_, SessionState>) -> Result<bool, String> {
+    lock(&state)?.resolve_proposal(id, accept).map(|()| true).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -450,6 +475,10 @@ pub fn run() {
             update_note,
             delete_note,
             custom_cards,
+            edit_sheet,
+            revert_sheet_edit,
+            sheet_proposals,
+            resolve_proposal,
             create_card,
             update_card,
             delete_card,

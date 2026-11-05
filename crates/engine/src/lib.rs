@@ -35,6 +35,7 @@ pub mod resource;
 pub mod rng;
 pub mod savegame;
 pub mod session;
+pub mod sheet_edits;
 mod sheets;
 mod spell_catalog;
 pub mod spellcasting;
@@ -69,6 +70,7 @@ pub use session::{
     LuckyReroll, PartyMember, PartyView, RestResult, RestedCharacter, SaveState, Scene, Session,
     ENGINE_LOG_LIMIT, LUCKY_ID, MIN_SAVE_FORMAT, SAVE_FORMAT_VERSION,
 };
+pub use sheet_edits::{SheetEdit, SheetProposal};
 pub use spellcasting::{
     slot_id, CastMethod, CastOutcome, CastRequest, Caster, CasterView, GrantedSpell, GrantedView,
     Preparation, Progression, RestorerView, ScrollStack, ScrollView, SlotRef, SlotRestoreOutcome,

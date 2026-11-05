@@ -7,6 +7,7 @@ use crate::error::EngineError;
 use crate::inventory::Inventory;
 use crate::profile::Profile;
 use crate::resource::{ResourcePool, RestKind};
+use crate::sheet_edits::SheetEdit;
 use crate::spellcasting::Spellcasting;
 
 /// Характеристика.
@@ -137,6 +138,8 @@ pub struct Character {
     /// Полный лист: спасброски, навыки, атаки, умения, владения.
     pub profile: Profile,
     pub inventory: Inventory,
+    /// Правки постоянной части листа игроком (поверх листа приложения).
+    pub edits: Vec<SheetEdit>,
 }
 
 /// Строка характеристики в листе.
@@ -340,6 +343,7 @@ mod tests {
             spellcasting: None,
             profile: Profile::default(),
             inventory: Inventory::default(),
+            edits: Vec::new(),
         };
         assert_eq!(
             c.resource_mut("feat.lucky"),

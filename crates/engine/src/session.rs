@@ -18,6 +18,7 @@ use crate::master_ops::UndoPoint;
 use crate::notation::resolve_player_d20;
 use crate::resource::{ResourcePool, RestKind};
 use crate::rng::{DiceRng, Xoshiro256};
+use crate::sheet_edits::SheetProposal;
 use crate::spellcasting::{
     CastOutcome, CastRequest, SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView,
 };
@@ -120,6 +121,7 @@ pub struct SaveState {
     pub kb_overrides: Vec<KbOverride>,
     pub custom_cards: Vec<CustomCard>,
     pub turns_without_notes: u32,
+    pub proposals: Vec<SheetProposal>,
 }
 
 /// Состояние сессии.
@@ -142,6 +144,9 @@ pub struct Session {
     pub(crate) custom_cards: Vec<CustomCard>,
     /// Ходов мастера подряд без записей в базу (для напоминания).
     pub(crate) turns_without_notes: u32,
+    /// Предложения мастера изменить лист, ждущие решения игрока.
+    pub(crate) proposals: Vec<SheetProposal>,
+    pub(crate) next_proposal_id: u64,
     /// Последний ход мастера, который можно отменить.
     pub(crate) undo: Option<Box<UndoPoint>>,
 }
@@ -160,6 +165,8 @@ impl Session {
             kb_cards: Vec::new(),
             custom_cards: Vec::new(),
             turns_without_notes: 0,
+            proposals: Vec::new(),
+            next_proposal_id: 1,
             undo: None,
         }
     }
@@ -449,6 +456,7 @@ impl Session {
             kb_overrides: self.kb_overrides.clone(),
             custom_cards: self.custom_cards.clone(),
             turns_without_notes: self.turns_without_notes,
+            proposals: self.proposals.clone(),
         }
     }
 }

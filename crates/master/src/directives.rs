@@ -14,7 +14,7 @@
 
 use dnd_engine::{
     all_spells, AssetKind, CardDraft, CardFact, CastMethod, CastRequest, Character, HpChange,
-    NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SceneChange, Session, SlotRef,
+    NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SceneChange, Session, SheetEdit, SlotRef,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -448,6 +448,17 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
             engine(session.move_character(&character, text_field(cmd, "location")?))?;
             Ok(last_log(session))
         }
+        "propose_sheet" => {
+            let edit: SheetEdit =
+                serde_json::from_value(cmd.get("edit").cloned().ok_or("нет поля «edit»")?)
+                    .map_err(|e| format!("неверная правка листа: {e}"))?;
+            engine(session.propose_sheet_edit(
+                &character,
+                edit,
+                opt_text(cmd, "reason").unwrap_or(""),
+            ))?;
+            Ok(last_log(session))
+        }
         other => Err(format!("неизвестная команда «{other}»")),
     }
 }
@@ -652,5 +663,26 @@ mod tests {
         );
         assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
         assert!(s.notes()[0].done);
+    }
+
+    #[test]
+    fn sheet_proposals_wait_for_player() {
+        let mut s = session();
+        let turn = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"propose_sheet\",\"character\":\"nikis\",\"edit\":{\"op\":\"proficiency\",\"kind\":\"Языки\",\"text\":\"Общий, Бездны\"},\"reason\":\"игрок назвал языки\"}\n{\"cmd\":\"propose_sheet\",\"character\":\"nikis\",\"edit\":{\"op\":\"fly\"}}\n```",
+        );
+        assert!(turn.actions[0].ok, "{:?}", turn.actions);
+        assert!(!turn.actions[1].ok);
+        assert_eq!(s.sheet_proposals().len(), 1);
+        let id = s.sheet_proposals()[0].id;
+        s.resolve_proposal(id, true).unwrap();
+        assert!(s
+            .character("pc.nikis")
+            .unwrap()
+            .profile
+            .proficiencies
+            .iter()
+            .any(|l| l.text == "Общий, Бездны"));
     }
 }

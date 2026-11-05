@@ -13,7 +13,7 @@ use std::cell::RefCell;
 
 use dnd_engine::{
     CardDraft, CardFact, CastMethod, CastRequest, KbCard, NewNote, NoteEdit, NoteKind, NoteLayer,
-    RestKind, SaveData, Session, SlotRef, Xoshiro256,
+    RestKind, SaveData, Session, SheetEdit, SlotRef, Xoshiro256,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -121,6 +121,22 @@ pub enum Request {
         due_day: Option<u32>,
         #[serde(default)]
         done: Option<bool>,
+    },
+    /// Правка листа игроком.
+    EditSheet {
+        id: String,
+        edit: SheetEdit,
+    },
+    /// Вернуть поле листа как в приложении.
+    RevertSheetEdit {
+        id: String,
+        key: String,
+    },
+    /// Предложения мастера изменить лист.
+    SheetProposals,
+    ResolveProposal {
+        id: u64,
+        accept: bool,
     },
     /// Карточки базы, созданные по ходу игры.
     CustomCards,
@@ -246,6 +262,19 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
                 .map_err(|e| e.to_string())?,
         ),
         Request::CustomCards => to_value(session.custom_cards()),
+        Request::EditSheet { id, edit } => {
+            session.edit_sheet(&id, edit).map_err(|e| e.to_string())?;
+            to_value(true)
+        }
+        Request::RevertSheetEdit { id, key } => {
+            session.revert_sheet_edit(&id, &key).map_err(|e| e.to_string())?;
+            to_value(true)
+        }
+        Request::SheetProposals => to_value(session.sheet_proposals()),
+        Request::ResolveProposal { id, accept } => {
+            session.resolve_proposal(id, accept).map_err(|e| e.to_string())?;
+            to_value(true)
+        }
         Request::CreateCard { card } => {
             to_value(session.create_card(card.into(), true).map_err(|e| e.to_string())?)
         }
