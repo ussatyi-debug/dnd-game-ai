@@ -32,3 +32,24 @@ jobs:
         with:
           name: tts-${{ matrix.engine }}
           path: out/*.mp3
+  collect:
+    needs: [sample]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: samples
+          merge-multiple: true
+      - name: Ветка с образцами
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd samples && ls -l
+          git init -q -b tts-samples-out
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -q -m "образцы озвучки ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" tts-samples-out
