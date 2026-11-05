@@ -18,7 +18,20 @@ for name, speakers in [("vosk-model-tts-ru-0.9-multi", [2, 4])]:
     for sid in speakers:
         try:
             t = time.time()
-            synth.synth(text, str(out / f"long-vosk-speaker{sid}.wav"), speaker_id=sid)
+            import re, wave
+            parts = [p.strip() for p in re.split(r"(?<=[.!?…])\s+|\n+", text) if p.strip()]
+            frames, params = [], None
+            for k, part in enumerate(parts):
+                tmp = out / f"tmp{k}.wav"
+                synth.synth(part.replace("—", "").strip(), str(tmp), speaker_id=sid)
+                with wave.open(str(tmp)) as w:
+                    params = w.getparams()
+                    frames.append(w.readframes(w.getnframes()))
+                    frames.append(b"\x00\x00" * int(w.getframerate() * 0.25))
+                tmp.unlink()
+            with wave.open(str(out / f"long-vosk-speaker{sid}.wav"), "wb") as w:
+                w.setparams(params)
+                w.writeframes(b"".join(frames))
             print(f"vosk {short} speaker {sid}: {time.time()-t:.1f} c")
         except BaseException as e:
             print("ошибка", short, sid, e)

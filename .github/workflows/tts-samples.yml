@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        engine: [vosk, silero]
+        engine: [vosk]
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
