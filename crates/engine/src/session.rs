@@ -36,6 +36,39 @@ pub const MIN_SAVE_FORMAT: u32 = 3;
 /// Сколько последних записей журнала движка хранится (и передаётся мастеру).
 pub const ENGINE_LOG_LIMIT: usize = 12;
 
+/// Настроение сцены — по нему приложение выбирает фоновую музыку.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Mood {
+    /// Обычная сцена: разговоры, город, отдых.
+    #[default]
+    Calm,
+    /// Путешествие (днём или ночью — по времени сцены).
+    Travel,
+    /// Бой.
+    Battle,
+}
+
+impl Mood {
+    pub fn parse(text: &str) -> Option<Self> {
+        match text.trim().to_lowercase().as_str() {
+            "calm" => Some(Self::Calm),
+            "travel" => Some(Self::Travel),
+            "battle" => Some(Self::Battle),
+            _ => None,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Calm => "спокойная сцена",
+            Self::Travel => "путешествие",
+            Self::Battle => "бой",
+        }
+    }
+}
+
 /// Текущая сцена.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +83,9 @@ pub struct Scene {
     /// начинал сцену с фактов кампании, а не придумывал её заново.
     #[cfg_attr(feature = "serde", serde(default))]
     pub situation: String,
+    /// Настроение сцены (музыка).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub mood: Mood,
 }
 
 /// Результат переброса d20 чертой «Везунчик».

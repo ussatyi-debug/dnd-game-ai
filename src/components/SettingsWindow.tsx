@@ -10,10 +10,11 @@ import {
   type Gender,
   type TtsSettings,
 } from "../lib/tts";
+import { musicPlayer, saveMusicSettings, type MusicSettings, type MusicState, type MusicTrack } from "../lib/music";
 import AiSettingsWindow, { type AiSettingsWindowProps } from "./AiSettingsWindow";
 import Modal from "./Modal";
 
-export type SettingsTab = "tts" | "ai";
+export type SettingsTab = "tts" | "music" | "ai";
 
 type AiProps = Omit<AiSettingsWindowProps, "embedded" | "onClose">;
 
@@ -22,7 +23,77 @@ interface SettingsWindowProps {
   onClose: () => void;
   tts: TtsSettings;
   onTtsChange: (settings: TtsSettings) => void;
+  music: MusicSettings;
+  onMusicChange: (settings: MusicSettings) => void;
   ai: AiProps;
+}
+
+const MOOD_LABEL: Record<MusicTrack["mood"], string> = {
+  menu: "Главное меню",
+  calm: "Фон игры",
+  travel_day: "Путешествие днём",
+  travel_night: "Путешествие ночью",
+  battle: "Бой",
+};
+
+function MusicSettingsPanel({ music, onChange }: { music: MusicSettings; onChange: (s: MusicSettings) => void }) {
+  const [tracks, setTracks] = useState<MusicTrack[] | null>(null);
+  const [state, setState] = useState<MusicState | null>(null);
+  useEffect(() => {
+    void musicPlayer.list().then(setTracks);
+    return musicPlayer.subscribe(setState);
+  }, []);
+  const update = (patch: Partial<MusicSettings>) => onChange({ ...music, ...patch });
+
+  return (
+    <div className="space-y-5 p-4 text-sm">
+      {tracks !== null && tracks.length === 0 && (
+        <p className="text-xs text-muted">Музыка в этой версии недоступна: файлы музыки входят только в приложение для ПК и Android.</p>
+      )}
+      <section className="space-y-3">
+        <label className="flex items-center justify-between gap-2">
+          <span>Фоновая музыка</span>
+          <input type="checkbox" checked={music.enabled} onChange={(e) => update({ enabled: e.target.checked })} className="h-4 w-4 accent-[var(--color-gold)]" />
+        </label>
+        <label className="flex items-center gap-3">
+          <span className="w-24 shrink-0">Громкость</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(music.volume * 100)}
+            onChange={(e) => update({ volume: Number(e.target.value) / 100 })}
+            disabled={!music.enabled}
+            className="flex-1 accent-[var(--color-gold)]"
+            aria-label="Громкость музыки"
+          />
+          <span className="w-10 text-right font-mono text-xs">{Math.round(music.volume * 100)}%</span>
+        </label>
+        <p className="text-xs text-muted">Пока мастер читает ответ голосом, музыка звучит тише.</p>
+        {state?.track && (
+          <p className="text-xs">
+            Сейчас: <span className="text-gold">{state.track.title}</span> — {state.track.author}
+          </p>
+        )}
+      </section>
+      {tracks && tracks.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="font-serif text-gold">Треки</h3>
+          <p className="text-xs text-muted">Вся музыка — с OpenGameArt под лицензией CC0 (общественное достояние).</p>
+          <ul className="space-y-1 text-xs">
+            {tracks.map((t) => (
+              <li key={t.id} className="flex justify-between gap-2">
+                <span>
+                  {t.title} <span className="text-muted">— {t.author}</span>
+                </span>
+                <span className="shrink-0 text-muted">{MOOD_LABEL[t.mood]}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
 }
 
 const input =
@@ -215,7 +286,7 @@ function TtsSettingsPanel({ tts, onChange }: { tts: TtsSettings; onChange: (s: T
   );
 }
 
-export default function SettingsWindow({ initialTab, onClose, tts, onTtsChange, ai }: SettingsWindowProps) {
+export default function SettingsWindow({ initialTab, onClose, tts, onTtsChange, music, onMusicChange, ai }: SettingsWindowProps) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
 
   function changeTts(next: TtsSettings) {
@@ -223,12 +294,18 @@ export default function SettingsWindow({ initialTab, onClose, tts, onTtsChange, 
     onTtsChange(next);
   }
 
+  function changeMusic(next: MusicSettings) {
+    saveMusicSettings(next);
+    onMusicChange(next);
+  }
+
   return (
     <Modal title="Настройки" onClose={onClose} size="lg">
-      <div className="grid grid-cols-2 gap-1 border-b border-edge p-2" role="tablist">
+      <div className="grid grid-cols-3 gap-1 border-b border-edge p-2" role="tablist">
         {(
           [
             ["tts", "Озвучка"],
+            ["music", "Музыка"],
             ["ai", "ИИ-мастер"],
           ] as const
         ).map(([id, label]) => (
@@ -246,6 +323,8 @@ export default function SettingsWindow({ initialTab, onClose, tts, onTtsChange, 
       </div>
       {tab === "tts" ? (
         <TtsSettingsPanel tts={tts} onChange={changeTts} />
+      ) : tab === "music" ? (
+        <MusicSettingsPanel music={music} onChange={changeMusic} />
       ) : (
         <AiSettingsWindow {...ai} onClose={onClose} embedded />
       )}

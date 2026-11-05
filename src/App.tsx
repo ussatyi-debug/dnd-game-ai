@@ -58,6 +58,7 @@ import {
 import { kbExtraFor, kbIndex } from "./data/kb/index.ts";
 import { AUTOSAVE_EVERY, listAutosaves, writeAutosave, type AutosaveInfo } from "./lib/autosave";
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
+import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
 import type { RollResult, TrayRoll } from "./lib/rolls";
 
 const MAX_ROLLS = 200;
@@ -127,6 +128,7 @@ export default function App() {
   const [kbCharacter, setKbCharacter] = useState<string | null>(null);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("tts");
   const [tts, setTts] = useState<TtsSettings>(loadTtsSettings);
+  const [music, setMusic] = useState<MusicSettings>(loadMusicSettings);
   /** Заявка без ответа из-за сбоя и оборванный ответ мастера, который заменит повтор. */
   const [failed, setFailed] = useState<{ playerId: number; partialId: number | null } | null>(null);
   const [autosaves, setAutosaves] = useState<AutosaveInfo[]>([]);
@@ -155,6 +157,14 @@ export default function App() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+  useEffect(() => {
+    musicPlayer.configure(music);
+  }, [music]);
+  const sceneMood = party?.scene.mood;
+  const sceneTime = party?.scene.time ?? null;
+  useEffect(() => {
+    if (sceneMood) musicPlayer.setMood(moodForScene(sceneMood, sceneTime));
+  }, [sceneMood, sceneTime]);
   useEffect(() => {
     rollsRef.current = rolls;
   }, [rolls]);
@@ -646,6 +656,8 @@ export default function App() {
           onClose={() => setOpenWindow(null)}
           tts={tts}
           onTtsChange={setTts}
+          music={music}
+          onMusicChange={setMusic}
           ai={{
             masterMode,
             tier,

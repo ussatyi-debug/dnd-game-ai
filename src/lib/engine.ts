@@ -90,7 +90,11 @@ export interface Scene {
   location: string;
   /** Обстановка: что было накануне и что запланировано. */
   situation: string;
+  /** Настроение сцены — по нему выбирается фоновая музыка. */
+  mood: Mood;
 }
+
+export type Mood = "calm" | "travel" | "battle";
 
 export interface PartyMember {
   id: string;

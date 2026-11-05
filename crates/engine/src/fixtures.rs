@@ -5,7 +5,7 @@
 
 use crate::character::{Ability, AbilityScores, Character, CharacterKind, ClassLevel, HitPoints};
 use crate::resource::{Recovery, ResourcePool};
-use crate::session::Scene;
+use crate::session::{Mood, Scene};
 use crate::sheets;
 use crate::spellcasting::{
     Caster, GrantedSpell, Preparation, Progression, ScrollStack, SlotRestorer, Spellcasting,
@@ -89,6 +89,7 @@ pub fn demo_scene() -> Scene {
         time: Some("утро".into()),
         location: SCENE_LOCATION.into(),
         situation: SCENE_SITUATION.into(),
+        mood: Mood::Calm,
     }
 }
 

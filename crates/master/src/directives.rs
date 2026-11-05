@@ -13,7 +13,7 @@
 //! движка, который мастер видит на следующем ходу.
 
 use dnd_engine::{
-    all_spells, AssetKind, CardDraft, CardFact, CastMethod, CastRequest, Character, HpChange,
+    all_spells, AssetKind, CardDraft, CardFact, CastMethod, CastRequest, Character, HpChange, Mood,
     NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SceneChange, Session, SheetEdit, SlotRef,
 };
 use serde::Serialize;
@@ -239,6 +239,12 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
                 time: opt_text(cmd, "time").map(Into::into),
                 location: opt_text(cmd, "location").map(Into::into),
                 situation: opt_text(cmd, "situation").map(Into::into),
+                mood: match opt_text(cmd, "mood") {
+                    Some(m) => Some(
+                        Mood::parse(m).ok_or_else(|| format!("неизвестное настроение «{m}»"))?,
+                    ),
+                    None => None,
+                },
             };
             engine(session.change_scene(change))?;
             Ok(last_log(session))
@@ -524,6 +530,15 @@ mod tests {
         assert_eq!(gunther.resource("slots.1").unwrap().current(), 3);
         let nikis = s.character("pc.nikis").unwrap();
         assert_eq!(nikis.resource("pact.slots").unwrap().current(), 1);
+    }
+
+    #[test]
+    fn scene_mood_is_set_by_master() {
+        let mut s = session();
+        let turn = apply_directives(&mut s, "Засада!\n```engine\n{\"cmd\":\"scene\",\"mood\":\"battle\"}\n{\"cmd\":\"scene\",\"mood\":\"party\"}\n```");
+        assert!(turn.actions[0].ok, "{:?}", turn.actions);
+        assert!(!turn.actions[1].ok);
+        assert_eq!(s.scene().mood, Mood::Battle);
     }
 
     #[test]

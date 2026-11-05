@@ -147,6 +147,12 @@ jobs:
           key: tts-${{ hashFiles('scripts/fetch-tts.mjs') }}
       - name: Голоса и движок озвучки
         run: node scripts/fetch-tts.mjs
+      - uses: actions/cache@v4
+        with:
+          path: public/music
+          key: music-${{ hashFiles('scripts/fetch-music.mjs') }}
+      - name: Фоновая музыка
+        run: node scripts/fetch-music.mjs
       - name: Сборка интерфейса
         run: npm run build
       - name: Браузер для проверки
@@ -184,6 +190,12 @@ jobs:
           key: tts-${{ hashFiles('scripts/fetch-tts.mjs') }}
       - name: Голоса и движок озвучки
         run: node scripts/fetch-tts.mjs
+      - uses: actions/cache@v4
+        with:
+          path: public/music
+          key: music-${{ hashFiles('scripts/fetch-music.mjs') }}
+      - name: Фоновая музыка
+        run: node scripts/fetch-music.mjs
       - name: Сборка интерфейса
         run: npm run build
       - name: Линтер и тесты приложения

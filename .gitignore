@@ -29,3 +29,6 @@ Thumbs.db
 
 # Голоса и движок озвучки (скачивает scripts/fetch-tts.mjs при сборке приложения)
 /public/tts/
+
+# Фоновая музыка (скачивает scripts/fetch-music.mjs при сборке приложения)
+/public/music/

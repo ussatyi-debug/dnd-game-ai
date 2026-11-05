@@ -8,7 +8,7 @@ use crate::inventory::{InventoryView, NewItem};
 use crate::knowledge::{CustomCard, KbOverride, MasterNote};
 use crate::profile::SheetDetails;
 use crate::resource::{ResourcePool, RestKind};
-use crate::session::{Scene, Session};
+use crate::session::{Mood, Scene, Session};
 use crate::sheet_edits::SheetProposal;
 use crate::treasury::{Asset, AssetKind, EntrySource, NewEntry, Treasury};
 
@@ -30,6 +30,7 @@ pub struct SceneChange {
     pub time: Option<String>,
     pub location: Option<String>,
     pub situation: Option<String>,
+    pub mood: Option<Mood>,
 }
 
 /// Состояние, которое отменяется вместе с ходом мастера (генератор кубов не откатывается).
@@ -439,6 +440,7 @@ impl Session {
         if change == SceneChange::default() {
             return Err(EngineError::ZeroAmount);
         }
+        let moved = change.location.is_some() || change.day.is_some();
         if let Some(day) = change.day {
             if day < self.scene.day {
                 let e = EngineError::DayInPast { current: self.scene.day, requested: day };
@@ -464,9 +466,19 @@ impl Session {
         if let Some(situation) = change.situation {
             self.scene.situation = situation.trim().to_string();
         }
+        match change.mood {
+            Some(mood) => self.scene.mood = mood,
+            // Новое место или новый день — бой и дорога позади, пока мастер не скажет иначе.
+            None if moved && self.scene.mood == Mood::Battle => self.scene.mood = Mood::Calm,
+            None => {}
+        }
         let s = &self.scene;
         let time = s.time.as_deref().map(|t| format!(", {t}")).unwrap_or_default();
-        self.log(format!("Сцена: День {}{time} — {}", s.day, s.location));
+        let mood = match s.mood {
+            Mood::Calm => String::new(),
+            m => format!(" ({})", m.label()),
+        };
+        self.log(format!("Сцена: День {}{time} — {}{mood}", s.day, s.location));
         Ok(self.scene.clone())
     }
 
@@ -493,6 +505,9 @@ impl Session {
 
     /// Отдых отряда с записью в журнал.
     pub fn master_rest(&mut self, kind: RestKind) -> Vec<String> {
+        if self.scene.mood == Mood::Battle {
+            self.scene.mood = Mood::Calm;
+        }
         let result = self.take_rest(kind);
         let label = match kind {
             RestKind::Short => "Короткий отдых",
@@ -581,6 +596,26 @@ mod tests {
         assert!(s.change_scene(SceneChange { day: Some(10), ..SceneChange::default() }).is_err());
         s.move_character("npc.valeria", "Серебряный Шпиль").unwrap();
         assert!(s.party_view().members.iter().find(|m| m.id == "npc.valeria").unwrap().in_scene);
+    }
+
+    #[test]
+    fn mood_follows_master_and_battle_ends_on_move_or_rest() {
+        let mut s = session();
+        assert_eq!(s.scene().mood, Mood::Calm);
+        s.change_scene(SceneChange { mood: Some(Mood::Battle), ..SceneChange::default() }).unwrap();
+        assert_eq!(s.scene().mood, Mood::Battle);
+        assert!(s.engine_log().last().unwrap().contains("(бой)"));
+        s.change_scene(SceneChange {
+            location: Some("Тракт".into()), ..SceneChange::default()
+        })
+        .unwrap();
+        assert_eq!(s.scene().mood, Mood::Calm);
+        s.change_scene(SceneChange { mood: Some(Mood::Travel), ..SceneChange::default() }).unwrap();
+        s.change_scene(SceneChange { day: Some(83), ..SceneChange::default() }).unwrap();
+        assert_eq!(s.scene().mood, Mood::Travel, "дорога продолжается на следующий день");
+        s.change_scene(SceneChange { mood: Some(Mood::Battle), ..SceneChange::default() }).unwrap();
+        s.master_rest(RestKind::Short);
+        assert_eq!(s.scene().mood, Mood::Calm);
     }
 
     #[test]
