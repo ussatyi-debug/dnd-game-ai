@@ -1,0 +1,43 @@
+name: Образцы музыки и карта
+on:
+  push:
+    branches: [music-samples]
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg && pip install pillow
+      - name: Музыка
+        run: python scripts/music-samples/fetch.py out
+      - name: Карта мира
+        continue-on-error: true
+        run: |
+          curl -sSL -o map.jpg "https://drive.usercontent.google.com/download?id=1WeirO3Z8aFE8FiQhhE2NfWC2vALfIWbO&export=download&confirm=t"
+          file map.jpg
+          python - <<'PY'
+          from PIL import Image
+          im = Image.open("map.jpg").convert("RGB")
+          print("map", im.size)
+          for w in (1920, 3200):
+              c = im.copy()
+              if c.width > w:
+                  c = c.resize((w, round(c.height * w / c.width)), Image.LANCZOS)
+              c.save(f"out/map-{w}.webp", "WEBP", quality=82, method=6)
+          PY
+      - name: Ветка с образцами
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd out && ls -l
+          git init -q -b music-samples-out
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -q -m "образцы музыки ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" music-samples-out
