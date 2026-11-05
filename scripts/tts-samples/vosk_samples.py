@@ -1,6 +1,6 @@
 import sys, pathlib, time, os
 from vosk_tts import Model, Synth
-text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip().replace("120", "сто двадцать")
+text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").strip().replace("120", "сто двадцать").replace("«", "").replace("»", "")
 out = pathlib.Path(sys.argv[2]); out.mkdir(parents=True, exist_ok=True)
 import json, urllib.request
 models = json.load(urllib.request.urlopen("https://alphacephei.com/vosk/models/model-list.json"))
