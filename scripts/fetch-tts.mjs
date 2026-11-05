@@ -60,7 +60,7 @@ function copyMatching(from, to, test) {
 mkdirSync(OUT, { recursive: true });
 
 const ort = await npmPackage("onnxruntime-web", ORT_VERSION);
-const ortFiles = copyMatching(join(ort, "dist"), join(OUT, "ort"), (f) => f === "ort.min.js" || /^ort-wasm-simd-threaded\.(wasm|mjs)$/.test(f));
+const ortFiles = copyMatching(join(ort, "dist"), join(OUT, "ort"), (f) => f === "ort.min.js" || /^ort-wasm-simd-threaded.*\.(wasm|mjs)$/.test(f));
 if (!ortFiles.includes("ort.min.js") || !ortFiles.some((f) => f.endsWith(".wasm"))) {
   throw new Error(`В onnxruntime-web ${ORT_VERSION} нет нужных файлов: ${ortFiles.join(", ")}`);
 }
