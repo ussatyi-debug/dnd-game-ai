@@ -16,6 +16,7 @@
 //! - [`profile`] — полный лист: спасброски, навыки, атаки, умения, владения;
 //! - [`inventory`] — инвентарь по местам хранения;
 //! - [`master_ops`] — действия ИИ-мастера над состоянием и отмена его хода;
+//! - [`knowledge`] — записи мастера и игрока, статусы карточек базы знаний;
 //! - [`fixtures`] — демо-персонаж до появления импорта кампании;
 //! - [`treasury`] — казна отряда с журналом операций;
 //! - [`session`] — сессия, общая для приложения и веб-версии.
@@ -26,11 +27,13 @@ pub mod error;
 pub mod expr;
 pub mod fixtures;
 pub mod inventory;
+pub mod knowledge;
 pub mod master_ops;
 pub mod notation;
 pub mod profile;
 pub mod resource;
 pub mod rng;
+pub mod savegame;
 pub mod session;
 mod sheets;
 mod spell_catalog;
@@ -49,7 +52,8 @@ pub use inventory::{
     Container, ContainerView, Inventory, InventoryView, Item, ItemGroup, ItemLine, NewItem,
     ON_PERSON,
 };
-pub use master_ops::{Checkpoint, HpChange, MasterNote, NoteLayer, SceneChange, UndoInfo};
+pub use knowledge::{KbCard, KbOverride, MasterNote, NoteEdit, NoteLayer, KB_STATUSES};
+pub use master_ops::{Checkpoint, HpChange, SceneChange, UndoInfo};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
 pub use profile::{
     Attack, AttackLine, Attunement, Bonus, Feature, HitDice, Proficiency, ProficiencyLine, Profile,
@@ -57,9 +61,10 @@ pub use profile::{
 };
 pub use resource::{Recovery, ResourcePool, RestKind};
 pub use rng::{DiceRng, Xoshiro256};
+pub use savegame::{LoadReport, SaveData, SavedCharacter};
 pub use session::{
     LuckyReroll, PartyMember, PartyView, RestResult, RestedCharacter, SaveState, Scene, Session,
-    ENGINE_LOG_LIMIT, LUCKY_ID, SAVE_FORMAT_VERSION,
+    ENGINE_LOG_LIMIT, LUCKY_ID, MIN_SAVE_FORMAT, SAVE_FORMAT_VERSION,
 };
 pub use spellcasting::{
     slot_id, CastMethod, CastOutcome, CastRequest, Caster, CasterView, GrantedSpell, GrantedView,

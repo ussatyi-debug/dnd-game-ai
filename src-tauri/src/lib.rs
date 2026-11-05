@@ -12,9 +12,10 @@ use ai::{
     AiSettings, AiSettingsView, ChatMessage, MasterReply, ModelInfo, Provider, SettingsStore,
 };
 use dnd_engine::{
-    CastMethod, CastOutcome, CastRequest, CharacterSheet, ExprRoll, InventoryView, LuckyReroll,
-    MasterNote, PartyView, RestKind, RestResult, SaveState, Session, SheetDetails, SlotRef,
-    SlotRestoreOutcome, SpellEntry, SpellbookView, TreasuryView, UndoInfo,
+    CastMethod, CastOutcome, CastRequest, CharacterSheet, ExprRoll, InventoryView, KbCard,
+    KbOverride, LoadReport, LuckyReroll, MasterNote, NoteEdit, NoteLayer, PartyView, RestKind,
+    RestResult, SaveData, SaveState, Session, SheetDetails, SlotRef, SlotRestoreOutcome,
+    SpellEntry, SpellbookView, TreasuryView, UndoInfo,
 };
 use tauri::{Manager, State};
 
@@ -164,6 +165,58 @@ fn master_undo_info(state: State<'_, SessionState>) -> Result<Option<UndoInfo>, 
 }
 
 #[tauri::command]
+fn set_kb_cards(cards: Vec<KbCard>, state: State<'_, SessionState>) -> Result<bool, String> {
+    lock(&state)?.set_kb_cards(cards);
+    Ok(true)
+}
+
+#[tauri::command]
+fn kb_overrides(state: State<'_, SessionState>) -> Result<Vec<KbOverride>, String> {
+    Ok(lock(&state)?.kb_overrides().to_vec())
+}
+
+#[tauri::command]
+fn add_note(
+    layer: NoteLayer,
+    title: String,
+    text: String,
+    card: Option<String>,
+    state: State<'_, SessionState>,
+) -> Result<u64, String> {
+    lock(&state)?
+        .add_note_full(layer, &title, &text, card.as_deref(), true)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_note(
+    id: u64,
+    title: Option<String>,
+    text: Option<String>,
+    card: Option<String>,
+    layer: Option<NoteLayer>,
+    state: State<'_, SessionState>,
+) -> Result<MasterNote, String> {
+    lock(&state)?.update_note(id, NoteEdit { title, text, card, layer }).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_note(id: u64, state: State<'_, SessionState>) -> Result<bool, String> {
+    lock(&state)?.delete_note(id).map(|()| true).map_err(|e| e.to_string())
+}
+
+/// Загрузка сохранения: часть `engine` файла. При ошибке игра не меняется.
+#[tauri::command]
+fn load_state(
+    save: serde_json::Value,
+    state: State<'_, SessionState>,
+) -> Result<LoadReport, String> {
+    let data: SaveData = serde_json::from_value(save)
+        .map_err(|e| format!("Сохранение не загружено: файл повреждён ({e})"))?;
+    lock(&state)?.load(data).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn undo_master_turn(state: State<'_, SessionState>) -> Result<Vec<String>, String> {
     lock(&state)?.undo_master_turn().map_err(|e| e.to_string())
 }
@@ -215,13 +268,20 @@ async fn ai_list_models(
 #[tauri::command]
 async fn ai_chat(
     history: Vec<ChatMessage>,
+    kb_extra: Option<String>,
     ai: State<'_, AiState>,
     session: State<'_, SessionState>,
 ) -> Result<MasterReply, String> {
     let settings = lock(&ai.settings)?.clone();
     let system = {
         let mut session = lock(&session)?;
-        dnd_master::system_text(&dnd_master::turn_context(&mut session))
+        let query = history
+            .iter()
+            .rev()
+            .find(|m| m.role == ai::Role::Player)
+            .map_or("", |m| m.text.as_str());
+        let kb_extra = kb_extra.as_deref().unwrap_or("");
+        dnd_master::system_text(&dnd_master::turn_context(&mut session, query, kb_extra))
     };
     let mut reply = ai::chat(&ai.client, &settings, &system, &history).await?;
     let turn = dnd_master::apply_directives(&mut *lock(&session)?, &reply.text);
@@ -266,6 +326,12 @@ pub fn run() {
             master_notes,
             master_undo_info,
             undo_master_turn,
+            set_kb_cards,
+            kb_overrides,
+            add_note,
+            update_note,
+            delete_note,
+            load_state,
             ai_settings,
             ai_set_key,
             ai_select_model,

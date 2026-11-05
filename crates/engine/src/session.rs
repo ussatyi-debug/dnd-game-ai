@@ -13,7 +13,8 @@ use crate::check::{roll_d20, D20Roll, Modifier, RollMode};
 use crate::error::EngineError;
 use crate::expr::{DiceExpr, ExprRoll};
 use crate::fixtures::{demo_party, demo_scene, demo_treasury};
-use crate::master_ops::{MasterNote, UndoPoint};
+use crate::knowledge::{KbCard, KbOverride, MasterNote};
+use crate::master_ops::UndoPoint;
 use crate::notation::resolve_player_d20;
 use crate::resource::{ResourcePool, RestKind};
 use crate::rng::{DiceRng, Xoshiro256};
@@ -26,7 +27,10 @@ use crate::treasury::{EntrySource, NewEntry, Treasury, TreasuryView};
 pub const LUCKY_ID: &str = "feat.lucky";
 
 /// Версия формата сохранения.
-pub const SAVE_FORMAT_VERSION: u32 = 3;
+pub const SAVE_FORMAT_VERSION: u32 = 4;
+
+/// Самый старый формат, который загружается (сохранения 0.5.0).
+pub const MIN_SAVE_FORMAT: u32 = 3;
 
 /// Сколько последних записей журнала движка хранится (и передаётся мастеру).
 pub const ENGINE_LOG_LIMIT: usize = 12;
@@ -113,6 +117,7 @@ pub struct SaveState {
     pub treasury: Treasury,
     pub engine_log: Vec<String>,
     pub notes: Vec<MasterNote>,
+    pub kb_overrides: Vec<KbOverride>,
 }
 
 /// Состояние сессии.
@@ -127,6 +132,10 @@ pub struct Session {
     /// Записи мастера в базу знаний.
     pub(crate) notes: Vec<MasterNote>,
     pub(crate) next_note_id: u64,
+    /// Статусы карточек базы, изменённые по ходу игры.
+    pub(crate) kb_overrides: Vec<KbOverride>,
+    /// Указатель карточек базы (из интерфейса; в сохранение не попадает).
+    pub(crate) kb_cards: Vec<KbCard>,
     /// Последний ход мастера, который можно отменить.
     pub(crate) undo: Option<Box<UndoPoint>>,
 }
@@ -141,6 +150,8 @@ impl Session {
             engine_log: Vec::new(),
             notes: Vec::new(),
             next_note_id: 1,
+            kb_overrides: Vec::new(),
+            kb_cards: Vec::new(),
             undo: None,
         }
     }
@@ -427,6 +438,7 @@ impl Session {
             treasury: self.treasury.clone(),
             engine_log: self.engine_log.clone(),
             notes: self.notes.clone(),
+            kb_overrides: self.kb_overrides.clone(),
         }
     }
 }

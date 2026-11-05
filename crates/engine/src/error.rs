@@ -55,6 +55,16 @@ pub enum EngineError {
     DayInPast { current: u32, requested: u32 },
     /// Пустая запись в базу знаний.
     EmptyNote,
+    /// Нет записи базы знаний с таким номером.
+    UnknownNote(u64),
+    /// Нет карточки базы знаний.
+    UnknownCard(String),
+    /// Неизвестный статус карточки.
+    UnknownStatus(String),
+    /// Статус карточки и так из базы.
+    NoCardOverride(String),
+    /// Сохранение не подходит.
+    InvalidSave(String),
     /// Ценность с таким ID уже есть.
     DuplicateAsset(String),
     /// После хода мастера состояние менялось — отмена вернула бы и чужие изменения.
@@ -190,6 +200,16 @@ impl fmt::Display for EngineError {
                 "Сейчас День {current} — вернуться в День {requested} нельзя"
             ),
             Self::EmptyNote => write!(f, "Пустая запись: нужен заголовок или текст"),
+            Self::UnknownNote(id) => write!(f, "Нет записи базы знаний № {id}"),
+            Self::UnknownCard(card) => write!(f, "В базе знаний нет карточки «{card}»"),
+            Self::UnknownStatus(s) => write!(
+                f,
+                "Неизвестный статус «{s}»: active, ally, vassal, neutral, watch, enemy, prisoner, dead, open, progress, done, failed, planned"
+            ),
+            Self::NoCardOverride(title) => {
+                write!(f, "У карточки «{title}» и так статус из базы знаний")
+            }
+            Self::InvalidSave(reason) => write!(f, "Сохранение не загружено: {reason}"),
             Self::DuplicateAsset(id) => write!(f, "Ценность «{id}» уже есть в казне"),
             Self::UndoStale => write!(
                 f,

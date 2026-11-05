@@ -130,7 +130,7 @@ pub struct NewEntry {
 }
 
 /// Казна.
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Treasury {
     name: String,
@@ -260,6 +260,54 @@ impl Treasury {
         }
         self.assets.push(asset);
         Ok(())
+    }
+
+    /// Проверка казны из сохранения: записи ссылаются на известные ценности и места,
+    /// остатки не уходят в минус, счётчик номеров после последней записи.
+    pub fn validate_loaded(&mut self) -> Result<(), EngineError> {
+        let bad = |reason: String| EngineError::InvalidSave(format!("казна: {reason}"));
+        for e in &self.entries {
+            if !self.assets.iter().any(|a| a.id == e.asset_id) {
+                return Err(bad(format!(
+                    "запись {} — неизвестная ценность «{}»",
+                    e.id, e.asset_id
+                )));
+            }
+            if !self.locations.iter().any(|l| l.id == e.location_id) {
+                return Err(bad(format!(
+                    "запись {} — неизвестное место «{}»",
+                    e.id, e.location_id
+                )));
+            }
+        }
+        for a in &self.assets {
+            for l in &self.locations {
+                let held = self.quantity(&a.id, &l.id);
+                if held < 0 {
+                    return Err(bad(format!("«{}» в «{}»: остаток {held}", a.name, l.name)));
+                }
+            }
+        }
+        let last = self.entries.iter().map(|e| e.id).max().unwrap_or(0);
+        self.next_id = self.next_id.max(last + 1);
+        Ok(())
+    }
+
+    /// Запись в обход проверок — для тестов загрузки повреждённых сохранений.
+    #[cfg(test)]
+    pub(crate) fn record_unchecked_for_test(&mut self, asset: &str, location: &str, quantity: i64) {
+        self.push(
+            NewEntry {
+                day: 1,
+                time: None,
+                asset_id: asset.into(),
+                location_id: location.into(),
+                quantity,
+                reason: String::new(),
+                source: EntrySource::Manual,
+            },
+            None,
+        );
     }
 
     /// Количество ценности в месте хранения.

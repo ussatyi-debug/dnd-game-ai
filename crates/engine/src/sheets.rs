@@ -102,7 +102,9 @@ const NOT_IN_SHEET: &str = "В листе не указано";
 pub(crate) fn nikis_profile() -> Profile {
     use Proficiency::{Expertise, Proficient};
     Profile {
-        background: String::new(),
+        background: "Беспризорник Черноводья: в детстве — Грим, лучший карманник и шпион на \
+побегушках у криминального лорда, мастер обмана и притворства."
+            .into(),
         alignment: "Нейтрально-злой".into(),
         xp: Some(80_000),
         xp_next: Some(85_000),
@@ -113,6 +115,9 @@ pub(crate) fn nikis_profile() -> Profile {
         save_proficiencies: vec![Ability::Dexterity, Ability::Charisma],
         save_bonuses: Vec::new(),
         save_notes: vec![
+            "Владение спасброском ХАР — по предыстории (беспризорник Грим из Черноводья: \
+полдетства жил обманом и притворством); ЛОВ — Плут."
+                .into(),
             "Кольцо Защиты +1 лежит в кармане без настройки: при настройке +1 к КД и всем спасброскам."
                 .into(),
             "Удача Тёмного: +1d10 к спасброску или проверке (2 заряда).".into(),
@@ -312,8 +317,8 @@ dальность — по пистолю из Руководства масте
         notes: vec![
             "Кости хитов в листе: 3d8 плута и 7d8 колдуна — все d8, всего 10.".into(),
             "Владение оружием — по Плуту первым классом: Клинок Закатного Савана (длинный меч) \
-бьёт с владением. Но тогда спасброски по правилам ЛОВ и ИНТ, а в листе ЛОВ и ХАР — \
-оставлено по листу до решения игрока."
+бьёт с владением. Спасброски ЛОВ и ХАР: Харизма — по предыстории вместо Интеллекта Плута \
+(решение игрока)."
                 .into(),
             "В разделе умений остаток Удачи Тёмного 1/2 и Везунчика 1/3, в трекере ресурсов — \
 полные; взят трекер."
@@ -703,7 +708,7 @@ pub(crate) fn corvus_inventory() -> Inventory {
 }
 
 pub(crate) fn gunther_profile() -> Profile {
-    use Proficiency::{Expertise, Proficient};
+    use Proficiency::Proficient;
     Profile {
         save_proficiencies: vec![Ability::Wisdom, Ability::Charisma],
         save_bonuses: vec![Bonus::new("Аура Защиты", 2)],
@@ -711,7 +716,7 @@ pub(crate) fn gunther_profile() -> Profile {
         skills_listed: true,
         skills: vec![
             skill(Skill::Athletics, Proficient, "по листу"),
-            skill(Skill::Intimidation, Expertise, "Компетентность рыцаря возмездия"),
+            skill(Skill::Intimidation, Proficient, "по листу"),
             skill(Skill::Persuasion, Proficient, "по листу"),
             skill(Skill::Insight, Proficient, "по листу"),
             skill(Skill::Religion, Proficient, "по листу"),
@@ -783,6 +788,9 @@ pub(crate) fn gunther_profile() -> Profile {
         notes: vec![
             "Спасбросок СИЛ приведён к правилам: +6 (СИЛ +4, Аура Защиты +2); в листе было +9 — \
 паладин владеет только спасбросками МДР и ХАР."
+                .into(),
+            "Запугивание приведено к правилам: +5 (в листе было +8 как «компетентность рыцаря \
+возмездия» — у паладина компетентности нет)."
                 .into(),
             "В листе КД 22 = латы 18 + щит +2 + «Оборона» +1 + ещё +1 без источника.".into(),
             "Спутник Эрих фон Кройц упомянут в листе без статблока.".into(),

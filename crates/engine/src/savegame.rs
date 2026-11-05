@@ -1,0 +1,392 @@
+//! Загрузка сохранения.
+//!
+//! Правило кампании: из файла берётся только то, что меняется в игре (хиты, ресурсы,
+//! подготовка, свитки, состояния, инвентарь, место, сцена, казна, записи). Постоянная часть
+//! листа — владения, спасброски, навыки, атаки, умения, известные заклинания — берётся из
+//! приложения, поэтому исправления листа не пропадают при загрузке старого файла. Чего нет
+//! в файле, дополняется из приложения, и загрузка сообщает, что именно дополнено.
+
+use crate::character::{Character, HitPoints};
+use crate::error::EngineError;
+use crate::fixtures::demo_party;
+use crate::inventory::Inventory;
+use crate::knowledge::{KbOverride, MasterNote};
+use crate::profile::HitDice;
+use crate::resource::ResourcePool;
+use crate::session::{Scene, Session, MIN_SAVE_FORMAT, SAVE_FORMAT_VERSION};
+use crate::spellcasting::ScrollStack;
+use crate::spells;
+use crate::treasury::Treasury;
+
+/// Значение пула ресурса в файле.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedPool {
+    pub id: String,
+    pub current: u32,
+}
+
+/// Подготовленные заклинания класса в файле.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedCaster {
+    pub id: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub prepared: Vec<String>,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SavedSpellcasting {
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub casters: Vec<SavedCaster>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub scrolls: Vec<ScrollStack>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub can_prepare: bool,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SavedProfile {
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub conditions: Vec<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub exhaustion: u8,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub hit_dice: Vec<HitDice>,
+}
+
+/// Персонаж в файле: только то, что меняется в игре (лишние поля файла не читаются).
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedCharacter {
+    pub id: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub hit_points: Option<HitPoints>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub location: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub resources: Option<Vec<SavedPool>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub spellcasting: Option<SavedSpellcasting>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub profile: Option<SavedProfile>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub inventory: Option<Inventory>,
+}
+
+/// Состояние движка из файла сохранения.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveData {
+    pub format_version: u32,
+    pub scene: Scene,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub party: Vec<SavedCharacter>,
+    pub treasury: Treasury,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub engine_log: Vec<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub notes: Vec<MasterNote>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub kb_overrides: Vec<KbOverride>,
+}
+
+/// Итог загрузки.
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadReport {
+    pub format_version: u32,
+    pub day: u32,
+    pub location: String,
+    /// Что дополнено из приложения или исправлено при загрузке.
+    pub supplemented: Vec<String>,
+}
+
+fn apply_character(c: &mut Character, saved: SavedCharacter, report: &mut Vec<String>) {
+    let name = c.name.clone();
+
+    match saved.hit_points {
+        Some(hp) => {
+            let max = c.hit_points.max;
+            if hp.current > max {
+                report
+                    .push(format!("{name}: хиты {} больше максимума {max} — снижены", hp.current));
+            }
+            c.hit_points = HitPoints { current: hp.current.min(max), max, temporary: hp.temporary };
+        }
+        None => report.push(format!("{name}: хиты — из приложения")),
+    }
+    if let Some(location) = saved.location.filter(|l| !l.trim().is_empty()) {
+        c.location = location;
+    }
+
+    match saved.resources {
+        Some(pools) => {
+            let mut missing = Vec::new();
+            c.resources = c
+                .resources
+                .iter()
+                .map(|pool| match pools.iter().find(|p| p.id == pool.id()) {
+                    Some(p) => ResourcePool::with_current(
+                        pool.id(),
+                        pool.name(),
+                        p.current.min(pool.max()),
+                        pool.max(),
+                        pool.recovery(),
+                    )
+                    .unwrap_or_else(|_| pool.clone()),
+                    None => {
+                        missing.push(pool.name().to_string());
+                        pool.clone()
+                    }
+                })
+                .collect();
+            if !missing.is_empty() {
+                report.push(format!("{name}: ресурсы из приложения — {}", missing.join(", ")));
+            }
+        }
+        None => report.push(format!("{name}: ресурсы — из приложения")),
+    }
+
+    if let (Some(sc), Some(saved_sc)) = (c.spellcasting.as_mut(), saved.spellcasting) {
+        for caster in &mut sc.casters {
+            if let Some(sv) = saved_sc.casters.iter().find(|s| s.id == caster.id) {
+                let (known, unknown): (Vec<String>, Vec<String>) =
+                    sv.prepared.iter().cloned().partition(|id| spells::spell(id).is_some());
+                if !unknown.is_empty() {
+                    report.push(format!(
+                        "{name}: неизвестные заклинания пропущены — {}",
+                        unknown.join(", ")
+                    ));
+                }
+                caster.prepared = known;
+            }
+        }
+        let (scrolls, unknown): (Vec<ScrollStack>, Vec<ScrollStack>) =
+            saved_sc.scrolls.into_iter().partition(|s| spells::spell(&s.spell_id).is_some());
+        if !unknown.is_empty() {
+            let ids: Vec<String> = unknown.into_iter().map(|s| s.spell_id).collect();
+            report.push(format!(
+                "{name}: свитки неизвестных заклинаний пропущены — {}",
+                ids.join(", ")
+            ));
+        }
+        sc.scrolls = scrolls;
+        sc.can_prepare = saved_sc.can_prepare;
+    }
+
+    match saved.profile {
+        Some(p) => {
+            c.profile.conditions = p.conditions;
+            c.profile.exhaustion = p.exhaustion.min(6);
+            for dice in &mut c.profile.hit_dice {
+                if let Some(saved) = p.hit_dice.iter().find(|d| d.die == dice.die) {
+                    dice.current = saved.current.min(dice.total);
+                }
+            }
+        }
+        None => report.push(format!("{name}: состояния и кости хитов — из приложения")),
+    }
+
+    match saved.inventory {
+        Some(mut inv) => match inv.validate_loaded() {
+            Ok(()) => c.inventory = inv,
+            Err(e) => report.push(format!("{name}: инвентарь из приложения ({e})")),
+        },
+        None => report.push(format!("{name}: инвентарь — из приложения")),
+    }
+}
+
+impl Session {
+    /// Загружает сохранение вместо текущей игры. При ошибке игра не меняется.
+    /// Генератор кубов и указатель базы знаний остаются текущими, отмена хода сбрасывается.
+    pub fn load(&mut self, save: SaveData) -> Result<LoadReport, EngineError> {
+        if save.format_version < MIN_SAVE_FORMAT {
+            return Err(EngineError::InvalidSave(format!(
+                "формат {} — сохранения до версии 0.5.0 не поддерживаются",
+                save.format_version
+            )));
+        }
+        if save.format_version > SAVE_FORMAT_VERSION {
+            return Err(EngineError::InvalidSave(format!(
+                "формат {} из более новой версии приложения (эта понимает до {SAVE_FORMAT_VERSION}) — обновите приложение",
+                save.format_version
+            )));
+        }
+        let mut treasury = save.treasury;
+        treasury.validate_loaded()?;
+
+        let mut report = Vec::new();
+        let mut party = demo_party();
+        let mut saved_party = save.party;
+        for c in &mut party {
+            match saved_party.iter().position(|s| s.id == c.id) {
+                Some(i) => apply_character(c, saved_party.remove(i), &mut report),
+                None => report.push(format!("{}: нет в файле — взят из приложения", c.name)),
+            }
+        }
+        for s in saved_party {
+            report.push(format!("Персонаж «{}» из файла не найден в приложении — пропущен", s.id));
+        }
+
+        let mut notes = save.notes;
+        notes.sort_by_key(|n| n.id);
+        notes.dedup_by_key(|n| n.id);
+        let next_note_id = notes.last().map_or(1, |n| n.id + 1);
+
+        self.scene = save.scene;
+        self.party = party;
+        self.treasury = treasury;
+        self.engine_log = save.engine_log;
+        self.notes = notes;
+        self.next_note_id = next_note_id;
+        self.kb_overrides = save.kb_overrides;
+        self.undo = None;
+        self.log(format!("Загружено сохранение: День {}", self.scene.day));
+
+        Ok(LoadReport {
+            format_version: save.format_version,
+            day: self.scene.day,
+            location: self.scene.location.clone(),
+            supplemented: report,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::knowledge::NoteLayer;
+    use crate::master_ops::HpChange;
+    use crate::rng::Xoshiro256;
+    use crate::spellcasting::CastRequest;
+
+    fn session() -> Session {
+        Session::demo(Xoshiro256::from_seed(1))
+    }
+
+    /// Сохранение текущей сессии в виде, в каком его прочитает загрузка.
+    fn round_trip(s: &Session) -> SaveData {
+        let state = s.save_state();
+        SaveData {
+            format_version: state.format_version,
+            scene: state.scene,
+            party: state
+                .party
+                .iter()
+                .map(|c| SavedCharacter {
+                    id: c.id.clone(),
+                    hit_points: Some(c.hit_points),
+                    location: Some(c.location.clone()),
+                    resources: Some(
+                        c.resources()
+                            .iter()
+                            .map(|r| SavedPool { id: r.id().into(), current: r.current() })
+                            .collect(),
+                    ),
+                    spellcasting: c.spellcasting.as_ref().map(|sc| SavedSpellcasting {
+                        casters: sc
+                            .casters
+                            .iter()
+                            .map(|k| SavedCaster { id: k.id.clone(), prepared: k.prepared.clone() })
+                            .collect(),
+                        scrolls: sc.scrolls.clone(),
+                        can_prepare: sc.can_prepare,
+                    }),
+                    profile: Some(SavedProfile {
+                        conditions: c.profile.conditions.clone(),
+                        exhaustion: c.profile.exhaustion,
+                        hit_dice: c.profile.hit_dice.clone(),
+                    }),
+                    inventory: Some(c.inventory.clone()),
+                })
+                .collect(),
+            treasury: state.treasury,
+            engine_log: state.engine_log,
+            notes: state.notes,
+            kb_overrides: state.kb_overrides,
+        }
+    }
+
+    #[test]
+    fn dynamic_state_survives_round_trip() {
+        let mut s = session();
+        s.change_hp("pc.nikis", HpChange::Damage(20)).unwrap();
+        s.cast_spell("pc.nikis", &CastRequest::new("misty-step")).unwrap();
+        s.cast_spell(
+            "pc.nikis",
+            &CastRequest::new("counterspell").with_method(crate::CastMethod::Scroll),
+        )
+        .unwrap();
+        s.set_condition("npc.corvus", "Отравлен", true).unwrap();
+        s.add_item("pc.nikis", "Печать Вернера", 1, None, "Документы", "").unwrap();
+        s.add_note(NoteLayer::Player, "Пароль", "Серый рассвет").unwrap();
+        s.master_treasury_entry("gp", "purse", -80, "Ужин").unwrap();
+        let save = round_trip(&s);
+
+        let mut loaded = Session::demo(Xoshiro256::from_seed(9));
+        let report = loaded.load(save).unwrap();
+        assert!(report.supplemented.is_empty(), "{:?}", report.supplemented);
+        let nikis = loaded.character("pc.nikis").unwrap();
+        assert_eq!(nikis.hit_points.current, s.character("pc.nikis").unwrap().hit_points.current);
+        assert_eq!(nikis.resource("pact.slots").unwrap().current(), 1);
+        let scrolls = &nikis.spellcasting.as_ref().unwrap().scrolls;
+        assert_eq!(scrolls.iter().find(|x| x.spell_id == "counterspell").unwrap().count, 1);
+        assert!(nikis.inventory.find_item("Печать Вернера").is_ok());
+        assert_eq!(loaded.character("npc.corvus").unwrap().profile.conditions, vec!["Отравлен"]);
+        assert_eq!(loaded.treasury_view().total, s.treasury_view().total);
+        assert_eq!(loaded.notes().len(), 1);
+        // Номера продолжаются после загруженных.
+        let id = loaded.add_note(NoteLayer::Master, "Ещё", "x").unwrap();
+        assert_eq!(id, 2);
+        assert!(loaded.master_undo_info().is_none());
+    }
+
+    #[test]
+    fn static_sheet_comes_from_app_and_gaps_are_reported() {
+        let s = session();
+        let mut save = round_trip(&s);
+        let gunther = save.party.iter_mut().find(|c| c.id == "npc.gunther").unwrap();
+        gunther.resources = None;
+        gunther.hit_points = Some(HitPoints { current: 500, max: 500, temporary: 0 });
+        save.party.retain(|c| c.id != "npc.brokk");
+        save.party.push(SavedCharacter {
+            id: "npc.ghost".into(),
+            hit_points: None,
+            location: None,
+            resources: None,
+            spellcasting: None,
+            profile: None,
+            inventory: None,
+        });
+        let mut loaded = session();
+        let report = loaded.load(save).unwrap();
+        let gunther = loaded.character("npc.gunther").unwrap();
+        assert_eq!(gunther.hit_points.current, 72);
+        assert_eq!(gunther.hit_points.max, 72);
+        assert_eq!(gunther.details().saves[0].total, 6);
+        let text = report.supplemented.join("\n");
+        assert!(text.contains("хиты 500"));
+        assert!(text.contains("ресурсы — из приложения"));
+        assert!(text.contains("Брокк"));
+        assert!(text.contains("npc.ghost"));
+    }
+
+    #[test]
+    fn bad_saves_are_rejected_without_changes() {
+        let mut s = session();
+        let mut old = round_trip(&s);
+        old.format_version = 2;
+        assert!(matches!(s.load(old), Err(EngineError::InvalidSave(_))));
+        let mut future = round_trip(&s);
+        future.format_version = SAVE_FORMAT_VERSION + 1;
+        assert!(s.load(future).is_err());
+        let before = s.checkpoint();
+        let mut broken = round_trip(&s);
+        broken.treasury.record_unchecked_for_test("gp", "purse", -1_000_000);
+        assert!(s.load(broken).is_err());
+        assert_eq!(s.checkpoint(), before);
+    }
+}

@@ -11,7 +11,10 @@
 
 use std::cell::RefCell;
 
-use dnd_engine::{CastMethod, CastRequest, RestKind, Session, SlotRef, Xoshiro256};
+use dnd_engine::{
+    CastMethod, CastRequest, KbCard, NoteEdit, NoteLayer, RestKind, SaveData, Session, SlotRef,
+    Xoshiro256,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -30,8 +33,14 @@ pub enum Request {
     Party,
     Treasury,
     SaveState,
-    /// Системный текст мастера на этот ход: кодекс и состояние игры.
-    MasterContext,
+    /// Системный текст мастера на этот ход: кодекс и состояние игры. `query` — заявка
+    /// игрока, `kb_extra` — подходящие к ней карточки базы знаний.
+    MasterContext {
+        #[serde(default)]
+        query: String,
+        #[serde(default)]
+        kb_extra: String,
+    },
     TreasuryAddManual {
         asset_id: String,
         location_id: String,
@@ -83,6 +92,33 @@ pub enum Request {
     /// Последний ход мастера, который можно отменить.
     MasterUndoInfo,
     UndoMasterTurn,
+    /// Указатель карточек базы знаний (передаётся при запуске).
+    SetKbCards {
+        cards: Vec<KbCard>,
+    },
+    /// Статусы карточек, изменённые по ходу игры.
+    KbOverrides,
+    /// Запись игрока в базу знаний.
+    AddNote {
+        layer: NoteLayer,
+        title: String,
+        text: String,
+        card: Option<String>,
+    },
+    UpdateNote {
+        id: u64,
+        title: Option<String>,
+        text: Option<String>,
+        card: Option<String>,
+        layer: Option<NoteLayer>,
+    },
+    DeleteNote {
+        id: u64,
+    },
+    /// Загрузка сохранения (часть `engine` файла).
+    LoadState {
+        save: Value,
+    },
     /// Выполняет команды движка из ответа мастера и возвращает текст без них.
     MasterApply {
         text: String,
@@ -111,8 +147,8 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::Party => to_value(session.party_view()),
         Request::Treasury => to_value(session.treasury_view()),
         Request::SaveState => to_value(session.save_state()),
-        Request::MasterContext => {
-            to_value(dnd_master::system_text(&dnd_master::turn_context(session)))
+        Request::MasterContext { query, kb_extra } => {
+            to_value(dnd_master::system_text(&dnd_master::turn_context(session, &query, &kb_extra)))
         }
         Request::TreasuryAddManual { asset_id, location_id, quantity, reason } => to_value(
             session
@@ -144,6 +180,30 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::Inventory { id } => to_value(session.inventory(&id).map_err(|e| e.to_string())?),
         Request::MasterNotes => to_value(session.notes()),
         Request::MasterUndoInfo => to_value(session.master_undo_info()),
+        Request::SetKbCards { cards } => {
+            session.set_kb_cards(cards);
+            to_value(true)
+        }
+        Request::KbOverrides => to_value(session.kb_overrides()),
+        Request::AddNote { layer, title, text, card } => to_value(
+            session
+                .add_note_full(layer, &title, &text, card.as_deref(), true)
+                .map_err(|e| e.to_string())?,
+        ),
+        Request::UpdateNote { id, title, text, card, layer } => to_value(
+            session
+                .update_note(id, NoteEdit { title, text, card, layer })
+                .map_err(|e| e.to_string())?,
+        ),
+        Request::DeleteNote { id } => {
+            session.delete_note(id).map_err(|e| e.to_string())?;
+            to_value(true)
+        }
+        Request::LoadState { save } => {
+            let data: SaveData = serde_json::from_value(save)
+                .map_err(|e| format!("Сохранение не загружено: файл повреждён ({e})"))?;
+            to_value(session.load(data).map_err(|e| e.to_string())?)
+        }
         Request::UndoMasterTurn => to_value(session.undo_master_turn().map_err(|e| e.to_string())?),
         Request::MasterApply { text } => to_value(dnd_master::apply_directives(session, &text)),
     }
@@ -342,7 +402,7 @@ mod tests {
         assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
         assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
         let save = call(&mut s, json!({ "cmd": "save_state" }));
-        assert_eq!(save["ok"]["format_version"], 3);
+        assert_eq!(save["ok"]["format_version"], 4);
         assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
         let added = call(
             &mut s,
@@ -403,5 +463,32 @@ mod tests {
             let value: Value = serde_json::from_slice(out).unwrap();
             assert_eq!(value["ok"]["resources"][0]["name"], "Везунчик");
         }
+    }
+
+    #[test]
+    fn save_round_trip_through_json() {
+        let mut s = session();
+        call(
+            &mut s,
+            json!({ "cmd": "add_note", "layer": "player", "title": "Пароль", "text": "Серый рассвет", "card": null }),
+        );
+        call(&mut s, json!({ "cmd": "lucky_reroll" }));
+        let save = call(&mut s, json!({ "cmd": "save_state" }))["ok"].clone();
+        let mut other = session();
+        let report = call(&mut other, json!({ "cmd": "load_state", "save": save }));
+        assert!(report["ok"]["supplemented"].as_array().unwrap().is_empty(), "{report}");
+        let notes = call(&mut other, json!({ "cmd": "master_notes" }));
+        assert_eq!(notes["ok"][0]["by_player"], true);
+        let sheet = call(&mut other, json!({ "cmd": "character_sheet", "id": "pc.nikis" }));
+        let lucky = sheet["ok"]["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == "feat.lucky")
+            .unwrap()
+            .clone();
+        assert_eq!(lucky["current"], 2);
+        let bad = call(&mut other, json!({ "cmd": "load_state", "save": { "format_version": 4 } }));
+        assert!(bad["err"].as_str().unwrap().contains("повреждён"));
     }
 }

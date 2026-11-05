@@ -5,6 +5,7 @@
 use crate::character::{Character, HitPoints};
 use crate::error::EngineError;
 use crate::inventory::{InventoryView, NewItem};
+use crate::knowledge::{KbOverride, MasterNote};
 use crate::profile::SheetDetails;
 use crate::resource::{ResourcePool, RestKind};
 use crate::session::{Scene, Session};
@@ -19,29 +20,6 @@ pub enum HpChange {
     Heal(u32),
     /// Временные хиты: не складываются, остаётся большее значение.
     Temporary(u32),
-}
-
-/// Слой базы знаний для записи мастера.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NoteLayer {
-    /// Видно игроку: «Записи мастера».
-    Player,
-    /// Только мастеру: «Журнал мастера».
-    Master,
-}
-
-/// Запись мастера в базе знаний.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MasterNote {
-    pub id: u64,
-    pub layer: NoteLayer,
-    pub day: u32,
-    pub time: Option<String>,
-    pub title: String,
-    pub text: String,
 }
 
 /// Изменения сцены. `None` — без изменений.
@@ -62,6 +40,7 @@ pub struct Checkpoint {
     engine_log: Vec<String>,
     notes: Vec<MasterNote>,
     next_note_id: u64,
+    kb_overrides: Vec<KbOverride>,
 }
 
 /// Отменяемый ход мастера.
@@ -127,6 +106,7 @@ impl Session {
             engine_log: self.engine_log.clone(),
             notes: self.notes.clone(),
             next_note_id: self.next_note_id,
+            kb_overrides: self.kb_overrides.clone(),
         }
     }
 
@@ -137,6 +117,7 @@ impl Session {
         self.engine_log = c.engine_log;
         self.notes = c.notes;
         self.next_note_id = c.next_note_id;
+        self.kb_overrides = c.kb_overrides;
     }
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
@@ -511,46 +492,12 @@ impl Session {
             .map(|c| format!("{}: {}", c.name, c.restored.join(", ")))
             .collect()
     }
-
-    // ─────────────────────── записи в базу знаний ───────────────────────
-
-    pub fn notes(&self) -> &[MasterNote] {
-        &self.notes
-    }
-
-    /// Запись мастера в базу знаний: игроку («Записи мастера») или себе («Журнал мастера»).
-    pub fn add_note(
-        &mut self,
-        layer: NoteLayer,
-        title: &str,
-        text: &str,
-    ) -> Result<u64, EngineError> {
-        let (title, text) = (title.trim(), text.trim());
-        if title.is_empty() && text.is_empty() {
-            return Err(EngineError::EmptyNote);
-        }
-        let id = self.next_note_id;
-        self.next_note_id += 1;
-        self.notes.push(MasterNote {
-            id,
-            layer,
-            day: self.scene.day,
-            time: self.scene.time.clone(),
-            title: if title.is_empty() { "Без названия".into() } else { title.into() },
-            text: text.into(),
-        });
-        let place = match layer {
-            NoteLayer::Player => "Записи мастера",
-            NoteLayer::Master => "Журнал мастера",
-        };
-        self.log(format!("База знаний ({place}): «{}»", self.notes.last().unwrap().title));
-        Ok(id)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::knowledge::NoteLayer;
     use crate::rng::Xoshiro256;
 
     fn session() -> Session {

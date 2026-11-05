@@ -72,6 +72,7 @@ pub struct Item {
 pub struct Inventory {
     pub containers: Vec<Container>,
     pub items: Vec<Item>,
+    #[cfg_attr(feature = "serde", serde(default))]
     next_id: u32,
 }
 
@@ -173,6 +174,27 @@ impl Inventory {
                 options: many.iter().take(4).map(|i| i.name.clone()).collect(),
             }),
         }
+    }
+
+    /// Проверка инвентаря из сохранения: предметы лежат в известных местах, счётчик номеров
+    /// после последнего предмета.
+    pub fn validate_loaded(&mut self) -> Result<(), EngineError> {
+        if let Some(item) =
+            self.items.iter().find(|i| !self.containers.iter().any(|c| c.id == i.container))
+        {
+            return Err(EngineError::InvalidSave(format!(
+                "предмет «{}» лежит в неизвестном месте «{}»",
+                item.name, item.container
+            )));
+        }
+        let last = self
+            .items
+            .iter()
+            .filter_map(|i| i.id.strip_prefix("item.").and_then(|n| n.parse::<u32>().ok()))
+            .max()
+            .unwrap_or(0);
+        self.next_id = self.next_id.max(last + 1);
+        Ok(())
     }
 
     /// Добавляет предмет. Одинаковый предмет в том же контейнере складывается в стопку.

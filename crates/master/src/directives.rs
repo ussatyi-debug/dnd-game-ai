@@ -13,8 +13,8 @@
 //! движка, который мастер видит на следующем ходу.
 
 use dnd_engine::{
-    all_spells, AssetKind, CastMethod, CastRequest, Character, HpChange, NoteLayer, RestKind,
-    SceneChange, Session, SlotRef,
+    all_spells, AssetKind, CastMethod, CastRequest, Character, HpChange, NoteEdit, NoteLayer,
+    RestKind, SceneChange, Session, SlotRef,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -258,14 +258,40 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             Ok(text)
         })(),
         "note" => (|| -> Result<String, String> {
-            let layer = match opt_text(cmd, "layer").unwrap_or("player") {
-                "player" => NoteLayer::Player,
-                "master" => NoteLayer::Master,
-                other => return Err(format!("неизвестный слой «{other}»")),
+            let layer = match opt_text(cmd, "layer") {
+                None => None,
+                Some("player") => Some(NoteLayer::Player),
+                Some("master") => Some(NoteLayer::Master),
+                Some(other) => return Err(format!("неизвестный слой «{other}»")),
             };
+            if let Some(id) = int_field(cmd, "id") {
+                let id = u64::try_from(id).map_err(|_| format!("неверный номер записи {id}"))?;
+                if cmd.get("delete").and_then(Value::as_bool).unwrap_or(false) {
+                    engine(session.delete_note(id))?;
+                } else {
+                    let field =
+                        |key: &str| cmd.get(key).and_then(Value::as_str).map(str::to_string);
+                    let edit = NoteEdit {
+                        title: field("title"),
+                        text: field("text"),
+                        card: field("card"),
+                        layer,
+                    };
+                    engine(session.update_note(id, edit))?;
+                }
+                return Ok(last_log(session));
+            }
             let title = opt_text(cmd, "title").unwrap_or("");
             let text = opt_text(cmd, "text").unwrap_or("");
-            engine(session.add_note(layer, title, text))?;
+            let layer = layer.unwrap_or(NoteLayer::Player);
+            engine(session.add_note_full(layer, title, text, opt_text(cmd, "card"), false))?;
+            Ok(last_log(session))
+        })(),
+        "card" => (|| -> Result<String, String> {
+            let card = text_field(cmd, "card")?;
+            let status = text_field(cmd, "status")?;
+            let status = if status == "reset" { None } else { Some(status) };
+            engine(session.set_card_status(card, status, opt_text(cmd, "note").unwrap_or("")))?;
             Ok(last_log(session))
         })(),
         _ => return None,
@@ -516,5 +542,38 @@ mod tests {
         assert!(turn.actions[0].summary.contains("[id: new."));
         assert!(turn.actions[1].ok);
         assert!(!turn.actions[2].ok);
+    }
+
+    #[test]
+    fn note_edit_delete_and_card_status() {
+        let mut s = session();
+        s.set_kb_cards(vec![dnd_engine::KbCard {
+            id: "goal.astrolabe".into(),
+            title: "Получить Княжескую Астролябию".into(),
+            layer: "player".into(),
+            status: Some("progress".into()),
+        }]);
+        let turn = apply_directives(
+            &mut s,
+            concat!(
+                "```engine\n",
+                "{\"cmd\":\"note\",\"title\":\"Астролябия\",\"text\":\"Готова к Дню 85\",\"card\":\"goal.astrolabe\"}\n",
+                "{\"cmd\":\"note\",\"id\":1,\"text\":\"Готова раньше срока\"}\n",
+                "{\"cmd\":\"card\",\"card\":\"goal.astrolabe\",\"status\":\"done\",\"note\":\"Получена\"}\n",
+                "{\"cmd\":\"note\",\"id\":7,\"delete\":true}\n",
+                "{\"cmd\":\"card\",\"card\":\"goal.nothing\",\"status\":\"done\"}\n",
+                "```"
+            ),
+        );
+        let ok: Vec<bool> = turn.actions.iter().map(|a| a.ok).collect();
+        assert_eq!(ok, vec![true, true, true, false, false], "{:?}", turn.actions);
+        assert_eq!(s.notes()[0].text, "Готова раньше срока");
+        assert_eq!(s.notes()[0].card.as_deref(), Some("goal.astrolabe"));
+        assert_eq!(s.kb_overrides()[0].status, "done");
+        s.undo_master_turn().unwrap();
+        assert!(s.notes().is_empty());
+        assert!(s.kb_overrides().is_empty());
+        let turn = apply_directives(&mut s, "```engine\n{\"cmd\":\"note\",\"title\":\"x\"}\n{\"cmd\":\"note\",\"id\":1,\"delete\":true}\n```");
+        assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
     }
 }

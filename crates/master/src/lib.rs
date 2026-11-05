@@ -10,7 +10,10 @@ mod directives;
 
 pub use directives::{apply_directives, strip_directives, MasterAction, MasterTurn};
 
-use dnd_engine::{Character, CharacterKind, Proficiency, Session, SpellbookView};
+use dnd_engine::{
+    Character, CharacterKind, MasterNote, NoteLayer, Proficiency, Session, SpellbookView,
+    KB_STATUSES,
+};
 use serde_json::{json, Value};
 
 /// Кодекс кампании «Дом Стрэндж».
@@ -81,7 +84,11 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
 - Казна: {"cmd":"treasury","asset":"gp","location":"purse","quantity":-80,"reason":"Ужин в «Золотом Фазане»"} (quantity < 0 — расход); перемещение: {"cmd":"transfer","asset":"gp","quantity":500,"from":"crow_rock_vault","to":"purse","reason":"..."}; новая ценность: {"cmd":"new_asset","name":"Изумруд","kind":"gem","value":500} (kind: coin, gem, ingot, note, valuable; value — ЗМ за штуку), затем запись казны с её id. Места и id ценностей — в «казна».
 - Сцена: {"cmd":"scene","time":"полдень","location":"Серебряный Шпиль"}; "day" — только вперёд. Меняй время и место ТОЛЬКО когда игрок сам сказал, что время прошло или он переместился. Спутника перемещает {"cmd":"move","character":"npc.valeria","location":"..."}.
 - Отдых — только по заявке игрока: {"cmd":"rest","kind":"short"} или "long".
-- База знаний: {"cmd":"note","layer":"player","title":"Пароль тайной гати","text":"..."} — то, что герой узнал (видно игроку в «Записи мастера»); "layer":"master" — твой журнал: тайны, планы NPC, импровизации, которые надо помнить. Записи — в «записи_базы_знаний».
+- База знаний — твоя долгая память: в контекст попадают только последние сообщения чата, всё важное записывай.
+  - Новая запись: {"cmd":"note","layer":"player","title":"Пароль тайной гати","text":"...","card":"secret.hecker_route"} — то, что герой узнал (видно игроку в «Записи мастера»); "layer":"master" — твой журнал: тайны, планы NPC, импровизации. "card" — id карточки из «карточки_базы», к которой относится запись (необязательно).
+  - Исправить запись: {"cmd":"note","id":12,"text":"новый текст"} (можно "title", "card", "layer"; "card":"" — отвязать). Удалить устаревшую: {"cmd":"note","id":12,"delete":true}. Не плоди дубли — исправляй.
+  - Статус карточки по ходу игры: {"cmd":"card","card":"goal.astrolabe","status":"done","note":"Получена у Халида"}; статусы: active, ally, vassal, neutral, watch, enemy, prisoner, dead, open, progress, done, failed, planned; "status":"reset" — вернуть статус из базы.
+  - «записи_базы_знаний»: все записи для игрока, последние записи журнала и старые записи журнала, подходящие к заявке. «карточки_базы» — оглавление базы, «карточки_по_заявке» — полный текст карточек, подходящих к заявке. Записи с пометкой «записал: игрок» — заметки самого игрока, уважай их.
 - Игрок может одной кнопкой отменить весь твой последний ход с командами. Если в «журнал_движка» есть «Отменён ход мастера», перескажи сцену заново по заявке игрока.
 - Чтобы прибавить модификатор к кубу игрока, бери готовые числа из «листы»: спасброски (* — владение), навыки, атаки.
 
@@ -218,8 +225,91 @@ fn sheet_context(c: &Character) -> Value {
     })
 }
 
+/// Сколько последних записей журнала мастера всегда уходит в контекст.
+pub const MASTER_JOURNAL_RECENT: usize = 30;
+/// Сколько старых записей журнала, подходящих к заявке, добавляется сверх последних.
+const MASTER_JOURNAL_FOUND: usize = 10;
+
+fn note_json(session: &Session, n: &MasterNote) -> Value {
+    let card = n.card.as_deref().map(|id| {
+        let title = session.kb_cards().iter().find(|c| c.id == id).map_or(id, |c| c.title.as_str());
+        format!("{title} [{id}]")
+    });
+    json!({
+        "id": n.id,
+        "день": n.day,
+        "заголовок": n.title,
+        "текст": n.text,
+        "карточка": card,
+        "записал": if n.by_player { "игрок" } else { "мастер" },
+    })
+}
+
+fn status_label(id: &str) -> &str {
+    KB_STATUSES.iter().find(|(s, _)| *s == id).map_or(id, |(_, l)| *l)
+}
+
+/// Оглавление базы знаний: карточки со статусами (с учётом изменений по ходу игры).
+fn kb_index(session: &Session) -> Value {
+    let mut layers = serde_json::Map::new();
+    for (layer, title) in [("player", "игрок"), ("master", "мастер"), ("world", "мир")]
+    {
+        let lines: Vec<String> = session
+            .kb_cards()
+            .iter()
+            .filter(|c| c.layer == layer)
+            .map(|c| {
+                let changed = session.kb_overrides().iter().find(|o| o.card_id == c.id);
+                let status = match (changed, c.status.as_deref()) {
+                    (Some(o), _) => {
+                        format!(" — {} (изменено, День {})", status_label(&o.status), o.day)
+                    }
+                    (None, Some(s)) => format!(" — {}", status_label(s)),
+                    (None, None) => String::new(),
+                };
+                format!("{} [{}]{status}", c.title, c.id)
+            })
+            .collect();
+        if !lines.is_empty() {
+            layers.insert(title.to_string(), json!(lines));
+        }
+    }
+    Value::Object(layers)
+}
+
+/// Записи базы знаний для мастера: все записи игрока, последние записи журнала мастера и
+/// старые записи журнала, подходящие к заявке игрока.
+fn notes_context(session: &Session, query: &str) -> Value {
+    let player: Vec<Value> = session
+        .notes()
+        .iter()
+        .filter(|n| n.layer == NoteLayer::Player)
+        .map(|n| note_json(session, n))
+        .collect();
+    let journal: Vec<&MasterNote> =
+        session.notes().iter().filter(|n| n.layer == NoteLayer::Master).collect();
+    let recent_from = journal.len().saturating_sub(MASTER_JOURNAL_RECENT);
+    let recent_ids: Vec<u64> = journal[recent_from..].iter().map(|n| n.id).collect();
+    let found: Vec<Value> = session
+        .notes_matching(query, NoteLayer::Master)
+        .into_iter()
+        .filter(|n| !recent_ids.contains(&n.id))
+        .take(MASTER_JOURNAL_FOUND)
+        .map(|n| note_json(session, n))
+        .collect();
+    json!({
+        "записи_мастера_игроку": player,
+        "журнал_мастера_последние": journal[recent_from..].iter().map(|n| note_json(session, n)).collect::<Vec<_>>(),
+        "журнал_мастера_по_заявке": found,
+        "всего_в_журнале": journal.len(),
+    })
+}
+
 /// Контекст хода в JSON.
-pub fn turn_context(session: &mut Session) -> Value {
+///
+/// `query` — последняя заявка игрока (по ней подбираются старые записи журнала мастера);
+/// `kb_extra` — полный текст карточек базы, подходящих к заявке (подбирает интерфейс).
+pub fn turn_context(session: &mut Session, query: &str, kb_extra: &str) -> Value {
     let pool = [
         ("d20", 8u32, 20u32),
         ("d4", 4, 4),
@@ -255,12 +345,9 @@ pub fn turn_context(session: &mut Session) -> Value {
         })).collect::<Vec<_>>(),
         "персонаж_игрока": player,
         "листы": session.party().iter().map(|c| (c.id.clone(), sheet_context(c))).collect::<serde_json::Map<_, _>>(),
-        "записи_базы_знаний": session.notes().iter().map(|n| json!({
-            "слой": n.layer,
-            "день": n.day,
-            "заголовок": n.title,
-            "текст": n.text,
-        })).collect::<Vec<_>>(),
+        "записи_базы_знаний": notes_context(session, query),
+        "карточки_базы": kb_index(session),
+        "карточки_по_заявке": kb_extra,
         "магия": session.party().iter().filter_map(|c| {
             let book = c.spellbook()?;
             Some((c.id.clone(), magic_context(&book)))
@@ -292,7 +379,7 @@ mod tests {
     #[test]
     fn context_contains_state_and_dice_pool() {
         let mut session = Session::demo(Xoshiro256::from_seed(1));
-        let context = turn_context(&mut session);
+        let context = turn_context(&mut session, "", "");
         assert_eq!(context["сцена"]["day"], 82);
         assert!(context["сцена"]["situation"].as_str().unwrap().contains("Кроу-Рок"));
         assert_eq!(context["отряд"].as_array().unwrap().len(), 6);
@@ -309,7 +396,7 @@ mod tests {
     fn context_contains_spellbooks_and_engine_log() {
         let mut session = Session::demo(Xoshiro256::from_seed(1));
         session.cast_spell("pc.nikis", &dnd_engine::CastRequest::new("misty-step")).unwrap();
-        let context = turn_context(&mut session);
+        let context = turn_context(&mut session, "", "");
         let nikis = &context["магия"]["pc.nikis"];
         assert_eq!(nikis["ячейки"][0], "4 круг (договор, \"pact\"): 1/2");
         assert_eq!(nikis["классы"][0]["кс"], 16);
@@ -325,7 +412,7 @@ mod tests {
     fn context_contains_sheets_inventory_treasury_and_notes() {
         let mut session = Session::demo(Xoshiro256::from_seed(1));
         session.add_note(dnd_engine::NoteLayer::Master, "План Вернера", "Ждёт обоз").unwrap();
-        let context = turn_context(&mut session);
+        let context = turn_context(&mut session, "", "");
         let nikis = &context["листы"]["pc.nikis"];
         assert!(nikis["спасброски"].as_array().unwrap().iter().any(|v| v == "ЛОВ +6*"));
         assert!(nikis["навыки"]
@@ -336,15 +423,47 @@ mod tests {
         assert_eq!(nikis["пассивная_внимательность"], 15);
         assert!(nikis["инвентарь"]["Кольцо Теневого Хранилища"].is_array());
         assert!(context["листы"]["npc.valeria"]["навыки"].is_string());
-        assert_eq!(context["записи_базы_знаний"][0]["слой"], "master");
+        assert_eq!(
+            context["записи_базы_знаний"]["журнал_мастера_последние"][0]["заголовок"],
+            "План Вернера"
+        );
         assert!(context["казна"].as_array().unwrap().iter().any(|l| l["id"] == "purse"));
+    }
+
+    #[test]
+    fn journal_is_trimmed_but_old_matches_are_found() {
+        let mut session = Session::demo(Xoshiro256::from_seed(3));
+        session.add_note(NoteLayer::Master, "Засада Вернера", "Ждёт обоз у брода").unwrap();
+        for i in 0..MASTER_JOURNAL_RECENT {
+            session.add_note(NoteLayer::Master, &format!("Пустяк {i}"), "x").unwrap();
+        }
+        session.add_note(NoteLayer::Player, "Пароль", "Серый рассвет").unwrap();
+        let context = turn_context(&mut session, "Проверим брод перед обозом", "Карточка: брод");
+        let notes = &context["записи_базы_знаний"];
+        assert_eq!(
+            notes["журнал_мастера_последние"].as_array().unwrap().len(),
+            MASTER_JOURNAL_RECENT
+        );
+        assert_eq!(notes["журнал_мастера_по_заявке"][0]["заголовок"], "Засада Вернера");
+        assert_eq!(notes["записи_мастера_игроку"].as_array().unwrap().len(), 1);
+        assert_eq!(context["карточки_по_заявке"], "Карточка: брод");
+        session.set_kb_cards(vec![dnd_engine::KbCard {
+            id: "goal.astrolabe".into(),
+            title: "Астролябия".into(),
+            layer: "player".into(),
+            status: Some("progress".into()),
+        }]);
+        session.set_card_status("goal.astrolabe", Some("done"), "").unwrap();
+        let context = turn_context(&mut session, "", "");
+        let line = context["карточки_базы"]["игрок"][0].as_str().unwrap();
+        assert!(line.contains("выполнено (изменено"), "{line}");
     }
 
     #[test]
     fn each_turn_gets_fresh_dice() {
         let mut session = Session::demo(Xoshiro256::from_seed(2));
-        let a = turn_context(&mut session)["кубы_мастера"].clone();
-        let b = turn_context(&mut session)["кубы_мастера"].clone();
+        let a = turn_context(&mut session, "", "")["кубы_мастера"].clone();
+        let b = turn_context(&mut session, "", "")["кубы_мастера"].clone();
         assert_ne!(a, b);
     }
 }
