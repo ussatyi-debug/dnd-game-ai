@@ -312,7 +312,7 @@ pub fn demo_party() -> Vec<Character> {
             classes: vec![class("Монах", Some("Путь Открытой Ладони"), 8)],
             abilities: abilities([12, 16, 14, 10, 16, 8]),
             hit_points: hp(59, 0),
-            armor_class: 19,
+            armor_class: 18,
             speed_ft: 50,
             location: "Серебряный Шпиль".into(),
             resources: vec![
