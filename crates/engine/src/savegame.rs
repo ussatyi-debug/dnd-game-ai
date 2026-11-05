@@ -10,7 +10,7 @@ use crate::character::{Character, HitPoints};
 use crate::error::EngineError;
 use crate::fixtures::demo_party;
 use crate::inventory::Inventory;
-use crate::knowledge::{KbOverride, MasterNote};
+use crate::knowledge::{CustomCard, KbOverride, MasterNote};
 use crate::profile::HitDice;
 use crate::resource::ResourcePool;
 use crate::session::{Scene, Session, MIN_SAVE_FORMAT, SAVE_FORMAT_VERSION};
@@ -91,6 +91,10 @@ pub struct SaveData {
     pub notes: Vec<MasterNote>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub kb_overrides: Vec<KbOverride>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub custom_cards: Vec<CustomCard>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub turns_without_notes: u32,
 }
 
 /// Итог загрузки.
@@ -243,6 +247,8 @@ impl Session {
         self.notes = notes;
         self.next_note_id = next_note_id;
         self.kb_overrides = save.kb_overrides;
+        self.custom_cards = save.custom_cards;
+        self.turns_without_notes = save.turns_without_notes;
         self.undo = None;
         self.log(format!("Загружено сохранение: День {}", self.scene.day));
 
@@ -307,6 +313,8 @@ mod tests {
             engine_log: state.engine_log,
             notes: state.notes,
             kb_overrides: state.kb_overrides,
+            custom_cards: state.custom_cards,
+            turns_without_notes: state.turns_without_notes,
         }
     }
 

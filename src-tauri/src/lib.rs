@@ -12,10 +12,10 @@ use ai::{
     AiSettings, AiSettingsView, ChatMessage, MasterReply, ModelInfo, Provider, SettingsStore,
 };
 use dnd_engine::{
-    CastMethod, CastOutcome, CastRequest, CharacterSheet, ExprRoll, InventoryView, KbCard,
-    KbOverride, LoadReport, LuckyReroll, MasterNote, NoteEdit, NoteLayer, PartyView, RestKind,
-    RestResult, SaveData, SaveState, Session, SheetDetails, SlotRef, SlotRestoreOutcome,
-    SpellEntry, SpellbookView, TreasuryView, UndoInfo,
+    CardDraft, CastMethod, CastOutcome, CastRequest, CharacterSheet, CustomCard, ExprRoll,
+    InventoryView, KbCard, KbOverride, LoadReport, LuckyReroll, MasterNote, NewNote, NoteEdit,
+    NoteKind, NoteLayer, PartyView, RestKind, RestResult, SaveData, SaveState, Session,
+    SheetDetails, SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView, TreasuryView, UndoInfo,
 };
 use tauri::{Manager, State};
 
@@ -181,10 +181,18 @@ fn add_note(
     title: String,
     text: String,
     card: Option<String>,
+    kind: Option<NoteKind>,
+    due_day: Option<u32>,
     state: State<'_, SessionState>,
 ) -> Result<u64, String> {
     lock(&state)?
-        .add_note_full(layer, &title, &text, card.as_deref(), true)
+        .create_note(NewNote {
+            card,
+            by_player: true,
+            kind: kind.unwrap_or_default(),
+            due_day,
+            ..NewNote::new(layer, &title, &text)
+        })
         .map_err(|e| e.to_string())
 }
 
@@ -195,9 +203,37 @@ fn update_note(
     text: Option<String>,
     card: Option<String>,
     layer: Option<NoteLayer>,
+    kind: Option<NoteKind>,
+    due_day: Option<u32>,
+    done: Option<bool>,
     state: State<'_, SessionState>,
 ) -> Result<MasterNote, String> {
-    lock(&state)?.update_note(id, NoteEdit { title, text, card, layer }).map_err(|e| e.to_string())
+    let edit = NoteEdit { title, text, card, layer, kind, due_day: due_day.map(Some), done };
+    lock(&state)?.update_note(id, edit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn custom_cards(state: State<'_, SessionState>) -> Result<Vec<CustomCard>, String> {
+    Ok(lock(&state)?.custom_cards().to_vec())
+}
+
+#[tauri::command]
+fn create_card(card: CardDraft, state: State<'_, SessionState>) -> Result<String, String> {
+    lock(&state)?.create_card(card, true).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_card(
+    id: String,
+    card: CardDraft,
+    state: State<'_, SessionState>,
+) -> Result<bool, String> {
+    lock(&state)?.update_card(&id, card).map(|()| true).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_card(id: String, state: State<'_, SessionState>) -> Result<bool, String> {
+    lock(&state)?.delete_card(&id).map(|()| true).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -331,6 +367,10 @@ pub fn run() {
             add_note,
             update_note,
             delete_note,
+            custom_cards,
+            create_card,
+            update_card,
+            delete_card,
             load_state,
             ai_settings,
             ai_set_key,

@@ -52,7 +52,10 @@ pub use inventory::{
     Container, ContainerView, Inventory, InventoryView, Item, ItemGroup, ItemLine, NewItem,
     ON_PERSON,
 };
-pub use knowledge::{KbCard, KbOverride, MasterNote, NoteEdit, NoteLayer, KB_STATUSES};
+pub use knowledge::{
+    CardDraft, CardFact, CustomCard, KbCard, KbOverride, MasterNote, NewNote, NoteEdit, NoteKind,
+    NoteLayer, KB_SECTIONS, KB_STATUSES, NOTE_REMINDER_TURNS,
+};
 pub use master_ops::{Checkpoint, HpChange, SceneChange, UndoInfo};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
 pub use profile::{

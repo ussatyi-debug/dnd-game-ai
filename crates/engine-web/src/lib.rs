@@ -12,8 +12,8 @@
 use std::cell::RefCell;
 
 use dnd_engine::{
-    CastMethod, CastRequest, KbCard, NoteEdit, NoteLayer, RestKind, SaveData, Session, SlotRef,
-    Xoshiro256,
+    CardDraft, CardFact, CastMethod, CastRequest, KbCard, NewNote, NoteEdit, NoteKind, NoteLayer,
+    RestKind, SaveData, Session, SlotRef, Xoshiro256,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -104,6 +104,10 @@ pub enum Request {
         title: String,
         text: String,
         card: Option<String>,
+        #[serde(default)]
+        kind: Option<NoteKind>,
+        #[serde(default)]
+        due_day: Option<u32>,
     },
     UpdateNote {
         id: u64,
@@ -111,6 +115,24 @@ pub enum Request {
         text: Option<String>,
         card: Option<String>,
         layer: Option<NoteLayer>,
+        #[serde(default)]
+        kind: Option<NoteKind>,
+        #[serde(default)]
+        due_day: Option<u32>,
+        #[serde(default)]
+        done: Option<bool>,
+    },
+    /// Карточки базы, созданные по ходу игры.
+    CustomCards,
+    CreateCard {
+        card: CardInput,
+    },
+    UpdateCard {
+        id: String,
+        card: CardInput,
+    },
+    DeleteCard {
+        id: String,
     },
     DeleteNote {
         id: u64,
@@ -123,6 +145,33 @@ pub enum Request {
     MasterApply {
         text: String,
     },
+}
+
+/// Карточка из формы интерфейса.
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+pub struct CardInput {
+    pub layer: Option<String>,
+    pub section: Option<String>,
+    pub title: Option<String>,
+    pub subtitle: Option<String>,
+    pub summary: Option<String>,
+    pub facts: Option<Vec<CardFact>>,
+    pub status: Option<String>,
+}
+
+impl From<CardInput> for CardDraft {
+    fn from(c: CardInput) -> Self {
+        CardDraft {
+            layer: c.layer,
+            section: c.section,
+            title: c.title,
+            subtitle: c.subtitle,
+            summary: c.summary,
+            facts: c.facts,
+            status: c.status,
+        }
+    }
 }
 
 /// Обрабатывает JSON-запрос и возвращает JSON-ответ.
@@ -185,14 +234,35 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(true)
         }
         Request::KbOverrides => to_value(session.kb_overrides()),
-        Request::AddNote { layer, title, text, card } => to_value(
+        Request::AddNote { layer, title, text, card, kind, due_day } => to_value(
             session
-                .add_note_full(layer, &title, &text, card.as_deref(), true)
+                .create_note(NewNote {
+                    card,
+                    by_player: true,
+                    kind: kind.unwrap_or_default(),
+                    due_day,
+                    ..NewNote::new(layer, &title, &text)
+                })
                 .map_err(|e| e.to_string())?,
         ),
-        Request::UpdateNote { id, title, text, card, layer } => to_value(
+        Request::CustomCards => to_value(session.custom_cards()),
+        Request::CreateCard { card } => {
+            to_value(session.create_card(card.into(), true).map_err(|e| e.to_string())?)
+        }
+        Request::UpdateCard { id, card } => {
+            session.update_card(&id, card.into()).map_err(|e| e.to_string())?;
+            to_value(true)
+        }
+        Request::DeleteCard { id } => {
+            session.delete_card(&id).map_err(|e| e.to_string())?;
+            to_value(true)
+        }
+        Request::UpdateNote { id, title, text, card, layer, kind, due_day, done } => to_value(
             session
-                .update_note(id, NoteEdit { title, text, card, layer })
+                .update_note(
+                    id,
+                    NoteEdit { title, text, card, layer, kind, due_day: due_day.map(Some), done },
+                )
                 .map_err(|e| e.to_string())?,
         ),
         Request::DeleteNote { id } => {

@@ -13,7 +13,7 @@ use crate::check::{roll_d20, D20Roll, Modifier, RollMode};
 use crate::error::EngineError;
 use crate::expr::{DiceExpr, ExprRoll};
 use crate::fixtures::{demo_party, demo_scene, demo_treasury};
-use crate::knowledge::{KbCard, KbOverride, MasterNote};
+use crate::knowledge::{CustomCard, KbCard, KbOverride, MasterNote};
 use crate::master_ops::UndoPoint;
 use crate::notation::resolve_player_d20;
 use crate::resource::{ResourcePool, RestKind};
@@ -118,6 +118,8 @@ pub struct SaveState {
     pub engine_log: Vec<String>,
     pub notes: Vec<MasterNote>,
     pub kb_overrides: Vec<KbOverride>,
+    pub custom_cards: Vec<CustomCard>,
+    pub turns_without_notes: u32,
 }
 
 /// Состояние сессии.
@@ -136,6 +138,10 @@ pub struct Session {
     pub(crate) kb_overrides: Vec<KbOverride>,
     /// Указатель карточек базы (из интерфейса; в сохранение не попадает).
     pub(crate) kb_cards: Vec<KbCard>,
+    /// Карточки, созданные по ходу игры.
+    pub(crate) custom_cards: Vec<CustomCard>,
+    /// Ходов мастера подряд без записей в базу (для напоминания).
+    pub(crate) turns_without_notes: u32,
     /// Последний ход мастера, который можно отменить.
     pub(crate) undo: Option<Box<UndoPoint>>,
 }
@@ -152,6 +158,8 @@ impl Session {
             next_note_id: 1,
             kb_overrides: Vec::new(),
             kb_cards: Vec::new(),
+            custom_cards: Vec::new(),
+            turns_without_notes: 0,
             undo: None,
         }
     }
@@ -439,6 +447,8 @@ impl Session {
             engine_log: self.engine_log.clone(),
             notes: self.notes.clone(),
             kb_overrides: self.kb_overrides.clone(),
+            custom_cards: self.custom_cards.clone(),
+            turns_without_notes: self.turns_without_notes,
         }
     }
 }

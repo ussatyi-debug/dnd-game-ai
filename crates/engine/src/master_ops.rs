@@ -5,7 +5,7 @@
 use crate::character::{Character, HitPoints};
 use crate::error::EngineError;
 use crate::inventory::{InventoryView, NewItem};
-use crate::knowledge::{KbOverride, MasterNote};
+use crate::knowledge::{CustomCard, KbOverride, MasterNote};
 use crate::profile::SheetDetails;
 use crate::resource::{ResourcePool, RestKind};
 use crate::session::{Scene, Session};
@@ -41,6 +41,7 @@ pub struct Checkpoint {
     notes: Vec<MasterNote>,
     next_note_id: u64,
     kb_overrides: Vec<KbOverride>,
+    custom_cards: Vec<CustomCard>,
 }
 
 /// Отменяемый ход мастера.
@@ -107,6 +108,7 @@ impl Session {
             notes: self.notes.clone(),
             next_note_id: self.next_note_id,
             kb_overrides: self.kb_overrides.clone(),
+            custom_cards: self.custom_cards.clone(),
         }
     }
 
@@ -118,11 +120,17 @@ impl Session {
         self.notes = c.notes;
         self.next_note_id = c.next_note_id;
         self.kb_overrides = c.kb_overrides;
+        self.custom_cards = c.custom_cards;
     }
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
         let after = self.checkpoint();
+        if after.notes != before.notes || after.custom_cards != before.custom_cards {
+            self.turns_without_notes = 0;
+        } else {
+            self.turns_without_notes += 1;
+        }
         // Отменяется только последний ход мастера: ход без изменений убирает точку отмены.
         self.undo = (after != before).then(|| Box::new(UndoPoint { before, after, actions }));
     }

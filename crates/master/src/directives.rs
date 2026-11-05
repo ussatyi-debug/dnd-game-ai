@@ -13,8 +13,8 @@
 //! движка, который мастер видит на следующем ходу.
 
 use dnd_engine::{
-    all_spells, AssetKind, CastMethod, CastRequest, Character, HpChange, NoteEdit, NoteLayer,
-    RestKind, SceneChange, Session, SlotRef,
+    all_spells, AssetKind, CardDraft, CardFact, CastMethod, CastRequest, Character, HpChange,
+    NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SceneChange, Session, SlotRef,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -264,6 +264,16 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
                 Some("master") => Some(NoteLayer::Master),
                 Some(other) => return Err(format!("неизвестный слой «{other}»")),
             };
+            let kind = match opt_text(cmd, "kind") {
+                None => None,
+                Some(k) => Some(NoteKind::parse(k).ok_or_else(|| {
+                    format!("неизвестный вид записи «{k}»: event, secret, plan, timer")
+                })?),
+            };
+            let due_day = match int_field(cmd, "due_day") {
+                Some(d) => Some(u32::try_from(d).map_err(|_| format!("неверный день {d}"))?),
+                None => None,
+            };
             if let Some(id) = int_field(cmd, "id") {
                 let id = u64::try_from(id).map_err(|_| format!("неверный номер записи {id}"))?;
                 if cmd.get("delete").and_then(Value::as_bool).unwrap_or(false) {
@@ -276,6 +286,9 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
                         text: field("text"),
                         card: field("card"),
                         layer,
+                        kind,
+                        due_day: due_day.map(Some),
+                        done: cmd.get("done").and_then(Value::as_bool),
                     };
                     engine(session.update_note(id, edit))?;
                 }
@@ -284,7 +297,42 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             let title = opt_text(cmd, "title").unwrap_or("");
             let text = opt_text(cmd, "text").unwrap_or("");
             let layer = layer.unwrap_or(NoteLayer::Player);
-            engine(session.add_note_full(layer, title, text, opt_text(cmd, "card"), false))?;
+            engine(session.create_note(NewNote {
+                card: opt_text(cmd, "card").map(Into::into),
+                kind: kind.unwrap_or_default(),
+                due_day,
+                ..NewNote::new(layer, title, text)
+            }))?;
+            Ok(last_log(session))
+        })(),
+        "new_card" | "edit_card" | "delete_card" => (|| -> Result<String, String> {
+            if name == "delete_card" {
+                engine(session.delete_card(text_field(cmd, "card")?))?;
+                return Ok(last_log(session));
+            }
+            let field = |key: &str| cmd.get(key).and_then(Value::as_str).map(str::to_string);
+            let facts = cmd.get("facts").and_then(Value::as_object).map(|m| {
+                m.iter()
+                    .map(|(label, v)| CardFact {
+                        label: label.clone(),
+                        value: v.as_str().map_or_else(|| v.to_string(), str::to_string),
+                    })
+                    .collect()
+            });
+            let draft = CardDraft {
+                layer: field("layer"),
+                section: field("section"),
+                title: field("title"),
+                subtitle: field("subtitle"),
+                summary: field("summary"),
+                facts,
+                status: field("status"),
+            };
+            if name == "new_card" {
+                engine(session.create_card(draft, false))?;
+            } else {
+                engine(session.update_card(text_field(cmd, "card")?, draft))?;
+            }
             Ok(last_log(session))
         })(),
         "card" => (|| -> Result<String, String> {
@@ -575,5 +623,34 @@ mod tests {
         assert!(s.kb_overrides().is_empty());
         let turn = apply_directives(&mut s, "```engine\n{\"cmd\":\"note\",\"title\":\"x\"}\n{\"cmd\":\"note\",\"id\":1,\"delete\":true}\n```");
         assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
+    }
+
+    #[test]
+    fn cards_timers_and_reminder() {
+        let mut s = session();
+        let turn = apply_directives(
+            &mut s,
+            concat!(
+                "```engine\n",
+                "{\"cmd\":\"new_card\",\"layer\":\"master\",\"section\":\"prisoners\",\"title\":\"Соглядатай у Шпиля\",\"summary\":\"Задержан Корвусом\",\"facts\":{\"Где\":\"казематы Шпиля\"},\"status\":\"prisoner\"}\n",
+                "{\"cmd\":\"note\",\"layer\":\"master\",\"kind\":\"timer\",\"due_day\":83,\"title\":\"Хвост на тракте\",\"text\":\"Засада 2–3 всадника\",\"card\":\"Соглядатай у Шпиля\"}\n",
+                "{\"cmd\":\"note\",\"layer\":\"master\",\"kind\":\"timer\",\"title\":\"без дня\"}\n",
+                "```"
+            ),
+        );
+        let ok: Vec<bool> = turn.actions.iter().map(|a| a.ok).collect();
+        assert_eq!(ok, vec![true, true, false], "{:?}", turn.actions);
+        assert_eq!(s.custom_cards()[0].facts[0].value, "казематы Шпиля");
+        assert_eq!(s.turns_without_notes(), 0);
+        for _ in 0..3 {
+            apply_directives(&mut s, "Тишина.");
+        }
+        assert_eq!(s.turns_without_notes(), 3);
+        let turn = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"edit_card\",\"card\":\"dyn.соглядатай_у_шпиля\",\"status\":\"dead\"}\n{\"cmd\":\"note\",\"id\":1,\"done\":true}\n```",
+        );
+        assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
+        assert!(s.notes()[0].done);
     }
 }

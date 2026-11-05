@@ -63,6 +63,12 @@ pub enum EngineError {
     UnknownStatus(String),
     /// Статус карточки и так из базы.
     NoCardOverride(String),
+    /// Таймеру нужен день срабатывания.
+    TimerWithoutDay,
+    /// Карточку из файлов базы нельзя изменить или удалить.
+    NotCustomCard(String),
+    /// Неизвестный слой или раздел базы.
+    UnknownSection(String),
     /// Сохранение не подходит.
     InvalidSave(String),
     /// Ценность с таким ID уже есть.
@@ -209,6 +215,12 @@ impl fmt::Display for EngineError {
             Self::NoCardOverride(title) => {
                 write!(f, "У карточки «{title}» и так статус из базы знаний")
             }
+            Self::TimerWithoutDay => write!(f, "Таймеру нужен день срабатывания («due_day»)"),
+            Self::NotCustomCard(id) => write!(
+                f,
+                "Карточку «{id}» нельзя изменить: менять и удалять можно только карточки, созданные по ходу игры (статус — командой card)"
+            ),
+            Self::UnknownSection(what) => write!(f, "Неизвестный раздел базы: {what}"),
             Self::InvalidSave(reason) => write!(f, "Сохранение не загружено: {reason}"),
             Self::DuplicateAsset(id) => write!(f, "Ценность «{id}» уже есть в казне"),
             Self::UndoStale => write!(

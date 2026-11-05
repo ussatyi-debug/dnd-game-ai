@@ -12,7 +12,7 @@ pub use directives::{apply_directives, strip_directives, MasterAction, MasterTur
 
 use dnd_engine::{
     Character, CharacterKind, MasterNote, NoteLayer, Proficiency, Session, SpellbookView,
-    KB_STATUSES,
+    KB_STATUSES, NOTE_REMINDER_TURNS,
 };
 use serde_json::{json, Value};
 
@@ -45,6 +45,7 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
 ЯЗЫК
 - Имя героя в косвенных падежах — строго через «а»: сэра Никиса, сэру Никису, сэром Никисом, о сэре Никисе. Формы вроде «Никисы» запрещены.
 - Реплики героя и значимых NPC оформляй прямой речью в строках цитаты: «> — ...».
+- Для озвучки помечай говорящего и его пол в начале реплики: «> — [Валерия, ж] Держитесь ближе к свету.», «> — [Гюнтер, м] ...». Пометку игрок не видит — по ней выбирается голос. Если говорящий неизвестен, пол всё равно укажи: «[стражник, м]».
 
 СПУТНИКИ
 - Спутниками управляешь ты, отыгрывая их характер. Если игрок отдал спутнику приказ — выполни его; спутник может коротко отреагировать по характеру, но не отменяет приказ.
@@ -88,6 +89,11 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
   - Новая запись: {"cmd":"note","layer":"player","title":"Пароль тайной гати","text":"...","card":"secret.hecker_route"} — то, что герой узнал (видно игроку в «Записи мастера»); "layer":"master" — твой журнал: тайны, планы NPC, импровизации. "card" — id карточки из «карточки_базы», к которой относится запись (необязательно).
   - Исправить запись: {"cmd":"note","id":12,"text":"новый текст"} (можно "title", "card", "layer"; "card":"" — отвязать). Удалить устаревшую: {"cmd":"note","id":12,"delete":true}. Не плоди дубли — исправляй.
   - Статус карточки по ходу игры: {"cmd":"card","card":"goal.astrolabe","status":"done","note":"Получена у Халида"}; статусы: active, ally, vassal, neutral, watch, enemy, prisoner, dead, open, progress, done, failed, planned; "status":"reset" — вернуть статус из базы.
+  - Связь записи с карточкой — ТОЛЬКО полем "card". Не вписывай id карточек в текст записи.
+  - ОБЯЗАТЕЛЬНО после значимого события (новый NPC, улика, угроза, решение игрока, пленник, сделка, бой) в том же ходу сделай ДВЕ записи: (1) "layer":"player" — что герой видел, узнал или решил; (2) "layer":"master" — правда за событием: кто стоит, чего хочет, что сделает дальше и к какому дню. Предметы, пленников, деньги оформляй командами item/treasury/new_card, а не только текстом.
+  - Вид записи "kind": "event" (событие, по умолчанию), "secret" (тайна), "plan" (план NPC или фракции), "timer" (событие на день — обязателен "due_day"). Пример: {"cmd":"note","layer":"master","kind":"timer","due_day":83,"title":"Хвост на тракте","text":"Сообщники соглядатая ждут кортеж князя у брода: 2–3 всадника","card":"dyn.соглядатай_у_шпиля"}. Когда день наступил, таймер попадёт в «сработавшие_таймеры» — разыграй его или отложи, а после отметь {"cmd":"note","id":N,"done":true}.
+  - Новая карточка (NPC, место, угроза, пленник): {"cmd":"new_card","layer":"master","section":"prisoners","title":"Соглядатай у Шпиля","summary":"...","facts":{"Где":"казематы Шпиля"},"status":"prisoner"}. Разделы: player — goals, personas, secrets, known, chronicle, notes; master — schedule, threats, prisoners, secrets, journal; world — locations, npc, factions, lore, artifacts, rules, maps. Публичные сведения о NPC — в world/npc, тайны о нём — в master. Правка: {"cmd":"edit_card","card":"dyn....","summary":"..."} (только карточки, созданные по ходу игры); удаление: {"cmd":"delete_card","card":"dyn...."}. Статус любой карточки — командой card.
+  - Если в контексте есть «напоминание_о_записях» — в этом ходу запиши то важное, что ещё не записано.
   - «записи_базы_знаний»: все записи для игрока, последние записи журнала и старые записи журнала, подходящие к заявке. «карточки_базы» — оглавление базы, «карточки_по_заявке» — полный текст карточек, подходящих к заявке. Записи с пометкой «записал: игрок» — заметки самого игрока, уважай их.
 - Игрок может одной кнопкой отменить весь твой последний ход с командами. Если в «журнал_движка» есть «Отменён ход мастера», перескажи сцену заново по заявке игрока.
 - Чтобы прибавить модификатор к кубу игрока, бери готовые числа из «листы»: спасброски (* — владение), навыки, атаки.
@@ -242,6 +248,9 @@ fn note_json(session: &Session, n: &MasterNote) -> Value {
         "текст": n.text,
         "карточка": card,
         "записал": if n.by_player { "игрок" } else { "мастер" },
+        "вид": n.kind.label(),
+        "день_срабатывания": n.due_day,
+        "отработано": n.done,
     })
 }
 
@@ -270,6 +279,15 @@ fn kb_index(session: &Session) -> Value {
                 format!("{} [{}]{status}", c.title, c.id)
             })
             .collect();
+        let mut lines = lines;
+        for c in session.custom_cards().iter().filter(|c| c.layer == layer) {
+            let status =
+                c.status.as_deref().map(|s| format!(" — {}", status_label(s))).unwrap_or_default();
+            lines.push(format!(
+                "{} [{}]{status} (создана по ходу игры, День {}: {})",
+                c.title, c.id, c.day, c.summary
+            ));
+        }
         if !lines.is_empty() {
             layers.insert(title.to_string(), json!(lines));
         }
@@ -346,6 +364,11 @@ pub fn turn_context(session: &mut Session, query: &str, kb_extra: &str) -> Value
         "персонаж_игрока": player,
         "листы": session.party().iter().map(|c| (c.id.clone(), sheet_context(c))).collect::<serde_json::Map<_, _>>(),
         "записи_базы_знаний": notes_context(session, query),
+        "сработавшие_таймеры": session.due_notes().iter().map(|n| note_json(session, n)).collect::<Vec<_>>(),
+        "напоминание_о_записях": (session.turns_without_notes() >= NOTE_REMINDER_TURNS).then(|| format!(
+            "Уже {} ходов без записей в базу знаний — запиши важное: события, тайны, планы NPC, таймеры.",
+            session.turns_without_notes()
+        )),
         "карточки_базы": kb_index(session),
         "карточки_по_заявке": kb_extra,
         "магия": session.party().iter().filter_map(|c| {
