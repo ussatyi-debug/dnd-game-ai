@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { stripEngineBlocks, type UndoInfo } from "../lib/engine";
+import { stripSpeakerTag } from "../lib/tts";
+import CopyButton from "./CopyButton";
 
 export interface ChatMessage {
   id: number;
@@ -30,6 +32,19 @@ interface ChatPanelProps {
   /** Последний ход мастера, изменивший состояние, — его можно отменить. */
   undo: UndoInfo | null;
   onUndo: () => void;
+  /** Озвучить ответ мастера. */
+  onSpeak: (message: ChatMessage) => void;
+  /** Заявка, на которую мастер не ответил из-за сбоя, — под ней кнопка повтора. */
+  failedId: number | null;
+  onRetry: () => void;
+}
+
+/** Текст ответа мастера для показа и копирования: без команд движка и пометок голосов. */
+export function masterDisplayText(text: string): string {
+  return stripEngineBlocks(text)
+    .split("\n")
+    .map((line) => (line.trim().startsWith(">") ? line.replace(/^(\s*>\s?)(.*)$/, (_, q: string, rest: string) => q + stripSpeakerTag(rest)) : line))
+    .join("\n");
 }
 
 /** Текст мастера: строки «> — ...» — прямая речь (формат из кодекса кампании). */
@@ -71,6 +86,9 @@ export default function ChatPanel({
   onOpenDice,
   undo,
   onUndo,
+  onSpeak,
+  failedId,
+  onRetry,
 }: ChatPanelProps) {
   const listRef = useRef<HTMLOListElement>(null);
   const [showJump, setShowJump] = useState(false);
@@ -221,17 +239,40 @@ export default function ChatPanel({
             }
           >
             {m.author === "player" && (
-              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-blood/70 px-3 py-2">
-                <p className="whitespace-pre-wrap break-words">{m.text}</p>
-                <time className="mt-0.5 block text-right text-[10px] text-parchment/60">{m.time}</time>
+              <div className="flex max-w-[85%] flex-col items-end gap-1">
+                <div className="rounded-2xl rounded-br-sm bg-blood/70 px-3 py-2">
+                  <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                  <time className="mt-0.5 block text-right text-[10px] text-parchment/60">{m.time}</time>
+                </div>
+                {failedId === m.id && !thinking && (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="rounded-md border border-gold px-3 py-1.5 text-sm text-gold hover:bg-gold/10"
+                  >
+                    ↻ Отправить снова
+                  </button>
+                )}
               </div>
             )}
             {m.author === "master" && (
               <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-edge bg-ink px-4 py-3">
-                <MasterText text={stripEngineBlocks(m.text)} />
-                <div className="mt-1 flex justify-between gap-2 text-[10px] text-muted">
-                  <span>{m.model ?? "Мастер"}</span>
-                  <time>{m.time}</time>
+                <MasterText text={masterDisplayText(m.text)} />
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted">
+                  <span className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onSpeak(m)}
+                      aria-label="Озвучить ответ"
+                      className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-gold hover:text-parchment"
+                    >
+                      ▶ Озвучить
+                    </button>
+                    <CopyButton text={masterDisplayText(m.text)} label="📋 Копировать" />
+                  </span>
+                  <span>
+                    {m.model ?? "Мастер"} · <time>{m.time}</time>
+                  </span>
                 </div>
               </div>
             )}

@@ -4,7 +4,8 @@
 // Из файла берётся только то, что меняется в игре; постоянная часть листа — из приложения
 // (это делает движок и сообщает, что дополнено).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ago, listAutosaves, readAutosave, type AutosaveInfo } from "../lib/autosave";
 import { errorText, loadState, type LoadReport } from "../lib/engine";
 import type { TrayRoll } from "../lib/rolls";
 import type { ChatMessage } from "./ChatPanel";
@@ -82,6 +83,21 @@ export default function LoadWindow({ onClose, onSaveFirst, onLoaded }: LoadWindo
   const [parsed, setParsed] = useState<ParsedSave | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [autosaves, setAutosaves] = useState<AutosaveInfo[]>([]);
+
+  useEffect(() => {
+    void listAutosaves().then(setAutosaves);
+  }, []);
+
+  function pickAutosave(slot: number) {
+    setError(null);
+    readAutosave(slot)
+      .then((content) => {
+        setText(content);
+        check(content);
+      })
+      .catch((e: unknown) => setError(errorText(e)));
+  }
 
   function check(raw: string) {
     setError(null);
@@ -122,6 +138,26 @@ export default function LoadWindow({ onClose, onSaveFirst, onLoaded }: LoadWindo
   return (
     <Modal title="Загрузить сохранение" onClose={onClose} size="md">
       <div className="space-y-3 p-4 text-sm">
+        {autosaves.length > 0 && (
+          <div>
+            <span className="mb-1 block text-muted">Автосохранения</span>
+            <ul className="space-y-1">
+              {autosaves.map((a) => (
+                <li key={a.slot}>
+                  <button
+                    type="button"
+                    onClick={() => pickAutosave(a.slot)}
+                    className="w-full rounded-md border border-edge px-3 py-2 text-left hover:border-gold"
+                  >
+                    День {a.day ?? "?"}
+                    {a.location ? `, ${a.location}` : ""}
+                    <span className="ml-2 text-xs text-muted">{ago(a.savedAt)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <label className="block">
           <span className="mb-1 block text-muted">Файл сохранения (.json)</span>
           <input

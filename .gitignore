@@ -26,3 +26,6 @@ Thumbs.db
 # Веб-сборка
 /src/generated/
 /dist-web/
+
+# Голоса и движок озвучки (скачивает scripts/fetch-tts.mjs при сборке приложения)
+/public/tts/

@@ -252,6 +252,87 @@ fn load_state(
     lock(&state)?.load(data).map_err(|e| e.to_string())
 }
 
+/// Автосохранение: файл `auto-N.json` и сведения о нём `auto-N.meta.json`
+/// в папке данных приложения.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct AutosaveMeta {
+    slot: u8,
+    saved_at: String,
+    day: Option<u32>,
+    location: String,
+}
+
+const AUTOSAVE_SLOTS: u8 = 3;
+
+fn autosave_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Нет папки данных приложения: {e}"))?
+        .join("autosaves");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Не создать папку автосохранений: {e}"))?;
+    Ok(dir)
+}
+
+fn check_slot(slot: u8) -> Result<(), String> {
+    if slot < AUTOSAVE_SLOTS {
+        Ok(())
+    } else {
+        Err(format!("Нет ячейки автосохранения {slot}"))
+    }
+}
+
+#[tauri::command]
+fn autosave_list(app: tauri::AppHandle) -> Result<Vec<AutosaveMeta>, String> {
+    let dir = autosave_dir(&app)?;
+    Ok((0..AUTOSAVE_SLOTS)
+        .filter_map(|slot| {
+            let text = std::fs::read_to_string(dir.join(format!("auto-{slot}.meta.json"))).ok()?;
+            let meta: AutosaveMeta = serde_json::from_str(&text).ok()?;
+            dir.join(format!("auto-{slot}.json")).exists().then_some(meta)
+        })
+        .collect())
+}
+
+#[tauri::command]
+fn autosave_write(
+    app: tauri::AppHandle,
+    slot: u8,
+    json: String,
+    saved_at: String,
+    day: Option<u32>,
+    location: String,
+) -> Result<bool, String> {
+    check_slot(slot)?;
+    let dir = autosave_dir(&app)?;
+    let tmp = dir.join(format!("auto-{slot}.json.tmp"));
+    std::fs::write(&tmp, json).map_err(|e| format!("Автосохранение не записано: {e}"))?;
+    std::fs::rename(&tmp, dir.join(format!("auto-{slot}.json")))
+        .map_err(|e| format!("Автосохранение не записано: {e}"))?;
+    let meta = AutosaveMeta { slot, saved_at, day, location };
+    let text = serde_json::to_string(&meta).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(format!("auto-{slot}.meta.json")), text)
+        .map_err(|e| format!("Автосохранение не записано: {e}"))?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn autosave_read(app: tauri::AppHandle, slot: u8) -> Result<String, String> {
+    check_slot(slot)?;
+    std::fs::read_to_string(autosave_dir(&app)?.join(format!("auto-{slot}.json")))
+        .map_err(|e| format!("Автосохранение не прочитано: {e}"))
+}
+
+/// Ссылка открывается в системном браузере (окно приложения внешние ссылки не открывает).
+#[tauri::command]
+fn open_url(app: tauri::AppHandle, url: String) -> Result<bool, String> {
+    use tauri_plugin_opener::OpenerExt;
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Открываются только веб-ссылки".into());
+    }
+    app.opener().open_url(url, None::<&str>).map(|()| true).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn undo_master_turn(state: State<'_, SessionState>) -> Result<Vec<String>, String> {
     lock(&state)?.undo_master_turn().map_err(|e| e.to_string())
@@ -329,6 +410,7 @@ async fn ai_chat(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(Session::default()))
         .setup(|app| {
             let path = app.path().app_config_dir().ok().map(|dir| dir.join("ai-settings.json"));
@@ -371,6 +453,10 @@ pub fn run() {
             create_card,
             update_card,
             delete_card,
+            autosave_list,
+            autosave_write,
+            autosave_read,
+            open_url,
             load_state,
             ai_settings,
             ai_set_key,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export type MenuAction = "knowledge" | "save" | "load" | "models";
+export type MenuAction = "knowledge" | "save" | "load" | "settings";
 
 interface MainMenuProps {
   onAction: (action: MenuAction) => void;
@@ -11,7 +11,7 @@ const ITEMS: { id: MenuAction | "home"; label: string; hint?: string }[] = [
   { id: "save", label: "Выгрузить сохранение" },
   { id: "load", label: "Загрузить сохранение" },
   { id: "knowledge", label: "База знаний" },
-  { id: "models", label: "Модели ИИ" },
+  { id: "settings", label: "Настройки", hint: "озвучка, ИИ-мастер" },
 ];
 
 export default function MainMenu({ onAction }: MainMenuProps) {

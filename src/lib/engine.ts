@@ -531,6 +531,72 @@ export interface MasterNote {
   card: string | null;
   /** Запись сделал игрок. */
   by_player: boolean;
+  kind: NoteKind;
+  /** День срабатывания таймера. */
+  due_day: number | null;
+  /** Таймер отработан. */
+  done: boolean;
+}
+
+export type NoteKind = "event" | "secret" | "plan" | "timer";
+
+export const NOTE_KIND_LABEL: Record<NoteKind, string> = {
+  event: "событие",
+  secret: "тайна",
+  plan: "план NPC",
+  timer: "таймер",
+};
+
+export interface CardFactInput {
+  label: string;
+  value: string;
+}
+
+/** Карточка базы, созданная по ходу игры. */
+export interface CustomCard {
+  id: string;
+  layer: string;
+  section: string;
+  title: string;
+  subtitle: string;
+  summary: string;
+  facts: CardFactInput[];
+  status: string | null;
+  day: number;
+  by_player: boolean;
+}
+
+export interface CardDraftInput {
+  layer?: string;
+  section?: string;
+  title?: string;
+  subtitle?: string;
+  summary?: string;
+  facts?: CardFactInput[];
+  status?: string;
+}
+
+export function customCards(): Promise<CustomCard[]> {
+  return call<CustomCard[]>("custom_cards");
+}
+
+export function createCard(card: CardDraftInput): Promise<string> {
+  return call<string>("create_card", { card });
+}
+
+export function updateCard(id: string, card: CardDraftInput): Promise<boolean> {
+  return call<boolean>("update_card", { id, card });
+}
+
+export function deleteCard(id: string): Promise<boolean> {
+  return call<boolean>("delete_card", { id });
+}
+
+/** Внешняя ссылка: в приложении — в системном браузере; `false` — открыть обычной ссылкой. */
+export function openExternal(url: string): boolean {
+  if (!isTauri()) return false;
+  void invoke("open_url", { url });
+  return true;
 }
 
 /** Статус карточки, изменённый по ходу игры. */
@@ -564,13 +630,28 @@ export function kbOverrides(): Promise<KbOverride[]> {
   return call<KbOverride[]>("kb_overrides");
 }
 
-export function addNote(layer: NoteLayer, title: string, text: string, card: string | null): Promise<number> {
-  return call<number>("add_note", { layer, title, text, card });
+export function addNote(
+  layer: NoteLayer,
+  title: string,
+  text: string,
+  card: string | null,
+  kind: NoteKind = "event",
+  dueDay: number | null = null,
+): Promise<number> {
+  return call<number>("add_note", { layer, title, text, card, kind, dueDay });
 }
 
 export function updateNote(
   id: number,
-  edit: { title?: string; text?: string; card?: string; layer?: NoteLayer },
+  edit: {
+    title?: string;
+    text?: string;
+    card?: string;
+    layer?: NoteLayer;
+    kind?: NoteKind;
+    dueDay?: number | null;
+    done?: boolean;
+  },
 ): Promise<MasterNote> {
   return call<MasterNote>("update_note", {
     id,
@@ -578,6 +659,9 @@ export function updateNote(
     text: edit.text ?? null,
     card: edit.card ?? null,
     layer: edit.layer ?? null,
+    kind: edit.kind ?? null,
+    dueDay: edit.dueDay ?? null,
+    done: edit.done ?? null,
   });
 }
 

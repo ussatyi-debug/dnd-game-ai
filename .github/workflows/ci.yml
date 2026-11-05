@@ -131,9 +131,42 @@ jobs:
           echo "::error title=web-preview push::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
           exit 1
 
+  tts:
+    name: Озвучка Piper — проверка в браузере
+    needs: [frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - uses: actions/cache@v4
+        with:
+          path: public/tts
+          key: tts-${{ hashFiles('scripts/fetch-tts.mjs') }}
+      - name: Голоса и движок озвучки
+        run: node scripts/fetch-tts.mjs
+      - name: Сборка интерфейса
+        run: npm run build
+      - name: Браузер для проверки
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: Синтез фразы голосами Дима и Ира
+        shell: bash
+        run: |
+          if ! out=$(node scripts/tts-smoke.mjs 2>&1); then
+            echo "$out"
+            echo "::error title=tts::$(echo "$out" | tail -n 6 | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "$out"
+          echo "::notice title=tts::$(echo "$out" | tr '\n' ' ')"
+
   windows:
     name: Сборка Windows (.exe)
-    needs: [engine, frontend]
+    needs: [engine, frontend, tts]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -145,6 +178,12 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
+      - uses: actions/cache@v4
+        with:
+          path: public/tts
+          key: tts-${{ hashFiles('scripts/fetch-tts.mjs') }}
+      - name: Голоса и движок озвучки
+        run: node scripts/fetch-tts.mjs
       - name: Сборка интерфейса
         run: npm run build
       - name: Линтер и тесты приложения

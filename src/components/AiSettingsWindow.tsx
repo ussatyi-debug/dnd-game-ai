@@ -14,7 +14,7 @@ import { CLAUDE_TIERS, type ClaudeTier } from "../lib/claude";
 import type { MasterMode } from "./ChatPanel";
 import Modal from "./Modal";
 
-interface AiSettingsWindowProps {
+export interface AiSettingsWindowProps {
   onClose: () => void;
   masterMode: MasterMode;
   tier: ClaudeTier;
@@ -22,6 +22,8 @@ interface AiSettingsWindowProps {
   models: ModelInfo[];
   onModelsLoaded: (models: ModelInfo[]) => void;
   onSettingsChange: (settings: AiSettingsView) => void;
+  /** Без своего окна — внутри окна «Настройки». */
+  embedded?: boolean;
 }
 
 /** Подсказки по провайдерам: где взять ключ и что важно знать. */
@@ -56,6 +58,7 @@ export default function AiSettingsWindow({
   models,
   onModelsLoaded,
   onSettingsChange,
+  embedded = false,
 }: AiSettingsWindowProps) {
   const available = isAiAvailable();
   const [settings, setSettings] = useState<AiSettingsView | null>(null);
@@ -139,8 +142,8 @@ export default function AiSettingsWindow({
     `${m.name} ${m.id}`.toLowerCase().includes(filter.trim().toLowerCase()),
   );
 
-  return (
-    <Modal title="Модели ИИ" onClose={onClose} size="lg">
+  const body = (
+    <>
       {!available && masterMode === "claude" ? (
         <div className="space-y-4 p-4 text-sm">
           <p>
@@ -306,6 +309,13 @@ export default function AiSettingsWindow({
           {error && <p className="text-sm text-fumble">{error}</p>}
         </div>
       )}
+    </>
+  );
+  return embedded ? (
+    body
+  ) : (
+    <Modal title="Модели ИИ" onClose={onClose} size="lg">
+      {body}
     </Modal>
   );
 }

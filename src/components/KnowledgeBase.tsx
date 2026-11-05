@@ -11,18 +11,23 @@ import {
   type KbStatus,
 } from "../data/kb/index.ts";
 import {
+  customCards,
+  deleteCard,
   errorText,
   isEngineAvailable,
   kbOverrides,
   masterNotes,
+  openExternal,
   partyView,
+  type CustomCard,
   type KbOverride,
   type MasterNote,
   type NoteLayer,
   type PartyView,
 } from "../lib/engine";
 import { FullSheet, PartySection } from "./FullSheet";
-import { NoteList } from "./KbNotes";
+import { CardForm, customEntry } from "./KbCards";
+import { LinkedText, NoteList, type CardOption, type CardTitle } from "./KbNotes";
 import Modal from "./Modal";
 
 interface KnowledgeBaseProps {
@@ -48,7 +53,7 @@ const NOTES_SECTION: Record<NoteLayer, { id: string; title: string; description:
     description: "Тайны, планы NPC и импровизации, которые мастер записал, чтобы помнить",
   },
 };
-const LIVE_IDS = new Set([PARTY_SECTION.id, NOTES_SECTION.player.id, NOTES_SECTION.master.id]);
+const LIVE_IDS = new Set([PARTY_SECTION.id, NOTES_SECTION.player.id]);
 
 /** Слои под спойлером: содержимое скрыто, пока игрок сам не откроет слой. */
 const SPOILER_TEXT: Partial<Record<KbLayer, string>> = {
@@ -155,6 +160,12 @@ function EntryDetail({
   override,
   notes,
   onNotesChanged,
+  custom,
+  onCardChanged,
+  onCardDeleted,
+  cardTitle,
+  customs,
+  today,
 }: {
   entry: KbEntry;
   onOpen: (id: string) => void;
@@ -162,7 +173,17 @@ function EntryDetail({
   override?: KbOverride;
   notes: MasterNote[];
   onNotesChanged: () => void;
+  /** Карточка создана по ходу игры — её можно править и удалить. */
+  custom?: CustomCard;
+  onCardChanged: () => void;
+  onCardDeleted: () => void;
+  cardTitle: CardTitle;
+  customs: CardOption[];
+  today?: number;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const related = (entry.related ?? []).map((id) => KB_BY_ID.get(id)).filter((e): e is KbEntry => !!e);
   const layer = KB_LAYERS.find((l) => l.id === entry.layer);
   const section = layer?.sections.find((s) => s.id === entry.section);
@@ -181,7 +202,54 @@ function EntryDetail({
         <Badges entry={entry} override={override} />
       </header>
 
-      <p className="leading-relaxed">{entry.summary}</p>
+      {custom && !editing && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-arcane">создано по ходу игры</span>
+          <button type="button" onClick={() => setEditing(true)} className="rounded border border-edge px-2 py-1 hover:border-gold">
+            ✎ Изменить
+          </button>
+          {confirm ? (
+            <>
+              <span>Удалить карточку?</span>
+              <button
+                type="button"
+                onClick={() =>
+                  deleteCard(custom.id)
+                    .then(onCardDeleted)
+                    .catch((e: unknown) => setError(errorText(e)))
+                }
+                className="rounded border border-fumble px-2 py-1 text-fumble"
+              >
+                Удалить
+              </button>
+              <button type="button" onClick={() => setConfirm(false)} className="px-2 py-1 text-muted">
+                Нет
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setConfirm(true)} className="rounded border border-edge px-2 py-1 hover:border-fumble">
+              🗑 Удалить
+            </button>
+          )}
+          {error && <span className="text-fumble">{error}</span>}
+        </div>
+      )}
+      {custom && editing && (
+        <CardForm
+          layer={entry.layer}
+          section={entry.section}
+          card={custom}
+          onDone={() => {
+            setEditing(false);
+            onCardChanged();
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
+
+      <p className="leading-relaxed">
+        <LinkedText text={entry.summary} onOpenCard={onOpen} cardTitle={cardTitle} />
+      </p>
 
       {entry.facts && entry.facts.length > 0 && (
         <dl className="divide-y divide-edge rounded-lg border border-edge">
@@ -210,6 +278,9 @@ function EntryDetail({
           href={entry.link}
           target="_blank"
           rel="noreferrer"
+          onClick={(e) => {
+            if (entry.link && openExternal(entry.link)) e.preventDefault();
+          }}
           className="inline-block rounded-md border border-gold px-3 py-1.5 text-sm text-gold hover:bg-gold/10"
         >
           Открыть карту на Google Диске ↗
@@ -245,6 +316,10 @@ function EntryDetail({
           card={entry.id}
           emptyText="К этой карточке записей пока нет."
           onChanged={onNotesChanged}
+          onOpenCard={onOpen}
+          cardTitle={cardTitle}
+          customs={customs}
+          today={today}
         />
       </section>
 
@@ -274,18 +349,31 @@ export default function KnowledgeBase({
   const [party, setParty] = useState<PartyView | null>(null);
   const [notes, setNotes] = useState<MasterNote[]>([]);
   const [overrides, setOverrides] = useState<KbOverride[]>([]);
+  const [customs, setCustoms] = useState<CustomCard[]>([]);
+  const [creating, setCreating] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     if (!isEngineAvailable()) return;
-    Promise.all([partyView(), masterNotes(), kbOverrides()])
-      .then(([p, n, o]) => {
+    Promise.all([partyView(), masterNotes(), kbOverrides(), customCards()])
+      .then(([p, n, o, c]) => {
         setParty(p);
         setNotes(n);
         setOverrides(o);
+        setCustoms(c);
       })
       .catch((e: unknown) => setLoadError(errorText(e)));
   }, []);
+
+  /** Все карточки: из файлов базы и созданные по ходу игры. */
+  const entries = useMemo(() => [...KB_ENTRIES, ...customs.map(customEntry)], [customs]);
+  const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  const cardTitle: CardTitle = useCallback((id: string) => byId.get(id)?.title ?? null, [byId]);
+  const cardOptions: CardOption[] = useMemo(
+    () => customs.map((c) => ({ id: c.id, title: c.title, layer: c.layer })),
+    [customs],
+  );
+  const today = party?.scene.day;
 
   useEffect(reload, [reload]);
 
@@ -300,18 +388,15 @@ export default function KnowledgeBase({
   const baseLayer = KB_LAYERS.find((l) => l.id === layerId) ?? KB_LAYERS[0];
   const layer = useMemo(() => {
     if (!baseLayer) return undefined;
+    // Записи журнала мастера показываются в разделе «Журнал мастера» слоя мастера.
     const sections =
-      baseLayer.id === "player"
-        ? [PARTY_SECTION, ...baseLayer.sections, NOTES_SECTION.player]
-        : baseLayer.id === "master"
-          ? [...baseLayer.sections, NOTES_SECTION.master]
-          : baseLayer.sections;
+      baseLayer.id === "player" ? [PARTY_SECTION, ...baseLayer.sections, NOTES_SECTION.player] : baseLayer.sections;
     return { ...baseLayer, sections };
   }, [baseLayer]);
 
   const hidden = !revealed.has(layerId);
   const searching = query.trim().length > 0 && !hidden;
-  const opened = openId ? KB_BY_ID.get(openId) : undefined;
+  const opened = openId ? byId.get(openId) : undefined;
   const layerNotes = (l: KbLayer) => notes.filter((n) => n.layer === l);
 
   function switchLayer(id: KbLayer) {
@@ -327,7 +412,7 @@ export default function KnowledgeBase({
   }
 
   function open(id: string) {
-    const entry = KB_BY_ID.get(id);
+    const entry = byId.get(id);
     if (!entry) return;
     if (openId) setHistory((h) => [...h, openId]);
     // Связь может вести в другой слой — переключаемся вместе с ней (и открываем его спойлер:
@@ -343,7 +428,7 @@ export default function KnowledgeBase({
   function back() {
     const previous = history[history.length - 1];
     setHistory((h) => h.slice(0, -1));
-    const entry = previous ? KB_BY_ID.get(previous) : undefined;
+    const entry = previous ? byId.get(previous) : undefined;
     if (entry) {
       setLayerId(entry.layer);
       setSectionId(entry.section);
@@ -353,8 +438,8 @@ export default function KnowledgeBase({
 
   const q = query.trim().toLowerCase().replace(/ё/g, "е");
   const results = useMemo(
-    () => (searching ? KB_ENTRIES.filter((e) => e.layer === layerId && matchesQuery(e, query)) : []),
-    [layerId, query, searching],
+    () => (searching ? entries.filter((e) => e.layer === layerId && matchesQuery(e, query)) : []),
+    [entries, layerId, query, searching],
   );
   const noteResults = searching
     ? notes.filter(
@@ -364,29 +449,38 @@ export default function KnowledgeBase({
 
   const sectionEntries = useMemo(() => {
     const groups = new Map<string, KbEntry[]>();
-    for (const e of KB_ENTRIES) {
+    for (const e of entries) {
       if (e.layer !== layerId || e.section !== sectionId) continue;
       groups.set(e.group, [...(groups.get(e.group) ?? []), e]);
     }
     return [...groups.entries()];
-  }, [layerId, sectionId]);
+  }, [entries, layerId, sectionId]);
+  const journalSection = layerId === "master" && sectionId === "journal";
 
   const counts = (id: string) => {
     if (id === PARTY_SECTION.id) return party?.members.length ?? 0;
     if (id === NOTES_SECTION.player.id) return layerNotes("player").length;
-    if (id === NOTES_SECTION.master.id) return layerNotes("master").length;
-    return KB_ENTRIES.filter((e) => e.layer === layerId && e.section === id).length;
+    const cards = entries.filter((e) => e.layer === layerId && e.section === id).length;
+    return layerId === "master" && id === "journal" ? cards + layerNotes("master").length : cards;
   };
   const section = layer?.sections.find((s) => s.id === sectionId);
   const layerCount = (id: KbLayer) =>
-    KB_ENTRIES.filter((e) => e.layer === id).length + layerNotes(id).length + (id === "player" ? (party?.members.length ?? 0) : 0);
+    entries.filter((e) => e.layer === id).length + layerNotes(id).length + (id === "player" ? (party?.members.length ?? 0) : 0);
 
   function liveSection() {
     if (sectionId === PARTY_SECTION.id) return <PartySection party={party} onOpen={setSheetId} />;
     if (sectionId === NOTES_SECTION.player.id)
-      return <NoteList notes={layerNotes("player")} layer="player" onChanged={notesChanged} onOpenCard={open} />;
-    if (sectionId === NOTES_SECTION.master.id)
-      return <NoteList notes={layerNotes("master")} layer="master" onChanged={notesChanged} onOpenCard={open} />;
+      return (
+        <NoteList
+          notes={layerNotes("player")}
+          layer="player"
+          onChanged={notesChanged}
+          onOpenCard={open}
+          cardTitle={cardTitle}
+          customs={cardOptions}
+          today={today}
+        />
+      );
     return null;
   }
 
@@ -438,6 +532,15 @@ export default function KnowledgeBase({
           override={overrideOf(opened.id)}
           notes={notesOf(opened.id)}
           onNotesChanged={notesChanged}
+          custom={customs.find((c) => c.id === opened.id)}
+          onCardChanged={notesChanged}
+          onCardDeleted={() => {
+            setOpenId(null);
+            notesChanged();
+          }}
+          cardTitle={cardTitle}
+          customs={cardOptions}
+          today={today}
         />
       ) : (
         <>
@@ -461,7 +564,16 @@ export default function KnowledgeBase({
                 <p className="p-4 text-center text-sm text-muted">Ничего не найдено</p>
               ) : (
                 <>
-                  {noteResults.length > 0 && <NoteList notes={noteResults} onChanged={notesChanged} onOpenCard={open} />}
+                  {noteResults.length > 0 && (
+                    <NoteList
+                      notes={noteResults}
+                      onChanged={notesChanged}
+                      onOpenCard={open}
+                      cardTitle={cardTitle}
+                      customs={cardOptions}
+                      today={today}
+                    />
+                  )}
                   <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                     {results.map((e) => (
                       <EntryCard key={e.id} entry={e} onOpen={open} override={overrideOf(e.id)} noteCount={notesOf(e.id).length} />
@@ -493,18 +605,61 @@ export default function KnowledgeBase({
               </nav>
               <div className="min-w-0 flex-1 space-y-5 p-3">
                 {section && <p className="text-xs text-muted">{section.description}</p>}
-                {LIVE_IDS.has(sectionId)
-                  ? liveSection()
-                  : sectionEntries.map(([group, entries]) => (
+                {LIVE_IDS.has(sectionId) ? (
+                  liveSection()
+                ) : (
+                  <>
+                    {creating ? (
+                      <CardForm
+                        layer={layerId}
+                        section={sectionId}
+                        onDone={() => {
+                          setCreating(false);
+                          notesChanged();
+                        }}
+                        onCancel={() => setCreating(false)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setCreating(true)}
+                        className="rounded-md border border-dashed border-gold/60 px-3 py-1.5 text-sm text-gold hover:bg-gold/10"
+                      >
+                        + Новая карточка
+                      </button>
+                    )}
+                    {sectionEntries.map(([group, groupEntries]) => (
                       <section key={group}>
                         <h3 className="mb-2 font-serif text-gold">{group}</h3>
                         <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                          {entries.map((e) => (
-                            <EntryCard key={e.id} entry={e} onOpen={open} override={overrideOf(e.id)} noteCount={notesOf(e.id).length} />
+                          {groupEntries.map((e) => (
+                            <EntryCard
+                              key={e.id}
+                              entry={e}
+                              onOpen={open}
+                              override={overrideOf(e.id)}
+                              noteCount={notesOf(e.id).length}
+                            />
                           ))}
                         </ul>
                       </section>
                     ))}
+                    {journalSection && (
+                      <section>
+                        <h3 className="mb-2 font-serif text-gold">Записи по ходу игры</h3>
+                        <NoteList
+                          notes={layerNotes("master")}
+                          layer="master"
+                          onChanged={notesChanged}
+                          onOpenCard={open}
+                          cardTitle={cardTitle}
+                          customs={cardOptions}
+                          today={today}
+                        />
+                      </section>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}

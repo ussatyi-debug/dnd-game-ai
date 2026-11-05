@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import AiSettingsWindow from "./components/AiSettingsWindow";
 import CharacterSheetPanel from "./components/CharacterSheetPanel";
 import ChatPanel, { type ChatMessage, type MasterMode } from "./components/ChatPanel";
 import DiceDrawer from "./components/DiceDrawer";
 import KnowledgeBase from "./components/KnowledgeBase";
-import LoadWindow, { type ParsedSave } from "./components/LoadWindow";
+import LoadWindow, { parseSave, type ParsedSave } from "./components/LoadWindow";
+import MiniPlayer from "./components/MiniPlayer";
+import SettingsWindow, { type SettingsTab } from "./components/SettingsWindow";
+import ContinueWindow from "./components/ContinueWindow";
 import MainMenu, { type MenuAction } from "./components/MainMenu";
 import PartyPanel from "./components/PartyPanel";
 import SaveWindow from "./components/SaveWindow";
@@ -51,6 +53,8 @@ import {
   type ClaudeTier,
 } from "./lib/claude";
 import { kbExtraFor, kbIndex } from "./data/kb/index.ts";
+import { AUTOSAVE_EVERY, listAutosaves, writeAutosave, type AutosaveInfo } from "./lib/autosave";
+import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import type { RollResult, TrayRoll } from "./lib/rolls";
 
 const MAX_ROLLS = 200;
@@ -59,7 +63,7 @@ const PLAYER_ID = "pc.nikis";
 const MASTER_HISTORY = 40;
 
 type Tab = "party" | "dialog" | "character";
-type Overlay = "knowledge" | "save" | "load" | "models" | "treasury" | null;
+type Overlay = "knowledge" | "save" | "load" | "settings" | "treasury" | "continue" | null;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "party", label: "Отряд" },
@@ -117,6 +121,15 @@ export default function App() {
   const [inv, setInv] = useState<InventoryView | null>(null);
   const [undo, setUndo] = useState<UndoInfo | null>(null);
   const [kbCharacter, setKbCharacter] = useState<string | null>(null);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("tts");
+  const [tts, setTts] = useState<TtsSettings>(loadTtsSettings);
+  /** Заявка без ответа из-за сбоя и оборванный ответ мастера, который заменит повтор. */
+  const [failed, setFailed] = useState<{ playerId: number; partialId: number | null } | null>(null);
+  const [autosaves, setAutosaves] = useState<AutosaveInfo[]>([]);
+  /** Ходов мастера с последнего автосохранения. */
+  const [sinceAutosave, setSinceAutosave] = useState<number | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const rollsRef = useRef<TrayRoll[]>([]);
   const [playerSheet, setPlayerSheet] = useState<CharacterSheet | null>(null);
   const [rolls, setRolls] = useState<TrayRoll[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>(
@@ -134,6 +147,33 @@ export default function App() {
     setMessages((prev) => [...prev, message]);
     return message;
   }, []);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+  useEffect(() => {
+    rollsRef.current = rolls;
+  }, [rolls]);
+
+  /** Автосохранение (тихо; ошибка — строкой в чате). */
+  const autosave = useCallback(() => {
+    // Сообщения из последнего хода попадают в состояние на следующем кадре.
+    window.setTimeout(() => {
+      writeAutosave(messagesRef.current ?? [], rollsRef.current ?? [])
+        .then(() => setSinceAutosave(0))
+        .catch((e: unknown) => addMessage("system", `Автосохранение не удалось: ${errorText(e)}`));
+    }, 300);
+  }, [addMessage]);
+
+  const ttsError = useCallback((text: string) => addMessage("system", text), [addMessage]);
+
+  const afterMasterTurn = useCallback(() => {
+    setSinceAutosave((n) => {
+      const next = (n ?? 0) + 1;
+      if (next >= AUTOSAVE_EVERY) autosave();
+      return next;
+    });
+  }, [autosave]);
 
   const refresh = useCallback(async () => {
     const [nextParty, nextPlayer, nextUndo] = await Promise.all([
@@ -188,6 +228,16 @@ export default function App() {
       cancelled = true;
     };
   }, [engineAvailable, activeId, party, addMessage]);
+
+  useEffect(() => {
+    if (!engineAvailable) return;
+    listAutosaves()
+      .then((list) => {
+        setAutosaves(list);
+        if (list.length > 0) setOpenWindow((w) => w ?? "continue");
+      })
+      .catch(() => undefined);
+  }, [engineAvailable]);
 
   const engineNotes = useCallback(
     (actions: MasterAction[]) => {
@@ -247,7 +297,8 @@ export default function App() {
   }
 
   function historyWith(playerMessage: ChatMessage) {
-    return [...messages, playerMessage]
+    // Только сообщения до заявки: оборванный ответ после неё при повторе не уходит мастеру.
+    return [...messages.filter((m) => m.id < playerMessage.id), playerMessage]
       .filter((m) => m.author === "player" || m.author === "master")
       .slice(-MASTER_HISTORY)
       .map((m) => ({ role: m.author === "player" ? ("player" as const) : ("master" as const), text: m.text }));
@@ -256,28 +307,50 @@ export default function App() {
   function send(text: string) {
     const playerMessage = addMessage("player", text);
     setDraft("");
+    setFailed(null);
+    request(playerMessage);
+  }
+
+  function request(playerMessage: ChatMessage) {
     if (masterMode === "claude" && sample) {
       sendToClaude(sample, playerMessage);
       return;
     }
     if (masterMode !== "provider") return;
     if (!ai?.model) {
-      addMessage("system", "Выберите модель мастера в меню «Модели ИИ».");
+      addMessage("system", "Выберите модель мастера: Меню → Настройки → ИИ-мастер.");
+      setFailed({ playerId: playerMessage.id, partialId: null });
       return;
     }
     const controller = new AbortController();
     abortRef.current = controller;
     setThinking(true);
-    aiChat(historyWith(playerMessage), kbExtraFor(text))
+    aiChat(historyWith(playerMessage), kbExtraFor(playerMessage.text))
       .then((reply) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          setFailed({ playerId: playerMessage.id, partialId: null });
+          return;
+        }
         addMessage("master", reply.text, reply.model);
         engineNotes(reply.actions);
+        afterMasterTurn();
       })
       .catch((e: unknown) => {
+        setFailed({ playerId: playerMessage.id, partialId: null });
         if (!controller.signal.aborted) addMessage("system", errorText(e));
       })
       .finally(() => setThinking(false));
+  }
+
+  /** Повтор заявки после сбоя: оборванный ответ убирается, заявка уходит заново. */
+  function retry() {
+    const f = failed;
+    if (!f) return;
+    const playerMessage = messages.find((m) => m.id === f.playerId);
+    if (!playerMessage) return;
+    setFailed(null);
+    if (f.partialId !== null) setMessages((prev) => prev.filter((m) => m.id !== f.partialId));
+    request(playerMessage);
   }
 
   function sendToClaude(fn: NonNullable<typeof sample>, playerMessage: ChatMessage) {
@@ -301,10 +374,12 @@ export default function App() {
       .then((turn) => {
         show(turn.text);
         engineNotes(turn.actions);
+        afterMasterTurn();
       })
       .catch((e: unknown) => {
         const partial = typeof e === "object" && e !== null && "text" in e ? (e as { text?: string }).text : undefined;
         if (partial) show(`${partial}\n\n(ответ прерван)`);
+        setFailed({ playerId: playerMessage.id, partialId: partial ? reply.id : null });
         addMessage("system", typeof e === "string" ? e : sampleErrorText(e));
       })
       .finally(() => setThinking(false));
@@ -345,6 +420,7 @@ export default function App() {
             ? `${name}: ${restored.map((c) => `${c.name} — ${c.restored.join(", ")}`).join("; ")}.`
             : `${name}: восстанавливать нечего.`,
         );
+        autosave();
       })
       .catch((e: unknown) => addMessage("system", `Отдых не удался: ${errorText(e)}`))
       .finally(() => setBusy(false));
@@ -372,7 +448,9 @@ export default function App() {
     const extra =
       report.supplemented.length > 0 ? ` Дополнено из приложения: ${report.supplemented.join("; ")}.` : "";
     addMessage("system", `Загружено сохранение: День ${report.day}, ${report.location}.${extra}`);
+    setFailed(null);
     refresh().catch((e: unknown) => addMessage("system", errorText(e)));
+    autosave();
   }
 
   function openFullSheet(id: string) {
@@ -382,7 +460,31 @@ export default function App() {
 
   function menu(action: MenuAction) {
     if (action === "knowledge") setKbCharacter(null);
+    if (action === "settings") setSettingsTab("tts");
     setOpenWindow(action);
+  }
+
+  function speak(m: ChatMessage) {
+    void ttsPlayer.play(m.id, `Мастер · ${m.time}`, m.text, tts);
+  }
+
+  /** Продолжить игру из автосохранения. */
+  function continueFrom(text: string) {
+    let save: ParsedSave;
+    try {
+      save = parseSave(text);
+    } catch (e) {
+      addMessage("system", e instanceof Error ? e.message : String(e));
+      setOpenWindow(null);
+      return;
+    }
+    import("./lib/engine")
+      .then(({ loadState }) => loadState(save.engine))
+      .then((report) => loaded(save, report))
+      .catch((e: unknown) => {
+        addMessage("system", `Автосохранение не загрузилось: ${errorText(e)}`);
+        setOpenWindow(null);
+      });
   }
 
   const shown = (id: Tab) => (tab === id ? "flex" : "hidden");
@@ -394,11 +496,17 @@ export default function App() {
           <MainMenu onAction={menu} />
           <h1 className="font-serif text-lg text-parchment">DnD Game AI</h1>
         </div>
-        <span className="text-xs text-muted">
+        <span className="text-right text-xs text-muted">
+          {sinceAutosave !== null && (
+            <span className="mr-2" title="Автосохранение каждые 5 ходов мастера">
+              💾 {sinceAutosave === 0 ? "сохранено" : `${sinceAutosave} ход. назад`}
+            </span>
+          )}
           v{__APP_VERSION__}
           {isWebBuild ? " · веб" : ""}
         </span>
       </header>
+      <MiniPlayer onError={ttsError} />
 
       {!engineAvailable && (
         <p role="alert" className="border-b border-gold/40 bg-gold/10 px-4 py-2 text-sm">
@@ -429,10 +537,16 @@ export default function App() {
             onSend={send}
             onStop={stop}
             onModelChange={changeModel}
-            onOpenModels={() => setOpenWindow("models")}
+            onOpenModels={() => {
+              setSettingsTab("ai");
+              setOpenWindow("settings");
+            }}
             onOpenDice={() => setDiceOpen(true)}
             undo={undo}
             onUndo={undoMaster}
+            onSpeak={speak}
+            failedId={failed?.playerId ?? null}
+            onRetry={retry}
           />
         </div>
 
@@ -511,15 +625,27 @@ export default function App() {
           }}
         />
       )}
-      {openWindow === "models" && (
-        <AiSettingsWindow
+      {openWindow === "settings" && (
+        <SettingsWindow
+          initialTab={settingsTab}
           onClose={() => setOpenWindow(null)}
-          masterMode={masterMode}
-          tier={tier}
-          onTierChange={changeModel}
-          models={models}
-          onModelsLoaded={setModels}
-          onSettingsChange={setAi}
+          tts={tts}
+          onTtsChange={setTts}
+          ai={{
+            masterMode,
+            tier,
+            onTierChange: changeModel,
+            models,
+            onModelsLoaded: setModels,
+            onSettingsChange: setAi,
+          }}
+        />
+      )}
+      {openWindow === "continue" && (
+        <ContinueWindow
+          autosaves={autosaves}
+          onContinue={continueFrom}
+          onNewGame={() => setOpenWindow(null)}
         />
       )}
     </div>
