@@ -254,6 +254,28 @@ fn migrate_to_v5(party: &mut [Character]) -> Vec<String> {
     report
 }
 
+/// Разовые исправления сохранений до 0.9.0 (формат 5): Брокк получил 9 уровень.
+fn migrate_to_v6(party: &mut [Character]) -> Vec<String> {
+    let mut report = Vec::new();
+    let Some(brokk) = party.iter_mut().find(|c| c.id == "npc.brokk") else {
+        return report;
+    };
+    // Был с полными хитами 8 уровня — остаётся с полными.
+    if brokk.hit_points.current >= 76 {
+        brokk.hit_points.current = brokk.hit_points.max;
+    }
+    for dice in &mut brokk.profile.hit_dice {
+        dice.current = (dice.current + 1).min(dice.total);
+    }
+    for item in &mut brokk.inventory.items {
+        if item.name == "Латная кираса" {
+            item.name = "Дварфийские латы".into();
+        }
+    }
+    report.push("Брокк: 9 уровень — хиты, кость хитов и доспех по новому листу (0.9.0)".into());
+    report
+}
+
 impl Session {
     /// Загружает сохранение вместо текущей игры. При ошибке игра не меняется.
     /// Генератор кубов и указатель базы знаний остаются текущими, отмена хода сбрасывается.
@@ -287,6 +309,9 @@ impl Session {
         }
         if save.format_version < 5 {
             report.extend(migrate_to_v5(&mut party));
+        }
+        if save.format_version < 6 {
+            report.extend(migrate_to_v6(&mut party));
         }
 
         let mut notes = save.notes;
@@ -490,6 +515,38 @@ mod tests {
         let again = round_trip(&loaded);
         let report = session().load(again).unwrap();
         assert!(report.supplemented.is_empty(), "{:?}", report.supplemented);
+    }
+
+    #[test]
+    fn brokk_level_nine() {
+        let s = session();
+        let b = s.character("npc.brokk").unwrap();
+        let d = b.details();
+        assert_eq!(b.proficiency_bonus(), 4);
+        assert_eq!(
+            d.saves.iter().find(|x| x.ability == crate::Ability::Strength).unwrap().total,
+            9
+        );
+        assert_eq!(b.skill_total(crate::Skill::Athletics), 9);
+        assert_eq!(b.skill_total(crate::Skill::Perception), 5);
+        let hammer = &d.attacks[0];
+        assert_eq!(hammer.to_hit, 10);
+        assert_eq!(hammer.damage, "1d8+8 дробящий");
+        assert_eq!(d.attacks[1].to_hit, 9);
+        assert_eq!(b.resource("fighter.indomitable").unwrap().max(), 1);
+
+        let mut save = round_trip(&s);
+        save.format_version = 5;
+        let brokk = save.party.iter_mut().find(|c| c.id == "npc.brokk").unwrap();
+        brokk.hit_points = Some(HitPoints { current: 76, max: 76, temporary: 0 });
+        let inv = brokk.inventory.as_mut().unwrap();
+        inv.items.iter_mut().find(|i| i.name == "Дварфийские латы").unwrap().name =
+            "Латная кираса".into();
+        let mut loaded = session();
+        loaded.load(save).unwrap();
+        let b = loaded.character("npc.brokk").unwrap();
+        assert_eq!(b.hit_points.current, 103);
+        assert!(b.inventory.find_item("Дварфийские латы").is_ok());
     }
 
     #[test]

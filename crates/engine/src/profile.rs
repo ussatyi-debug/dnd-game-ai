@@ -575,7 +575,7 @@ mod tests {
         assert_eq!(totals("npc.corvus"), vec![4, 6, 2, 0, 3, -1]);
         assert_eq!(totals("npc.gunther"), vec![6, 2, 4, 2, 6, 7]);
         assert_eq!(totals("npc.valeria"), vec![1, 1, 2, 1, 8, 3]);
-        assert_eq!(totals("npc.brokk"), vec![7, 1, 6, 0, 1, -1]);
+        assert_eq!(totals("npc.brokk"), vec![9, 1, 7, 0, 1, -1]);
     }
 
     #[test]
@@ -594,7 +594,7 @@ mod tests {
         let gunther = member("npc.gunther").details();
         assert_eq!(gunther.attacks[0].to_hit, 8);
         let brokk = member("npc.brokk").details();
-        assert_eq!(brokk.attacks[0].to_hit, 8);
+        assert_eq!(brokk.attacks[0].to_hit, 10);
     }
 
     #[test]

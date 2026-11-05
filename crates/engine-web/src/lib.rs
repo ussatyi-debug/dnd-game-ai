@@ -501,7 +501,7 @@ mod tests {
         assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
         assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
         let save = call(&mut s, json!({ "cmd": "save_state" }));
-        assert_eq!(save["ok"]["format_version"], 5);
+        assert_eq!(save["ok"]["format_version"], 6);
         assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
         let added = call(
             &mut s,
