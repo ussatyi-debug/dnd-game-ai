@@ -13,12 +13,23 @@ import urllib.request
 from pathlib import Path
 
 BASE = "https://opengameart.org"
-COLLECTIONS = [f"{BASE}/node/158884"]
+# Похожие на выбранные «Dark Forest Theme», «Dark Theme», «Vampire's Piano»:
+# мрачные мелодичные темы на гитаре, струнных и фортепиано.
+COLLECTIONS = [f"{BASE}/node/73278"]
 EXTRA = [
-    f"{BASE}/content/dark-forest-theme",
-    f"{BASE}/content/dark-theme",
-    f"{BASE}/node/115915",
+    f"{BASE}/content/sirens-in-darkness",
+    f"{BASE}/node/18887",
+    f"{BASE}/node/49460",
+    f"{BASE}/content/emotional-piano-loop",
+    f"{BASE}/content/sadness",
+    f"{BASE}/node/83236",
+    f"{BASE}/content/boundless",
+    f"{BASE}/content/emotional-piano-0",
+    f"{BASE}/content/sad-orchestral-theme",
+    f"{BASE}/content/fantasy-lament-for-a-warriors-soul",
 ]
+# Уже выбраны в прошлый раз.
+SKIP = {"dark-forest-theme", "dark-theme", "vampires-piano", "115915", "80219"}
 LIMIT = 14
 out = Path(sys.argv[1] if len(sys.argv) > 1 else "out")
 out.mkdir(parents=True, exist_ok=True)
@@ -32,7 +43,7 @@ def get(url: str) -> bytes:
 
 def page_info(url: str):
     text = get(url).decode("utf-8", "replace")
-    title = re.search(r'<h2[^>]*>\s*([^<]+?)\s*</h2>', text)
+    title = re.search(r'<title>\s*([^<|]+?)\s*(?:\||</title>)', text)
     author = re.search(r'field-name-author-submitter.*?<a[^>]*>([^<]+)</a>', text, re.S)
     lic = re.search(r'field-name-field-art-licenses(.*?)</div>\s*</div>\s*</div>', text, re.S)
     lic_text = lic.group(1) if lic else ""
@@ -67,7 +78,7 @@ for c in COLLECTIONS:
             pages.append(BASE + slug)
     except Exception as e:  # noqa: BLE001
         print("collection failed", c, e)
-pages = list(dict.fromkeys(EXTRA + pages))
+pages = [p for p in dict.fromkeys(EXTRA + pages) if p.rstrip("/").split("/")[-1] not in SKIP]
 print(len(pages), "pages")
 
 manifest = []
