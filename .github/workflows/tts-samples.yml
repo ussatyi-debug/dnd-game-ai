@@ -1,0 +1,34 @@
+name: Образцы озвучки
+on:
+  push:
+    branches: [tts-samples]
+jobs:
+  sample:
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [piper, vosk, silero, xtts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng
+      - name: Зависимости
+        run: |
+          case "${{ matrix.engine }}" in
+            piper) pip install piper-tts ;;
+            vosk) pip install vosk-tts ;;
+            silero) pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install numpy omegaconf ;;
+            xtts) pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu && pip install coqui-tts ;;
+          esac
+      - name: Синтез
+        run: python scripts/tts-samples/${{ matrix.engine }}_samples.py scripts/tts-samples/phrase.txt out
+      - name: MP3
+        run: for f in out/*.wav; do ffmpeg -loglevel error -y -i "$f" -codec:a libmp3lame -q:a 3 "${f%.wav}.mp3"; done; ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tts-${{ matrix.engine }}
+          path: out/*.mp3
