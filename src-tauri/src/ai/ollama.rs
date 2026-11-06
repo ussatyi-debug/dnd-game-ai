@@ -118,7 +118,15 @@ pub(crate) fn request_body(
         "model": model,
         "messages": messages,
         "stream": false,
-        "options": { "num_ctx": NUM_CTX },
+        // Рекомендации Qwen для ответов без размышлений; presence_penalty снижает повторы и
+        // переход на другой язык посреди текста.
+        "options": {
+            "num_ctx": NUM_CTX,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20,
+            "presence_penalty": 1.5,
+        },
     });
     if !think {
         // Режим размышлений (Qwen 3 и др.) сильно замедляет ответ мастера.

@@ -165,6 +165,24 @@ fn find_open(text: &str) -> Option<usize> {
     None
 }
 
+/// Иероглифы и другие азиатские письменности: локальные модели (Qwen) изредка вставляют их
+/// посреди русского текста.
+fn is_cjk(c: char) -> bool {
+    matches!(c as u32,
+        0x3000..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFF60)
+}
+
+/// Чистит ответ мастера: без строк-эха «[ДВИЖОК] …» и без иероглифов.
+pub(crate) fn clean_reply(text: &str) -> String {
+    text.lines()
+        .filter(|l| !l.trim_start().starts_with("[ДВИЖОК]"))
+        .map(|l| l.chars().filter(|c| !is_cjk(*c)).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
 /// Текст без блоков команд (для показа ответа, пока он печатается).
 pub fn strip_directives(text: &str) -> String {
     split(text).0
@@ -585,7 +603,7 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     }
     let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
     session.commit_master_turn(before, summaries);
-    MasterTurn { text, actions, fabricated: Vec::new() }
+    MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
 }
 
 #[cfg(test)]
@@ -622,6 +640,14 @@ mod tests {
         assert_eq!(gunther.resource("slots.1").unwrap().current(), 3);
         let nikis = s.character("pc.nikis").unwrap();
         assert_eq!(nikis.resource("pact.slots").unwrap().current(), 1);
+    }
+
+    #[test]
+    fn replies_are_cleaned() {
+        assert_eq!(
+            clean_reply("[ДВИЖОК] Результаты бросков приняты.\nТвои хиты гаснут, уступая место реальному灼痛.\n"),
+            "Твои хиты гаснут, уступая место реальному."
+        );
     }
 
     #[test]

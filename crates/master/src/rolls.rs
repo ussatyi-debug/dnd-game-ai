@@ -288,6 +288,20 @@ pub fn fabricated_rolls(text: &str, rolled: &[u32], player_text: &str) -> Vec<St
     let allowed: Vec<u32> = rolled.iter().copied().chain(numbers(player_text)).collect();
     let lower = text.to_lowercase();
     let mut found = Vec::new();
+    // Мастер «допустил» результат вместо броска движком.
+    for phrase in [
+        "допустим, выпало",
+        "допустим выпало",
+        "предположим, выпало",
+        "предположим выпало",
+        "допустим, урон",
+        "условно выпало",
+    ] {
+        if lower.contains(phrase) {
+            found.push("результат предположен, а не брошен".to_string());
+            break;
+        }
+    }
     for marker in ["d20", "к20"] {
         let mut from = 0;
         while let Some(i) = lower[from..].find(marker) {
@@ -403,5 +417,9 @@ mod tests {
             vec![format!("d20 {fake}")]
         );
         assert!(fabricated_rolls("Бросок игрока: d20 12", &[], "12").is_empty());
+        assert_eq!(
+            fabricated_rolls("Урон: допустим, выпало средне ~10-12", &[], ""),
+            vec!["результат предположен, а не брошен".to_string()]
+        );
     }
 }
