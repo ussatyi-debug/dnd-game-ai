@@ -9,7 +9,9 @@
 mod directives;
 mod rolls;
 
-pub use directives::{apply_directives, strip_directives, MasterAction, MasterTurn};
+pub use directives::{
+    apply_directives, apply_repair, repair_request, strip_directives, MasterAction, MasterTurn,
+};
 pub use rolls::{
     fabricated_rolls, has_roll_requests, rolled_faces, run_rolls, MasterRoll, RollRound,
     MAX_ROLL_ROUNDS,
@@ -431,7 +433,7 @@ mod tests {
         let context = turn_context(&mut session, "", "");
         let nikis = &context["магия"]["pc.nikis"];
         assert_eq!(nikis["ячейки"][0], "4 круг (договор, \"pact\"): 1/2");
-        assert_eq!(nikis["классы"][0]["кс"], 16);
+        assert_eq!(nikis["классы"][0]["кс"], 17);
         let ready = nikis["классы"][0]["готовые"].as_array().unwrap();
         assert!(ready.iter().any(|v| v == "Туманный шаг [misty-step], 2 круг"));
         assert!(context["магия"]["npc.valeria"].is_object());

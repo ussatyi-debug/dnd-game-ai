@@ -20,7 +20,7 @@ const sheet = engine.call<{ name: string; level: number; resources: { id: string
   id: "pc.nikis",
 });
 assert.equal(sheet.name, "Сэр Никис Стрэндж");
-assert.equal(sheet.level, 10);
+assert.equal(sheet.level, 11);
 assert.equal(sheet.resources[0]?.id, "feat.lucky");
 
 const reroll = engine.call<{ value: number; lucky: { current: number } }>({ cmd: "lucky_reroll" });

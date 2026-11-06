@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn nikis_derived_values_match_sheet() {
         let nikis = demo_nikis();
-        assert_eq!(nikis.level(), 10);
+        assert_eq!(nikis.level(), 11);
         assert_eq!(nikis.proficiency_bonus(), 4);
         assert_eq!(nikis.initiative(), 2);
         let sheet = nikis.sheet();

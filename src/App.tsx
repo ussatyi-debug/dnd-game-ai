@@ -9,6 +9,8 @@ import SettingsWindow, { type SettingsTab } from "./components/SettingsWindow";
 import ContinueWindow from "./components/ContinueWindow";
 import HomeScreen, { type HomeAction } from "./components/HomeScreen";
 import ReferenceWindow from "./components/ReferenceWindow";
+import LogWindow from "./components/LogWindow";
+import { devLog } from "./lib/devlog";
 import MainMenu, { type MenuAction } from "./components/MainMenu";
 import PartyPanel from "./components/PartyPanel";
 import SaveWindow from "./components/SaveWindow";
@@ -35,7 +37,9 @@ import {
   LUCKY_ID,
   masterApply,
   masterContext,
+  masterRepair,
   masterRolls,
+  repairRequest,
   partyView,
   setKbCards,
   spellbook,
@@ -75,7 +79,7 @@ const PLAYER_ID = "pc.nikis";
 const MASTER_HISTORY = 40;
 
 type Tab = "party" | "dialog" | "character";
-type Overlay = "knowledge" | "save" | "load" | "settings" | "treasury" | "continue" | "reference" | null;
+type Overlay = "knowledge" | "save" | "load" | "settings" | "treasury" | "continue" | "reference" | "log" | null;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "party", label: "Отряд" },
@@ -286,12 +290,29 @@ export default function App() {
     setRolls((prev) => [...entries.reverse(), ...prev].slice(0, MAX_ROLLS));
   }, []);
 
-  const engineNotes = useCallback(
-    (actions: MasterAction[]) => {
-      for (const a of actions) addMessage("engine", a.ok ? a.summary : `Отказ: ${a.summary}`);
-      if (actions.length > 0) refresh().catch(() => undefined);
+  /** Итоги хода мастера — в журнал разбора, под ответом — только краткая сводка. */
+  const recordTurn = useCallback(
+    (messageId: number, turn: { actions: MasterAction[]; rolls: MasterRoll[]; fabricated: string[]; raw: string[]; model?: string }) => {
+      devLog.add(
+        "master",
+        `${turn.model ?? "Мастер"}: ответ${turn.raw.length > 1 ? ` (${turn.raw.length} запроса к модели)` : ""}`,
+        turn.raw.join("\n\n──────── следующий запрос к модели ────────\n\n"),
+      );
+      for (const r of turn.rolls) devLog.add("roll", r.hidden ? `${r.line}` : r.line);
+      for (const a of turn.actions) devLog.add(a.ok ? "engine" : "refusal", a.summary);
+      if (turn.fabricated.length > 0) devLog.add("warning", `Бросок не из движка: ${turn.fabricated.join(", ")}`);
+      const ok = turn.actions.filter((a) => a.ok).length;
+      const failedCount = turn.actions.length - ok;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, fabricated: turn.fabricated, engine: turn.actions.length > 0 ? { ok, failed: failedCount } : undefined }
+            : m,
+        ),
+      );
+      if (turn.actions.length > 0) refresh().catch(() => undefined);
     },
-    [addMessage, refresh],
+    [refresh],
   );
 
   useEffect(() => {
@@ -379,15 +400,13 @@ export default function App() {
           return;
         }
         const message = addMessage("master", reply.text, reply.model);
-        if (reply.fabricated.length > 0) {
-          setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, fabricated: reply.fabricated } : m)));
-        }
         logMasterRolls(reply.rolls);
-        engineNotes(reply.actions);
+        recordTurn(message.id, { ...reply, model: reply.model });
         afterMasterTurn();
       })
       .catch((e: unknown) => {
         setFailed({ playerId: playerMessage.id, partialId: null });
+        devLog.add("error", "Мастер не ответил", errorText(e));
         if (!controller.signal.aborted) addMessage("system", errorText(e));
       })
       .finally(() => setThinking(false));
@@ -419,11 +438,15 @@ export default function App() {
     };
     setThinking(true);
     const rolled: MasterRoll[] = [];
+    const raw: string[] = [];
+    const history = historyWith(playerMessage);
+    let system = "";
     // Запросы бросков: движок бросает, мастер получает результаты и дописывает ход.
-    const withRolls = async (system: string) => {
-      const history = historyWith(playerMessage);
+    const withRolls = async (ctx: string) => {
+      system = ctx;
       for (let round = 0; ; round++) {
         const text = await claudeMasterReply(fn, system, history, tier, show, controller.signal);
+        raw.push(text);
         const r = round < MAX_ROLL_ROUNDS ? await masterRolls(text) : null;
         if (!r) return text;
         show("");
@@ -434,26 +457,38 @@ export default function App() {
     masterContext(playerMessage.text, kbExtraFor(playerMessage.text))
       .then(withRolls)
       // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
-      .then((text) =>
-        masterApply(
+      .then(async (text) => {
+        const turn = await masterApply(
           text,
           rolled.flatMap((r) => r.dice),
           playerMessage.text,
-        ),
-      )
+        );
+        // Отказы движка: один повтор — мастер присылает исправленные команды.
+        const request = repairRequest(turn.actions);
+        if (request) {
+          history.push({ role: "master", text }, { role: "player", text: request });
+          try {
+            const fix = await claudeMasterReply(fn, system, history, tier, () => undefined, controller.signal);
+            raw.push(fix);
+            const fixed = await masterRepair(fix);
+            turn.actions.push(...fixed.map((a) => ({ ...a, summary: `исправлено: ${a.summary}` })));
+          } catch (e) {
+            devLog.add("error", "Повтор команд не удался", errorText(e));
+          }
+        }
+        return turn;
+      })
       .then((turn) => {
         show(turn.text);
-        if (turn.fabricated.length > 0) {
-          setMessages((prev) => prev.map((m) => (m.id === reply.id ? { ...m, fabricated: turn.fabricated } : m)));
-        }
         logMasterRolls(rolled);
-        engineNotes(turn.actions);
+        recordTurn(reply.id, { ...turn, rolls: rolled, raw, model: tierName });
         afterMasterTurn();
       })
       .catch((e: unknown) => {
         const partial = typeof e === "object" && e !== null && "text" in e ? (e as { text?: string }).text : undefined;
         if (partial) show(`${partial}\n\n(ответ прерван)`);
         setFailed({ playerId: playerMessage.id, partialId: partial ? reply.id : null });
+        devLog.add("error", "Мастер не ответил", typeof e === "string" ? e : sampleErrorText(e));
         addMessage("system", typeof e === "string" ? e : sampleErrorText(e));
       })
       .finally(() => setThinking(false));
@@ -660,6 +695,7 @@ export default function App() {
             onSpeak={speak}
             failedId={failed?.playerId ?? null}
             onRetry={retry}
+            onOpenLog={() => setOpenWindow("log")}
             proposals={proposals}
             onResolveProposal={(id, accept) => {
               resolveProposal(id, accept)
@@ -779,6 +815,7 @@ export default function App() {
         />
       )}
       {openWindow === "reference" && <ReferenceWindow onClose={() => setOpenWindow(null)} />}
+      {openWindow === "log" && <LogWindow onClose={() => setOpenWindow(null)} />}
       {home && (
         <HomeScreen last={autosaves[0] ?? null} inGame={played} canExit={canExitApp()} onAction={homeAction} />
       )}

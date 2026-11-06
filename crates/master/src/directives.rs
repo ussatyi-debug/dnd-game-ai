@@ -585,9 +585,16 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
 pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     let (text, blocks) = split(reply);
     let before = session.checkpoint();
+    let actions = run_blocks(session, &blocks);
+    let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
+    session.commit_master_turn(before, summaries);
+    MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
+}
+
+fn run_blocks(session: &mut Session, blocks: &[String]) -> Vec<MasterAction> {
     let mut actions = Vec::new();
     for block in blocks {
-        for cmd in commands(&block) {
+        for cmd in commands(block) {
             let result = cmd.and_then(|cmd| run(session, &cmd));
             actions.push(match result {
                 Ok(summary) => MasterAction { ok: true, summary },
@@ -601,9 +608,37 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
             });
         }
     }
+    actions
+}
+
+/// Сообщение мастеру об отказах движка: просьба прислать исправленные команды.
+/// `None` — все команды выполнены.
+pub fn repair_request(actions: &[MasterAction]) -> Option<String> {
+    let failed: Vec<&MasterAction> = actions.iter().filter(|a| !a.ok).collect();
+    if failed.is_empty() {
+        return None;
+    }
+    let mut text = String::from("[ДВИЖОК] Эти команды не выполнены:\n");
+    for a in failed {
+        text.push_str(&format!("- {}\n", a.summary));
+    }
+    text.push_str(
+        "Пришли ТОЛЬКО исправленные команды в одном блоке ```engine, без рассказа. Формат — по \
+кодексу: временные хиты — {\"cmd\":\"hp\",\"character\":\"…\",\"temp\":N}, id ресурсов — из «листы». \
+Если команда не нужна — ответь пустым блоком ```engine```.",
+    );
+    Some(text)
+}
+
+/// Выполняет исправленные команды из ответа на [`repair_request`] и дописывает их к текущему
+/// ходу мастера (одна отмена откатывает весь ход). Текст ответа игнорируется.
+pub fn apply_repair(session: &mut Session, reply: &str) -> Vec<MasterAction> {
+    let (_, blocks) = split(reply);
+    let before = session.checkpoint();
+    let actions = run_blocks(session, &blocks);
     let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
-    session.commit_master_turn(before, summaries);
-    MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
+    session.extend_master_turn(before, summaries);
+    actions
 }
 
 #[cfg(test)]
@@ -643,6 +678,27 @@ mod tests {
     }
 
     #[test]
+    fn failed_commands_are_repaired_in_the_same_turn() {
+        let mut s = session();
+        let hp = s.character("pc.nikis").unwrap().hit_points.current;
+        let turn = apply_directives(
+            &mut s,
+            "Удар.\n```engine\n{\"cmd\":\"hp\",\"character\":\"pc.nikis\",\"damage\":5}\n{\"cmd\":\"resource\",\"character\":\"pc.nikis\",\"resource\":\"temp_hp\",\"delta\":-8}\n```",
+        );
+        let request = repair_request(&turn.actions).unwrap();
+        assert!(request.contains("temp_hp"));
+        let fixed = apply_repair(
+            &mut s,
+            "```engine\n{\"cmd\":\"hp\",\"character\":\"pc.nikis\",\"temp\":8}\n```",
+        );
+        assert!(fixed[0].ok, "{fixed:?}");
+        assert_eq!(s.master_undo_info().unwrap().actions.len(), 2);
+        s.undo_master_turn().unwrap();
+        assert_eq!(s.character("pc.nikis").unwrap().hit_points.current, hp);
+        assert!(repair_request(&fixed).is_none());
+    }
+
+    #[test]
     fn replies_are_cleaned() {
         assert_eq!(
             clean_reply("[ДВИЖОК] Результаты бросков приняты.\nТвои хиты гаснут, уступая место реальному灼痛.\n"),
@@ -675,12 +731,12 @@ mod tests {
     #[test]
     fn refusals_are_reported_and_logged() {
         let mut s = session();
-        let reply = "```engine\n[{\"cmd\":\"cast\",\"character\":\"pc.nikis\",\"spell\":\"fireball\"},{\"cmd\":\"fly\",\"character\":\"pc.nikis\"},{\"cmd\":\"cast\",\"character\":\"Мордехай\",\"spell\":\"bless\"}]\n```";
+        let reply = "```engine\n[{\"cmd\":\"cast\",\"character\":\"pc.nikis\",\"spell\":\"cone-of-cold\"},{\"cmd\":\"fly\",\"character\":\"pc.nikis\"},{\"cmd\":\"cast\",\"character\":\"Мордехай\",\"spell\":\"bless\"}]\n```";
         let turn = apply_directives(&mut s, reply);
         assert_eq!(turn.text, "");
         assert_eq!(turn.actions.len(), 3);
         assert!(turn.actions.iter().all(|a| !a.ok));
-        assert!(turn.actions[0].summary.contains("Огненный шар"));
+        assert!(turn.actions[0].summary.contains("Конус холода"));
         assert!(turn.actions[1].summary.contains("неизвестная команда"));
         assert!(turn.actions[2].summary.contains("Мордехай"));
         assert_eq!(s.engine_log().len(), 3);

@@ -28,7 +28,7 @@ use crate::treasury::{EntrySource, NewEntry, Treasury, TreasuryView};
 pub const LUCKY_ID: &str = "feat.lucky";
 
 /// Версия формата сохранения.
-pub const SAVE_FORMAT_VERSION: u32 = 6;
+pub const SAVE_FORMAT_VERSION: u32 = 7;
 
 /// Самый старый формат, который загружается (сохранения 0.5.0).
 pub const MIN_SAVE_FORMAT: u32 = 3;
@@ -631,9 +631,9 @@ mod tests {
         let mut s = session(1);
         let out = s.cast_spell("pc.nikis", &CastRequest::new("misty-step")).unwrap();
         assert_eq!(s.engine_log().last(), Some(&out.summary));
-        assert!(s.cast_spell("pc.nikis", &CastRequest::new("fireball")).is_err());
+        assert!(s.cast_spell("pc.nikis", &CastRequest::new("cone-of-cold")).is_err());
         let refusal = s.engine_log().last().unwrap();
-        assert!(refusal.starts_with("Отказ (Сэр Никис Стрэндж, заклинание «fireball»)"));
+        assert!(refusal.starts_with("Отказ (Сэр Никис Стрэндж, заклинание «cone-of-cold»)"));
         assert!(s.prepare_spells("npc.valeria", "cleric", &[]).is_err());
         assert!(s.spellbook("npc.corvus").is_err());
 

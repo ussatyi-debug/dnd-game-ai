@@ -171,6 +171,10 @@ pub enum Request {
     MasterRolls {
         text: String,
     },
+    /// Исправленные мастером команды после отказов движка — в тот же ход.
+    MasterRepair {
+        text: String,
+    },
 }
 
 /// Карточка из формы интерфейса.
@@ -320,6 +324,7 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(turn)
         }
         Request::MasterRolls { text } => to_value(dnd_master::run_rolls(session, &text)),
+        Request::MasterRepair { text } => to_value(dnd_master::apply_repair(session, &text)),
     }
 }
 
@@ -415,7 +420,7 @@ mod tests {
         let r = call(&mut s, json!({ "cmd": "character_sheet", "id": "pc.nikis" }));
         let sheet = &r["ok"];
         assert_eq!(sheet["name"], "Сэр Никис Стрэндж");
-        assert_eq!(sheet["level"], 10);
+        assert_eq!(sheet["level"], 11);
         assert_eq!(sheet["proficiency_bonus"], 4);
         assert_eq!(sheet["abilities"][3]["label"], "ИНТ");
         assert_eq!(sheet["abilities"][3]["modifier"], 4);
@@ -464,9 +469,9 @@ mod tests {
         assert_eq!(cast["ok"]["method"], "slot");
         let refused = call(
             &mut s,
-            json!({ "cmd": "cast_spell", "id": "pc.nikis", "spellId": "fireball", "method": null }),
+            json!({ "cmd": "cast_spell", "id": "pc.nikis", "spellId": "cone-of-cold", "method": null }),
         );
-        assert!(refused["err"].as_str().unwrap().contains("Огненный шар"));
+        assert!(refused["err"].as_str().unwrap().contains("Конус холода"));
 
         let changed = call(
             &mut s,
@@ -516,7 +521,7 @@ mod tests {
         assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
         assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
         let save = call(&mut s, json!({ "cmd": "save_state" }));
-        assert_eq!(save["ok"]["format_version"], 6);
+        assert_eq!(save["ok"]["format_version"], 7);
         assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
         let added = call(
             &mut s,

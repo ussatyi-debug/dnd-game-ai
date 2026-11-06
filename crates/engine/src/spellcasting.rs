@@ -137,6 +137,11 @@ pub struct Caster {
     pub attack_item_bonus: i32,
     #[cfg_attr(feature = "serde", serde(default))]
     pub attack_item_bonus_source: String,
+    /// Бонус только к КС спасбросков.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub dc_item_bonus: i32,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub dc_item_bonus_source: String,
 }
 
 fn ids(list: &[&str]) -> Vec<String> {
@@ -174,6 +179,8 @@ impl Caster {
             item_bonus_source: String::new(),
             attack_item_bonus: 0,
             attack_item_bonus_source: String::new(),
+            dc_item_bonus: 0,
+            dc_item_bonus_source: String::new(),
         }
     }
 
@@ -219,6 +226,13 @@ impl Caster {
         self
     }
 
+    /// Бонус только к КС спасбросков (атаки заклинаниями не меняются).
+    pub fn dc_item_bonus(mut self, bonus: i32, source: &str) -> Self {
+        self.dc_item_bonus = bonus;
+        self.dc_item_bonus_source = source.into();
+        self
+    }
+
     /// Источники бонусов предметов для подписи в книге заклинаний.
     pub fn item_bonus_sources(&self) -> Option<String> {
         let mut parts = Vec::new();
@@ -227,6 +241,9 @@ impl Caster {
         }
         if self.attack_item_bonus != 0 {
             parts.push(format!("{} (только атаки)", self.attack_item_bonus_source));
+        }
+        if self.dc_item_bonus != 0 {
+            parts.push(format!("{} (только КС)", self.dc_item_bonus_source));
         }
         (!parts.is_empty()).then(|| parts.join(", "))
     }
@@ -659,7 +676,10 @@ impl Character {
     /// КС спасброска и бонус атаки заклинаниями класса.
     pub fn caster_numbers(&self, caster: &Caster) -> (i32, i32) {
         let base = self.proficiency_bonus() + self.abilities.modifier(caster.ability);
-        (8 + base + caster.item_bonus, base + caster.item_bonus + caster.attack_item_bonus)
+        (
+            8 + base + caster.item_bonus + caster.dc_item_bonus,
+            base + caster.item_bonus + caster.attack_item_bonus,
+        )
     }
 
     /// Высший круг, который персонаж может сотворить своими ячейками.
@@ -1308,7 +1328,7 @@ mod tests {
     fn numbers_match_sheets() {
         let nikis = member("pc.nikis");
         let book = nikis.spellbook().unwrap();
-        assert_eq!(book.casters[0].save_dc, 16);
+        assert_eq!(book.casters[0].save_dc, 17);
         assert_eq!(book.casters[0].attack_bonus, 8);
         let valeria = member("npc.valeria").spellbook().unwrap();
         assert_eq!(valeria.casters[0].save_dc, 16);
@@ -1344,7 +1364,7 @@ mod tests {
     fn unknown_and_unprepared_spells_are_rejected() {
         let mut nikis = member("pc.nikis");
         assert!(matches!(
-            nikis.cast_spell(&CastRequest::new("fireball")),
+            nikis.cast_spell(&CastRequest::new("cone-of-cold")),
             Err(EngineError::SpellNotAvailable { .. })
         ));
         assert_eq!(
@@ -1375,7 +1395,7 @@ mod tests {
         let mut nikis = member("pc.nikis");
         let out = nikis.cast_spell(&CastRequest::new("hunger-of-hadar")).unwrap();
         assert_eq!(out.method, CastMethod::Granted);
-        assert_eq!(out.save_dc, Some(16));
+        assert_eq!(out.save_dc, Some(17));
         assert_eq!(out.spent.unwrap().current(), 0);
         assert!(matches!(
             nikis.cast_spell(&CastRequest::new("hunger-of-hadar")),
@@ -1394,7 +1414,7 @@ mod tests {
         // Бесплатное применение потрачено — дальше ячейкой договора на 4 круге.
         let slot = nikis.cast_spell(&CastRequest::new("cause-fear")).unwrap();
         assert_eq!((slot.method, slot.cast_level), (CastMethod::Pact, 4));
-        assert_eq!(slot.save_dc, Some(16));
+        assert_eq!(slot.save_dc, Some(17));
         assert_eq!(nikis.resource(PACT_SLOTS_ID).unwrap().current(), 1);
         // Явный выбор ячейки, пока бесплатное применение ещё есть.
         let out = nikis

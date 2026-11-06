@@ -14,6 +14,8 @@ export interface ChatMessage {
   model?: string;
   /** Броски d20 в ответе мастера, которых движок не делал. */
   fabricated?: string[];
+  /** Сводка команд движка за ход мастера (подробности — в журнале). */
+  engine?: { ok: number; failed: number };
 }
 
 export type MasterMode = "provider" | "claude" | "none";
@@ -39,6 +41,8 @@ interface ChatPanelProps {
   /** Заявка, на которую мастер не ответил из-за сбоя, — под ней кнопка повтора. */
   failedId: number | null;
   onRetry: () => void;
+  /** Открыть окно «Логирование». */
+  onOpenLog: () => void;
   /** Предложения мастера изменить лист — ждут решения игрока. */
   proposals: SheetProposal[];
   onResolveProposal: (id: number, accept: boolean) => void;
@@ -101,6 +105,7 @@ export default function ChatPanel({
   onSpeak,
   failedId,
   onRetry,
+  onOpenLog,
   proposals,
   onResolveProposal,
 }: ChatPanelProps) {
@@ -272,6 +277,17 @@ export default function ChatPanel({
             {m.author === "master" && (
               <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-edge bg-ink px-4 py-3">
                 <MasterText text={masterDisplayText(m.text)} />
+                {m.engine && (
+                  <button
+                    type="button"
+                    onClick={onOpenLog}
+                    title="Подробности — в окне «Логирование»"
+                    className="mt-2 block text-[11px] text-muted hover:text-parchment"
+                  >
+                    ⚙ движок: {m.engine.ok} {m.engine.ok === 1 ? "команда" : "команд(ы)"}
+                    {m.engine.failed > 0 && <span className="text-fumble"> · отказов: {m.engine.failed}</span>}
+                  </button>
+                )}
                 {m.fabricated && m.fabricated.length > 0 && (
                   <p className="mt-2 text-xs text-fumble" title="Мастер назвал значение куба, которого движок не бросал">
                     ⚠ Бросок не из движка: {m.fabricated.join(", ")}

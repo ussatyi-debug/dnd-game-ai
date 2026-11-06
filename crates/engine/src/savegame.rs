@@ -276,6 +276,21 @@ fn migrate_to_v6(party: &mut [Character]) -> Vec<String> {
     report
 }
 
+/// Разовые исправления сохранений до 0.9.1 (формат 6): Никис получил 11 уровень (Колдун 8).
+fn migrate_to_v7(party: &mut [Character]) -> Vec<String> {
+    let Some(nikis) = party.iter_mut().find(|c| c.id == "pc.nikis") else {
+        return Vec::new();
+    };
+    // Был с полными хитами 10 уровня — остаётся с полными.
+    if nikis.hit_points.current >= 49 {
+        nikis.hit_points.current = nikis.hit_points.max;
+    }
+    for dice in &mut nikis.profile.hit_dice {
+        dice.current = (dice.current + 1).min(dice.total);
+    }
+    vec!["Никис: 11 уровень (Колдун 8) — хиты и кость хитов по новому листу (0.9.1)".into()]
+}
+
 impl Session {
     /// Загружает сохранение вместо текущей игры. При ошибке игра не меняется.
     /// Генератор кубов и указатель базы знаний остаются текущими, отмена хода сбрасывается.
@@ -312,6 +327,9 @@ impl Session {
         }
         if save.format_version < 6 {
             report.extend(migrate_to_v6(&mut party));
+        }
+        if save.format_version < 7 {
+            report.extend(migrate_to_v7(&mut party));
         }
 
         let mut notes = save.notes;
@@ -515,6 +533,23 @@ mod tests {
         let again = round_trip(&loaded);
         let report = session().load(again).unwrap();
         assert!(report.supplemented.is_empty(), "{:?}", report.supplemented);
+    }
+
+    #[test]
+    fn nikis_level_eleven() {
+        let s = session();
+        let n = s.character("pc.nikis").unwrap();
+        assert_eq!(n.level(), 11);
+        assert_eq!(n.proficiency_bonus(), 4);
+        let book = n.spellbook().unwrap();
+        assert_eq!(book.casters[0].save_dc, 17);
+        assert_eq!(book.casters[0].attack_bonus, 8);
+        assert_eq!(n.skill_total(crate::Skill::Deception), 10);
+        assert_eq!(n.skill_total(crate::Skill::SleightOfHand), 15);
+        assert_eq!(n.skill_total(crate::Skill::Perception), 5);
+        assert_eq!(n.resource("feat.metamagic_adept").unwrap().max(), 2);
+        let pact = book.slots.iter().find(|s| s.pact).unwrap();
+        assert_eq!((pact.level, pact.pool.max()), (4, 2));
     }
 
     #[test]

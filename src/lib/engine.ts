@@ -386,6 +386,22 @@ export interface RollRound {
   feedback: string;
 }
 
+/** Исправленные мастером команды после отказов движка (веб-версия). */
+export function masterRepair(text: string): Promise<MasterAction[]> {
+  return call<MasterAction[]>("master_repair", { text });
+}
+
+/** Просьба к мастеру исправить отклонённые команды (как в движке). */
+export function repairRequest(actions: MasterAction[]): string | null {
+  const failed = actions.filter((a) => !a.ok);
+  if (failed.length === 0) return null;
+  return (
+    "[ДВИЖОК] Эти команды не выполнены:\n" +
+    failed.map((a) => `- ${a.summary}`).join("\n") +
+    '\nПришли ТОЛЬКО исправленные команды в одном блоке ```engine, без рассказа. Формат — по кодексу: временные хиты — {"cmd":"hp","character":"…","temp":N}, id ресурсов — из «листы». Если команда не нужна — ответь пустым блоком ```engine```.'
+  );
+}
+
 /** Выполняет запросы бросков из ответа мастера (веб-версия); `null` — запросов нет. */
 export function masterRolls(text: string): Promise<RollRound | null> {
   return call<RollRound | null>("master_rolls", { text });
@@ -836,6 +852,8 @@ export interface MasterReply {
   /** Броски движка по запросам мастера за этот ход. */
   rolls: MasterRoll[];
   fabricated: string[];
+  /** Все ответы модели за ход как есть (для журнала). */
+  raw: string[];
 }
 
 /** Доступен ли ИИ-мастер (только в приложении). */

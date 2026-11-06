@@ -143,6 +143,26 @@ impl Session {
         self.undo = (after != before).then(|| Box::new(UndoPoint { before, after, actions }));
     }
 
+    /// Дописывает к последнему ходу мастера исправленные команды (повтор после отказов движка):
+    /// отмена хода откатывает и их. `before` — состояние до исправленных команд.
+    pub fn extend_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
+        let after = self.checkpoint();
+        if after.notes != before.notes || after.custom_cards != before.custom_cards {
+            self.turns_without_notes = 0;
+        }
+        match self.undo.as_mut() {
+            Some(point) if point.after == before => {
+                point.after = after;
+                point.actions.extend(actions);
+            }
+            _ => {
+                if after != before {
+                    self.undo = Some(Box::new(UndoPoint { before, after, actions }));
+                }
+            }
+        }
+    }
+
     /// Последний отменяемый ход мастера.
     pub fn master_undo_info(&self) -> Option<UndoInfo> {
         self.undo.as_ref().map(|u| UndoInfo {
@@ -538,9 +558,9 @@ mod tests {
     fn damage_uses_temporary_hp_first_and_heal_caps() {
         let mut s = session();
         let hp = s.change_hp("pc.nikis", HpChange::Damage(10)).unwrap();
-        assert_eq!((hp.current, hp.temporary), (47, 0));
+        assert_eq!((hp.current, hp.temporary), (58, 0));
         let hp = s.change_hp("pc.nikis", HpChange::Heal(100)).unwrap();
-        assert_eq!(hp.current, 49);
+        assert_eq!(hp.current, 58);
         let hp = s.change_hp("pc.nikis", HpChange::Temporary(5)).unwrap();
         assert_eq!(hp.temporary, 5);
         let hp = s.change_hp("pc.nikis", HpChange::Damage(200)).unwrap();
@@ -599,6 +619,21 @@ mod tests {
     }
 
     #[test]
+    fn repaired_commands_join_the_master_turn() {
+        let mut s = session();
+        let hp = s.character("pc.nikis").unwrap().hit_points.current;
+        let before = s.checkpoint();
+        s.change_hp("pc.nikis", HpChange::Damage(3)).unwrap();
+        s.commit_master_turn(before, vec!["урон 3".into()]);
+        let before = s.checkpoint();
+        s.change_hp("pc.nikis", HpChange::Damage(2)).unwrap();
+        s.extend_master_turn(before, vec!["урон 2".into()]);
+        assert_eq!(s.master_undo_info().unwrap().actions, vec!["урон 3", "урон 2"]);
+        s.undo_master_turn().unwrap();
+        assert_eq!(s.character("pc.nikis").unwrap().hit_points.current, hp);
+    }
+
+    #[test]
     fn mood_follows_master_and_battle_ends_on_move_or_rest() {
         let mut s = session();
         assert_eq!(s.scene().mood, Mood::Calm);
@@ -629,7 +664,7 @@ mod tests {
         assert!(s.master_undo_info().unwrap().available);
         let actions = s.undo_master_turn().unwrap();
         assert_eq!(actions.len(), 2);
-        assert_eq!(s.character("pc.nikis").unwrap().hit_points.current, 49);
+        assert_eq!(s.character("pc.nikis").unwrap().hit_points.current, 58);
         assert!(s.notes().is_empty());
         assert!(s.engine_log().last().unwrap().starts_with("Отменён ход мастера"));
 

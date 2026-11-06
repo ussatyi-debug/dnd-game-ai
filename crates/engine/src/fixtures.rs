@@ -100,13 +100,13 @@ fn nikis_spellcasting() -> Spellcasting {
         "Колдун",
         SpellClass::Warlock,
         Ability::Charisma,
-        7,
+        8,
         Progression::Pact,
         Preparation::Known,
     )
     .cantrips(3, &["eldritch-blast", "minor-illusion", "mage-hand"])
     .known(
-        Some(8),
+        Some(9),
         &[
             "scorching-ray",
             "hellish-rebuke",
@@ -116,6 +116,7 @@ fn nikis_spellcasting() -> Spellcasting {
             "suggestion",
             "counterspell",
             "blight",
+            "fireball",
         ],
     )
     .expanded(
@@ -133,7 +134,8 @@ fn nikis_spellcasting() -> Spellcasting {
             "hallow",
         ],
     )
-    .item_bonus(2, "Жезл Хранителя Договора +2");
+    .item_bonus(2, "Жезл Хранителя Договора +2")
+    .dc_item_bonus(1, "+1 к КС по листу игрока");
 
     Spellcasting {
         casters: vec![warlock],
@@ -236,7 +238,7 @@ fn valeria_spellcasting() -> Spellcasting {
             Progression::Full,
             Preparation::Prepared,
         )
-        .cantrips(5, &["spare-the-dying", "toll-the-dead", "sacred-flame", "guidance", "light"])
+        .cantrips(5, &["spare-the-dying", "toll-the-dead", "sacred-flame", "guidance", "thaumaturgy"])
         .prepared(VALERIA_PREPARED)
         .attack_item_bonus(1, "Палочка военного мага +1")
         .always(
@@ -272,11 +274,11 @@ pub fn demo_nikis() -> Character {
         race: "Человек".into(),
         classes: vec![
             class("Плут", Some("Фантом"), 3),
-            class("Колдун", Some("Исчадие (Ксартас), Договор Цепи"), 7),
+            class("Колдун", Some("Исчадие (Ксартас), Договор Цепи"), 8),
         ],
         // Интеллект: базовое 12, Обруч Интеллекта устанавливает 19.
         abilities: abilities([12, 14, 11, 19, 12, 15]),
-        hit_points: hp(49, 8),
+        hit_points: hp(58, 10),
         armor_class: 18,
         speed_ft: 30,
         location: SCENE_LOCATION.into(),
@@ -285,6 +287,7 @@ pub fn demo_nikis() -> Character {
                 ResourcePool::lucky(),
                 pool("warlock.dark_ones_luck", "Удача Тёмного", 2, Recovery::LongRest),
                 pool("rogue.wails_from_the_grave", "Вопли из могилы", 4, Recovery::LongRest),
+                pool("feat.metamagic_adept", "Единицы чародейства", 2, Recovery::LongRest),
                 pool("item.pact_rod.slot", "Жезл: восстановление ячейки", 1, Recovery::LongRest),
                 pool("item.ocular.hadar", "Окуляр: Голод Хадара", 1, Recovery::Daily),
                 pool(

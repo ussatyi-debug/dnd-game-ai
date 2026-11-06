@@ -77,6 +77,8 @@ pub struct MasterReply {
     pub rolls: Vec<dnd_master::MasterRoll>,
     /// Броски d20 в тексте, которых движок не делал.
     pub fabricated: Vec<String>,
+    /// Все ответы модели за ход как есть (для журнала разбора ошибок).
+    pub raw: Vec<String>,
 }
 
 /// Настройки ИИ. Хранятся в папке настроек приложения на ПК.
@@ -248,6 +250,7 @@ pub async fn chat(
         actions: Vec::new(),
         rolls: Vec::new(),
         fabricated: Vec::new(),
+        raw: Vec::new(),
     })
 }
 

@@ -432,9 +432,11 @@ async fn ai_chat(
         .unwrap_or_default();
     let mut history = history;
     let mut rolls = Vec::new();
+    let mut raw = Vec::new();
     let mut round = 0;
     let mut reply = loop {
         let reply = ai::chat(&ai.client, &settings, &system, &history).await?;
+        raw.push(reply.text.clone());
         // Запросы бросков: движок бросает, мастер получает результаты и продолжает ход.
         if round < dnd_master::MAX_ROLL_ROUNDS {
             let rolled = dnd_master::run_rolls(&mut *lock(&session)?, &reply.text);
@@ -448,12 +450,26 @@ async fn ai_chat(
         }
         break reply;
     };
-    let turn = dnd_master::apply_directives(&mut *lock(&session)?, &reply.text);
+    let mut turn = dnd_master::apply_directives(&mut *lock(&session)?, &reply.text);
+    // Отказы движка: один повтор — мастер присылает исправленные команды, они входят в тот же ход.
+    if let Some(request) = dnd_master::repair_request(&turn.actions) {
+        history.push(ai::ChatMessage { role: ai::Role::Master, text: reply.text.clone() });
+        history.push(ai::ChatMessage { role: ai::Role::Player, text: request });
+        if let Ok(fix) = ai::chat(&ai.client, &settings, &system, &history).await {
+            raw.push(fix.text.clone());
+            let fixed = dnd_master::apply_repair(&mut *lock(&session)?, &fix.text);
+            turn.actions.extend(fixed.into_iter().map(|mut a| {
+                a.summary = format!("исправлено: {}", a.summary);
+                a
+            }));
+        }
+    }
     reply.fabricated =
         dnd_master::fabricated_rolls(&turn.text, &dnd_master::rolled_faces(&rolls), &player_text);
     reply.text = turn.text;
     reply.actions = turn.actions;
     reply.rolls = rolls;
+    reply.raw = raw;
     Ok(reply)
 }
 
