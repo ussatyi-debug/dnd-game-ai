@@ -459,7 +459,7 @@ mod tests {
         let mut s = session();
         let book = call(&mut s, json!({ "cmd": "spellbook", "id": "pc.nikis" }));
         assert_eq!(book["ok"]["slots"][0]["pact"], true);
-        assert_eq!(book["ok"]["casters"][0]["save_dc"], 16);
+        assert_eq!(book["ok"]["casters"][0]["save_dc"], 17);
 
         let cast = call(
             &mut s,
