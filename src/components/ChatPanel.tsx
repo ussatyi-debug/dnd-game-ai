@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { stripEngineBlocks, type SheetProposal, type UndoInfo } from "../lib/engine";
-import { stripSpeakerTag } from "../lib/tts";
+import { isTaggedSpeech, stripSpeakerTag } from "../lib/tts";
 import CopyButton from "./CopyButton";
 
 export interface ChatMessage {
@@ -48,7 +48,14 @@ interface ChatPanelProps {
 export function masterDisplayText(text: string): string {
   return stripEngineBlocks(text)
     .split("\n")
-    .map((line) => (line.trim().startsWith(">") ? line.replace(/^(\s*>\s?)(.*)$/, (_, q: string, rest: string) => q + stripSpeakerTag(rest)) : line))
+    .map((line) => {
+      if (line.trim().startsWith(">")) {
+        return line.replace(/^(\s*>\s?)(.*)$/, (_, q: string, rest: string) => q + stripSpeakerTag(rest));
+      }
+      // Реплика с пометкой без «>» — показываем как прямую речь, пометку скрываем.
+      if (isTaggedSpeech(line)) return `> ${stripSpeakerTag(line.trim())}`;
+      return stripSpeakerTag(line);
+    })
     .join("\n");
 }
 

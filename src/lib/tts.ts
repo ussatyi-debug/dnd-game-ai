@@ -93,10 +93,17 @@ export function saveTtsSettings(settings: TtsSettings) {
 
 /** Пометка говорящего в начале реплики: «[Валерия, ж]». */
 const SPEAKER_TAG = /^(\s*[—–-]?\s*)\[([^\]\n]{1,40}?),\s*(ж|м|f|m)\]\s*/i;
+/** Пометка внутри строки (модель поставила её не в начале реплики) — тоже скрывается. */
+const INLINE_TAG = /\s*\[[^\]\n]{1,40}?,\s*(?:ж|м|f|m)\]/gi;
+
+/** Строка — реплика с пометкой говорящего, даже если модель не начала её с «>». */
+export function isTaggedSpeech(line: string): boolean {
+  return SPEAKER_TAG.test(line.trim());
+}
 
 /** Строка реплики без пометки говорящего (для показа в чате). */
 export function stripSpeakerTag(line: string): string {
-  return line.replace(SPEAKER_TAG, "$1");
+  return line.replace(SPEAKER_TAG, "$1").replace(INLINE_TAG, "");
 }
 
 export interface Segment {
@@ -166,8 +173,8 @@ export function segments(masterText: string, settings: TtsSettings): Segment[] {
       flush();
       continue;
     }
-    if (!line.startsWith(">")) {
-      narration.push(line);
+    if (!line.startsWith(">") && !isTaggedSpeech(line)) {
+      narration.push(stripSpeakerTag(line));
       continue;
     }
     flush();
