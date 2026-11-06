@@ -63,7 +63,93 @@ pub(crate) fn split(text: &str) -> (String, Vec<String>) {
             }
         }
     }
+    // Локальные модели иногда пишут команды без блока ```engine: в ```json или просто JSON.
+    let (prose, bare) = bare_commands(&prose);
+    blocks.extend(bare);
     (prose.trim().to_string(), blocks)
+}
+
+/// Конец JSON-значения, начатого `{` или `[` в позиции `start` (с учётом строк).
+fn json_end(text: &str, start: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (i, c) in text[start..].char_indices() {
+        if in_string {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                '"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' => in_string = true,
+            '{' | '[' => depth += 1,
+            '}' | ']' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(start + i + c.len_utf8());
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Есть ли в JSON команда движка (объект с полем `cmd` или массив таких объектов).
+fn is_command(value: &Value) -> bool {
+    match value {
+        Value::Object(map) => map.get("cmd").is_some_and(Value::is_string),
+        Value::Array(items) => !items.is_empty() && items.iter().all(is_command),
+        _ => false,
+    }
+}
+
+/// Вырезает из текста команды, записанные без блока ```engine: блоки ```json и голый JSON
+/// с полем `cmd`, начинающийся с новой строки.
+fn bare_commands(text: &str) -> (String, Vec<String>) {
+    let mut prose = String::new();
+    let mut blocks = Vec::new();
+    let mut pos = 0;
+    while pos < text.len() {
+        let line_end = text[pos..].find('\n').map_or(text.len(), |i| pos + i + 1);
+        let line = &text[pos..line_end];
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        // Блок ```json … ``` или ``` … ``` с командами.
+        if let Some(tag) = trimmed.strip_prefix(FENCE) {
+            let tag = tag.trim();
+            if tag.is_empty() || tag.eq_ignore_ascii_case("json") {
+                if let Some(close) = text[line_end..].find(FENCE) {
+                    let inner = &text[line_end..line_end + close];
+                    if commands(inner).iter().any(|c| c.as_ref().is_ok_and(is_command)) {
+                        blocks.push(inner.to_string());
+                        let after = line_end + close + FENCE.len();
+                        pos = text[after..].find('\n').map_or(text.len(), |i| after + i + 1);
+                        continue;
+                    }
+                }
+            }
+        }
+        // Голый JSON с новой строки.
+        if trimmed.starts_with('{') || trimmed.starts_with('[') {
+            let start = pos + indent;
+            if let Some(end) = json_end(text, start) {
+                let candidate = &text[start..end];
+                if serde_json::from_str::<Value>(candidate).is_ok_and(|v| is_command(&v)) {
+                    blocks.push(candidate.to_string());
+                    pos = text[end..].find('\n').map_or(text.len(), |i| end + i + 1);
+                    continue;
+                }
+            }
+        }
+        prose.push_str(line);
+        pos = line_end;
+    }
+    (prose, blocks)
 }
 
 /// Начало блока ```` ```engine ````.
@@ -113,7 +199,7 @@ fn text_field<'a>(cmd: &'a Value, key: &str) -> Result<&'a str, String> {
 }
 
 /// Персонаж по ID, по ID без префикса («valeria») или по части имени.
-fn find_character(session: &Session, key: &str) -> Result<String, String> {
+pub(crate) fn find_character(session: &Session, key: &str) -> Result<String, String> {
     let key_lower = key.to_lowercase();
     let party = session.party();
     let matches = |c: &&Character| {
@@ -536,6 +622,19 @@ mod tests {
         assert_eq!(gunther.resource("slots.1").unwrap().current(), 3);
         let nikis = s.character("pc.nikis").unwrap();
         assert_eq!(nikis.resource("pact.slots").unwrap().current(), 1);
+    }
+
+    #[test]
+    fn commands_without_engine_fence_are_found() {
+        let text = "Инициатива!\n{\n  \"cmd\": \"roll\",\n  \"who\": \"npc.valeria\",\n  \"dice\": \"1d20+1\"\n}\nКонец {не JSON}.\n```json\n{\"cmd\":\"scene\",\"mood\":\"battle\"}\n```\nХвост.";
+        let (prose, blocks) = split(text);
+        assert_eq!(blocks.len(), 2, "{blocks:?}");
+        assert_eq!(prose, "Инициатива!\nКонец {не JSON}.\nХвост.");
+        assert!(crate::has_roll_requests(text));
+        // Обычный JSON без команд и код в других блоках остаются в тексте.
+        let (prose, blocks) = split("Пример: {\"a\":1}\n```rust\nlet x = 1;\n```");
+        assert!(blocks.is_empty());
+        assert!(prose.contains("```rust"));
     }
 
     #[test]

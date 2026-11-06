@@ -5,7 +5,7 @@
 //! возвращает мастеру результаты отдельным сообщением, и мастер дописывает ход уже с ними.
 //! В итоговом ответе движок ищет броски d20, которых не делал, и помечает их.
 
-use crate::directives::{commands, split};
+use crate::directives::{commands, find_character, split};
 use dnd_engine::Session;
 use serde::Serialize;
 use serde_json::Value;
@@ -70,11 +70,95 @@ fn target(cmd: &Value) -> Result<Option<(&'static str, i64)>, String> {
     }
 }
 
+/// Модификатор проверки персонажа отряда по его листу: `initiative`, навык (`perception`,
+/// «Внимательность»), спасбросок (`save:dex`) или атака (`attack:Кадило`).
+/// Возвращает имя персонажа, модификатор и подпись броска.
+fn check_modifier(
+    session: &Session,
+    who: &str,
+    check: &str,
+) -> Result<(String, i32, String), String> {
+    let id = find_character(session, who)?;
+    let c = session.character(&id).map_err(|e| e.to_string())?;
+    let d = c.details();
+    let check_l = check.trim().to_lowercase();
+    if matches!(check_l.as_str(), "initiative" | "инициатива") {
+        return Ok((
+            c.name.clone(),
+            d.initiative_breakdown.iter().map(|b| b.value).sum(),
+            "инициатива".into(),
+        ));
+    }
+    if let Some(ability) = check_l.strip_prefix("save:") {
+        let ability = ability.trim();
+        let short = |a: dnd_engine::Ability| match a {
+            dnd_engine::Ability::Strength => "str",
+            dnd_engine::Ability::Dexterity => "dex",
+            dnd_engine::Ability::Constitution => "con",
+            dnd_engine::Ability::Intelligence => "int",
+            dnd_engine::Ability::Wisdom => "wis",
+            dnd_engine::Ability::Charisma => "cha",
+        };
+        let line = d
+            .saves
+            .iter()
+            .find(|s| {
+                let full = serde_json::to_value(s.ability).ok();
+                short(s.ability) == ability
+                    || full.as_ref().and_then(Value::as_str) == Some(ability)
+                    || s.label.to_lowercase() == ability
+            })
+            .ok_or_else(|| {
+                format!("неизвестный спасбросок «{ability}»: str, dex, con, int, wis, cha")
+            })?;
+        return Ok((c.name.clone(), line.total, format!("спасбросок {}", line.label)));
+    }
+    if let Some(name) = check_l.strip_prefix("attack:") {
+        let name = name.trim();
+        let attack = d
+            .attacks
+            .iter()
+            .find(|a| a.name.to_lowercase().contains(name))
+            .ok_or_else(|| format!("у {} нет атаки «{name}»", c.name))?;
+        if attack.save_dc.is_some() {
+            return Err(format!("«{}» — спасбросок цели, а не бросок атаки", attack.name));
+        }
+        return Ok((c.name.clone(), attack.to_hit, format!("атака: {}", attack.name)));
+    }
+    let skill = d
+        .skills
+        .iter()
+        .find(|s| {
+            serde_json::to_value(s.skill).ok().as_ref().and_then(Value::as_str)
+                == Some(check_l.as_str())
+                || s.name.to_lowercase() == check_l
+        })
+        .ok_or_else(|| {
+            format!("неизвестная проверка «{check}»: initiative, навык, save:dex, attack:название")
+        })?;
+    Ok((c.name.clone(), skill.total, skill.name.to_lowercase()))
+}
+
 /// Бросок одной команды `roll`.
 fn roll_one(session: &mut Session, cmd: &Value) -> Result<MasterRoll, String> {
-    let who = text(cmd, "who").unwrap_or_else(|| "Мастер".into());
-    let what = text(cmd, "what").unwrap_or_default();
-    let expression = text(cmd, "dice").ok_or("нет поля «dice» (например 1d20+5)")?;
+    let mut who = text(cmd, "who").unwrap_or_else(|| "Мастер".into());
+    let mut what = text(cmd, "what").unwrap_or_default();
+    // Проверка персонажа отряда: модификатор берётся из его листа, а не из головы мастера.
+    let expression = match text(cmd, "check") {
+        Some(check) => {
+            let character = text(cmd, "character").unwrap_or_else(|| who.clone());
+            let (name, modifier, label) = check_modifier(session, &character, &check)?;
+            who = name;
+            if what.is_empty() {
+                what = label;
+            }
+            match modifier {
+                0 => "1d20".to_string(),
+                m => format!("1d20{m:+}"),
+            }
+        }
+        None => text(cmd, "dice").ok_or("нет поля «dice» (например 1d20+5) или «check»")?,
+    };
     let hidden = cmd.get("hidden").and_then(Value::as_bool).unwrap_or(false);
     let adv = cmd.get("adv").and_then(Value::as_bool).unwrap_or(false);
     let dis = cmd.get("dis").and_then(Value::as_bool).unwrap_or(false);
@@ -263,6 +347,23 @@ mod tests {
         let nikis = s.character("pc.nikis").unwrap();
         assert_eq!(nikis.hit_points.current, nikis.hit_points.max);
         assert!(run_rolls(&mut s, "Просто рассказ.").is_none());
+    }
+
+    #[test]
+    fn party_checks_take_modifiers_from_sheets() {
+        let mut s = session();
+        let reply = "```engine\n{\"cmd\":\"roll\",\"character\":\"npc.valeria\",\"check\":\"initiative\"}\n{\"cmd\":\"roll\",\"who\":\"Валерия\",\"check\":\"perception\"}\n{\"cmd\":\"roll\",\"character\":\"brokk\",\"check\":\"save:str\",\"vs\":\"dc:15\"}\n{\"cmd\":\"roll\",\"character\":\"brokk\",\"check\":\"attack:молот\",\"vs\":\"ac:16\"}\n```";
+        let round = run_rolls(&mut s, reply).unwrap();
+        assert_eq!(round.rolls.len(), 4, "{}", round.feedback);
+        assert_eq!(round.rolls[0].expression, "1d20+1");
+        assert_eq!(round.rolls[0].who, "Сестра Валерия «Пепельная Дева»");
+        assert_eq!(round.rolls[0].what, "инициатива");
+        assert_eq!(round.rolls[1].expression, "1d20+8");
+        assert_eq!(round.rolls[2].expression, "1d20+9");
+        assert_eq!(round.rolls[3].expression, "1d20+10");
+        let bad = run_rolls(&mut s, "```engine\n{\"cmd\":\"roll\",\"character\":\"npc.valeria\",\"check\":\"attack:Погребальный\"}\n```").unwrap();
+        assert!(bad.rolls.is_empty());
+        assert!(bad.feedback.contains("спасбросок цели"));
     }
 
     #[test]
