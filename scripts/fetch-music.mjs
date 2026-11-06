@@ -16,7 +16,8 @@ const OGA = "https://opengameart.org/sites/default/files";
  * путешествие днём и ночью; battle — бой.
  */
 const TRACKS = [
-  { id: "osare", mood: "menu", title: "Osare (Unrest Theme)", author: "HaelDB", page: "https://opengameart.org/content/osare-unrest-theme", file: "42b4b.ogg" },
+  // Начало трека (3 с тишины и шума) пропускается, громкость чуть выше остальных.
+  { id: "osare", mood: "menu", title: "Osare (Unrest Theme)", author: "HaelDB", page: "https://opengameart.org/content/osare-unrest-theme", file: "42b4b.ogg", start: 3, gain: 1.3 },
   { id: "battlegrounds", mood: "battle", title: "Fantasy — Battlegrounds", author: "Doge", page: "https://opengameart.org/content/fantasy-battlegrounds", file: "battleground_remastered_0.mp3" },
   { id: "sirens", mood: "travel_day", title: "Sirens in Darkness", author: "cynicmusic", page: "https://opengameart.org/content/sirens-in-darkness", file: "012_Sirens_in_Darkness_0.mp3" },
   { id: "ghost-piano", mood: "travel_night", title: "Dark environment — Horror games", author: "KiluaBoy", page: "https://opengameart.org/node/83236", file: "GoshtPiano2.ogg" },
@@ -54,7 +55,7 @@ for (const t of TRACKS) {
   const path = join(OUT, name);
   await download(`${OGA}/${t.file}`, path);
   total += statSync(path).size;
-  tracks.push({ id: t.id, mood: t.mood, title: t.title, author: t.author, page: t.page, license: "CC0", file: name });
+  tracks.push({ id: t.id, mood: t.mood, title: t.title, author: t.author, page: t.page, license: "CC0", file: name, start: t.start ?? 0, gain: t.gain ?? 1 });
   console.log(`${name}: ${(statSync(path).size / 1048576).toFixed(1)} МБ`);
 }
 writeFileSync(join(OUT, "manifest.json"), JSON.stringify({ tracks }, null, 2));

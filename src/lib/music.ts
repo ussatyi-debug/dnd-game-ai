@@ -14,6 +14,10 @@ export interface MusicTrack {
   page: string;
   license: string;
   file: string;
+  /** С какой секунды играть трек (пропуск вступления). */
+  start?: number;
+  /** Множитель громкости трека относительно остальных. */
+  gain?: number;
 }
 
 export interface MusicSettings {
@@ -140,7 +144,8 @@ class MusicPlayer {
   }
 
   private target(): number {
-    return this.settings.volume * (this.ducked ? DUCK : 1);
+    const gain = this.current?.track.gain ?? 1;
+    return Math.min(1, this.settings.volume * gain * (this.ducked ? DUCK : 1));
   }
 
   private async apply() {
@@ -163,13 +168,20 @@ class MusicPlayer {
     this.stopCurrent();
     const el = new Audio(`${BASE}${track.file}`);
     el.volume = 0;
+    const start = track.start ?? 0;
+    if (start > 0) {
+      // Перемотка надёжна только после загрузки длительности.
+      el.addEventListener("loadedmetadata", () => {
+        if (el.currentTime < start) el.currentTime = start;
+      }, { once: true });
+    }
     el.preload = "auto";
     const pool = async () => (await this.list()).filter((t) => t.mood === track.mood);
     el.addEventListener("ended", () => {
       void pool().then((p) => {
         if (this.current?.el !== el) return;
         if (p.length <= 1) {
-          el.currentTime = 0;
+          el.currentTime = track.start ?? 0;
           void el.play().catch(() => undefined);
         } else {
           this.start(this.pick(p));
