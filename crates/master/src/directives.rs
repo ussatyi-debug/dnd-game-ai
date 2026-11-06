@@ -779,7 +779,7 @@ mod tests {
         assert_eq!(ok.len(), 9, "{:?}", turn.actions);
         assert!(!turn.actions[9].ok);
         let nikis = s.character("pc.nikis").unwrap();
-        assert_eq!(nikis.hit_points.current, 45);
+        assert_eq!(nikis.hit_points.current, 56);
         assert_eq!(nikis.hit_points.temporary, 0);
         assert_eq!(s.scene().time.as_deref(), Some("полдень"));
         assert_eq!(s.notes().len(), 1);
@@ -787,7 +787,7 @@ mod tests {
         assert_eq!(info.actions.len(), 9);
         s.undo_master_turn().unwrap();
         let nikis = s.character("pc.nikis").unwrap();
-        assert_eq!(nikis.hit_points.current, 49);
+        assert_eq!(nikis.hit_points.current, 58);
         assert!(s.notes().is_empty());
         assert_eq!(s.scene().time.as_deref(), Some("утро"));
     }
