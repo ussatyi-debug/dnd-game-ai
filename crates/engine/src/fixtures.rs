@@ -238,7 +238,10 @@ fn valeria_spellcasting() -> Spellcasting {
             Progression::Full,
             Preparation::Prepared,
         )
-        .cantrips(5, &["spare-the-dying", "toll-the-dead", "sacred-flame", "guidance", "thaumaturgy"])
+        .cantrips(
+            5,
+            &["spare-the-dying", "toll-the-dead", "sacred-flame", "guidance", "thaumaturgy"],
+        )
         .prepared(VALERIA_PREPARED)
         .attack_item_bonus(1, "Палочка военного мага +1")
         .always(
