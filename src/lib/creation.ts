@@ -288,7 +288,22 @@ export interface ChoiceOption {
   id: string;
   name: string;
   text?: string;
+  /** Уже есть из другого источника — выбрать нельзя. */
+  disabled?: boolean;
+  /** Подпись: «есть · Мудрец». */
+  note?: string;
 }
+
+/** Язык своего вида (отмечается по умолчанию на шаге «Личность»). */
+export const SPECIES_LANGUAGE: Record<string, string> = {
+  dwarf: "Дварфийский",
+  elf: "Эльфийский",
+  gnome: "Гномий",
+  halfling: "Язык полуросликов",
+  orc: "Орочий",
+  dragonborn: "Драконий",
+  goliath: "Великаний",
+};
 
 /** Выбор, который нужно сделать на шаге. */
 export interface ChoiceSlot {
@@ -399,6 +414,9 @@ export function choiceSlots(d: Draft): ChoiceSlot[] {
     options: STANDARD_LANGUAGES.map((n) => ({ id: n, name: n })),
     step: "details",
   });
+  // Навык, уже полученный раньше (предыстория, вид, предыдущий выбор), повторно не выбирается:
+  // по правилам 2024 года двойное владение не даёт экспертизы.
+  markKnownSkills(d, out);
   // Экспертиза — только в навыках, которыми герой уже владеет.
   const proficient = new Set(skillProficiencies(d, false).map((s) => s.skill));
   for (const slot of out) {
@@ -407,6 +425,27 @@ export function choiceSlots(d: Draft): ChoiceSlot[] {
     }
   }
   return out;
+}
+
+function markKnownSkills(d: Draft, slots: ChoiceSlot[]): void {
+  const bg = d.backgroundId ? BACKGROUND_BY_ID.get(d.backgroundId) : undefined;
+  const known = new Map<string, string>();
+  if (bg) for (const s of bg.skills) known.set(s, bg.name);
+  const isSkill = (c: ChoiceSlot) =>
+    c.options.length > 0 && c.options.every((o) => SKILL_NAME[o.id as SkillId] !== undefined) && !c.key.includes("expertise") && c.key !== "wizard.scholar";
+  for (const slot of slots) {
+    if (!isSkill(slot)) continue;
+    slot.options = slot.options.map((o) => {
+      const from = known.get(o.id);
+      return from ? { ...o, disabled: true, note: `есть · ${from}` } : o;
+    });
+    for (const id of pick(d, slot.key)) if (!known.has(id)) known.set(id, slot.source);
+  }
+}
+
+/** Выбранные варианты, которые ещё доступны (не стали «уже есть» после смены других шагов). */
+export function validPicks(d: Draft, slot: ChoiceSlot): string[] {
+  return pick(d, slot.key).filter((id) => !slot.options.find((o) => o.id === id)?.disabled);
 }
 
 // ───────────────────────────── заклинания ─────────────────────────────
@@ -720,7 +759,8 @@ export function speed(d: Draft): number {
 
 // ───────────────────────────── проверка шагов ─────────────────────────────
 
-function countIssue(label: string, have: number, need: number): string | null {
+function countIssue(label: string, haveList: number | string[], need: number): string | null {
+  const have = typeof haveList === "number" ? haveList : haveList.length;
   if (need <= 0) return null;
   if (have < need) return `${label}: выбрано ${have} из ${need}`;
   if (have > need) return `${label}: выбрано ${have}, нужно ${need}`;
@@ -734,7 +774,8 @@ export function stepIssues(d: Draft, step: StepId): string[] {
   const slotIssues = (s: StepId) => {
     for (const c of choiceSlots(d).filter((x) => x.step === s)) {
       const need = Math.min(c.count, c.options.length);
-      issues.push(countIssue(`${c.label} (${c.source})`, pick(d, c.key).length, need));
+      const free = c.options.filter((o) => !o.disabled).length;
+      issues.push(countIssue(`${c.label} (${c.source})`, validPicks(d, c), Math.min(need, free)));
     }
   };
   switch (step) {

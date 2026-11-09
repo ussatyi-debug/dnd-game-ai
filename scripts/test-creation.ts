@@ -58,8 +58,9 @@ function autofill(d: Draft, seed: number): void {
     }
     for (const c of choiceSlots(d)) {
       const taken = new Set(Object.entries(d.picks).filter(([k]) => k !== c.key).flatMap(([, v]) => v));
-      const fresh = c.options.filter((o) => !taken.has(o.id));
-      const pool = fresh.length >= c.count ? fresh : c.options;
+      const open = c.options.filter((o) => !o.disabled);
+      const fresh = open.filter((o) => !taken.has(o.id));
+      const pool = fresh.length >= c.count ? fresh : open;
       d.picks[c.key] = pool.slice(0, c.count).map((o) => o.id);
     }
     for (const c of spellChoices(d)) {

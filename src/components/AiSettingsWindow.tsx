@@ -54,7 +54,7 @@ const PROVIDER_INFO: Record<Provider, { short: string; keyPlaceholder: string; k
     short: "Локальная",
     keyPlaceholder: "http://localhost:11434 или http://192.168.1.25:11434",
     keyNote:
-      "Ollama на этом ПК или на другом компьютере в домашней сети. Бесплатно и без интернета; для доступа по сети на компьютере с Ollama нужны OLLAMA_HOST=0.0.0.0 и разрешение в брандмауэре.",
+      "Ollama слушает порт 11434. На этом ПК — http://localhost:11434. С телефона или другого устройства — http://IP_ПК:11434 (IP — строка «IPv4-адрес» в ipconfig на ПК). На ПК с Ollama нужны переменная OLLAMA_HOST=0.0.0.0 (и перезапуск Ollama) и разрешение порта 11434 в брандмауэре. Проверка с телефона: открыть адрес в браузере — должно быть «Ollama is running».",
     filter: "Фильтр: qwen, gemma…",
   },
 };

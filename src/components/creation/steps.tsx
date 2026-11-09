@@ -6,6 +6,7 @@ import { CLASSES } from "../../data/rules/classes/index.ts";
 import {
   ABILITIES,
   ABILITY_NAME,
+  ALIGNMENT_TEXT,
   ALIGNMENTS,
   ARTISAN_TOOLS,
   GAMING_SETS,
@@ -17,6 +18,7 @@ import {
   STANDARD_ARRAY,
 } from "../../data/rules/common.ts";
 import { FEAT_BY_ID } from "../../data/rules/feats.ts";
+import { randomTags } from "../../data/rules/appearance.ts";
 import { portraitUrl } from "../../data/rules/portraits.ts";
 import { SPECIES } from "../../data/rules/species.ts";
 import type { AbilityId } from "../../data/rules/types";
@@ -35,6 +37,7 @@ import {
   portraitKey,
   resolve,
   roll4d6,
+  SPECIES_LANGUAGE,
   signed,
   slotFeat,
   spellChoices,
@@ -84,7 +87,10 @@ export function StepSpecies({ draft, update }: StepProps) {
   const r = resolve(draft);
   return (
     <div className="space-y-4">
-      <Section title="Вид" hint="правила 2024 года: прибавки к характеристикам даёт предыстория">
+      <Section
+        title="Вид"
+        hint="правила 2024 года: прибавки к характеристикам даёт предыстория, языки — Общий и два на выбор (шаг 7)"
+      >
         <div className="grid gap-2 sm:grid-cols-2">
           {SPECIES.map((s) => (
             <PickCard
@@ -96,6 +102,11 @@ export function StepSpecies({ draft, update }: StepProps) {
               onClick={() =>
                 update((d) => {
                   if (d.speciesId !== s.id) {
+                    // Язык прежнего вида снимается, язык нового — отмечается (его можно снять).
+                    const prevLang = d.speciesId ? SPECIES_LANGUAGE[d.speciesId] : undefined;
+                    const langs = pick(d, "lang.choice").filter((l) => l !== prevLang);
+                    const lang = SPECIES_LANGUAGE[s.id];
+                    d.picks["lang.choice"] = lang && !langs.includes(lang) && langs.length < 2 ? [lang, ...langs] : langs;
                     d.speciesId = s.id;
                     delete d.picks["species.lineage"];
                     delete d.picks["species.feat"];
@@ -715,6 +726,76 @@ export function StepAbilities({ draft, update }: StepProps) {
 
 // ───────────────────────────── 7. Личность ─────────────────────────────
 
+/** 13 случайных тегов внешности; нажатие добавляет тег в описание или убирает его. */
+function AppearanceTags({ draft, update }: StepProps) {
+  const [tags, setTags] = useState<string[]>(() => randomTags(draft.speciesId));
+  const parts = draft.appearance
+    .split(/,\s*/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  function toggle(tag: string) {
+    update((d) => {
+      const list = d.appearance
+        .split(/,\s*/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const next = list.includes(tag) ? list.filter((t) => t !== tag) : [...list, tag];
+      d.appearance = next.join(", ").slice(0, 800);
+    });
+  }
+  return (
+    <span className="mt-1 mb-1.5 flex flex-wrap items-center gap-1.5">
+      {tags.map((t) => {
+        const on = parts.includes(t);
+        return (
+          <button
+            key={t}
+            type="button"
+            onClick={() => toggle(t)}
+            className={`rounded-full border px-2.5 py-0.5 text-xs ${on ? "border-gold bg-gold/15 text-gold" : "border-edge text-parchment/85 hover:border-gold/60"}`}
+          >
+            {t}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        onClick={() => setTags(randomTags(draft.speciesId))}
+        className="rounded-full border border-gold/60 px-2.5 py-0.5 text-xs text-gold"
+        aria-label="Другие теги"
+        title="Другие теги"
+      >
+        🎲 ещё
+      </button>
+    </span>
+  );
+}
+
+/** Снаряжение по источникам: класс, предыстория. */
+function EquipmentBreakdown({ draft }: { draft: Draft }) {
+  const r = resolve(draft);
+  const bg = BACKGROUNDS.find((b) => b.id === draft.backgroundId);
+  const rows: { label: string; items: string[]; gold: number }[] = [];
+  if (r.cls) {
+    const gold = pick(draft, "equip.class")[0] === "gold";
+    rows.push({ label: `Класс (${r.cls.name})`, items: gold ? [] : r.cls.equipment.items, gold: gold ? r.cls.equipment.altGold : r.cls.equipment.gold });
+  }
+  if (bg) {
+    const gold = pick(draft, "equip.bg")[0] === "gold";
+    rows.push({ label: `Предыстория (${bg.name})`, items: gold ? [] : bg.equipment.items, gold: gold ? bg.equipment.altGold : bg.equipment.gold });
+  }
+  return (
+    <ul className="space-y-1 text-sm">
+      {rows.map((row) => (
+        <li key={row.label}>
+          <span className="text-muted">{row.label}:</span> {row.items.join(", ") || "только золото"}{" "}
+          <span className="text-gold">+ {row.gold} зм</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function StepDetails({ draft, update }: StepProps) {
   const r = resolve(draft);
   const die = r.cls?.hitDie ?? 8;
@@ -742,19 +823,27 @@ export function StepDetails({ draft, update }: StepProps) {
             ]}
             onChange={(v) => update((d) => void (d.gender = v))}
           />
-          <label className="block text-sm">
-            Мировоззрение
-            <select
-              value={draft.alignment}
-              onChange={(e) => update((d) => void (d.alignment = e.target.value))}
-              className="mt-1 w-full rounded-md border border-edge bg-ink px-3 py-2"
-            >
-              <option value="">—</option>
-              {ALIGNMENTS.map((a) => (
-                <option key={a}>{a}</option>
-              ))}
-            </select>
-          </label>
+          <fieldset className="text-sm">
+            <legend>Мировоззрение</legend>
+            <div className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-3">
+              {ALIGNMENTS.map((a) => {
+                const on = draft.alignment === a;
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => update((d) => void (d.alignment = a))}
+                    title={ALIGNMENT_TEXT[a]}
+                    aria-pressed={on}
+                    className={`rounded-md border px-2 py-1.5 text-left ${on ? "border-gold bg-gold/10" : "border-edge hover:border-gold/60"}`}
+                  >
+                    <span className={`block text-xs font-medium ${on ? "text-gold" : ""}`}>{a}</span>
+                    <span className="block text-[11px] leading-snug text-muted">{ALIGNMENT_TEXT[a]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
         </div>
         <div className="mx-auto w-36 overflow-hidden rounded-lg border border-edge bg-ink">
           {portrait ? (
@@ -764,9 +853,11 @@ export function StepDetails({ draft, update }: StepProps) {
           )}
         </div>
       </div>
-      <label className="block text-sm">
-        Внешность и характер
+      <div className="block text-sm">
+        <span>Внешность и характер</span>
+        <AppearanceTags draft={draft} update={update} />
         <textarea
+          aria-label="Внешность и характер"
           value={draft.appearance}
           rows={3}
           maxLength={800}
@@ -774,7 +865,7 @@ export function StepDetails({ draft, update }: StepProps) {
           className="mt-1 w-full rounded-md border border-edge bg-ink px-3 py-2 text-sm"
           placeholder="Рост, глаза, шрамы, манера говорить, что движет героем"
         />
-      </label>
+      </div>
       <RuleChoices draft={draft} update={update} step="details" />
 
       {draft.level > 1 && (
@@ -824,8 +915,8 @@ export function StepDetails({ draft, update }: StepProps) {
       )}
 
       <Section title="Снаряжение и золото">
-        <p className="text-sm text-parchment/85">{eq.items.join(", ") || "—"}</p>
-        <p className="text-sm text-gold">{eq.gold} зм</p>
+        <EquipmentBreakdown draft={draft} />
+        <p className="text-sm text-gold">Итого: {eq.gold} зм</p>
       </Section>
     </div>
   );

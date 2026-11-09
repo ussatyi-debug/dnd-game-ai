@@ -32,3 +32,12 @@ body {
   padding-right: env(safe-area-inset-right, 0px);
   box-sizing: border-box;
 }
+
+/* Рамка фокуса — только при управлении с клавиатуры, не после нажатия мышью или пальцем. */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
