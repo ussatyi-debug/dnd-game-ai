@@ -380,6 +380,8 @@ fn autosave_list(app: tauri::AppHandle, campaign: String) -> Result<Vec<Autosave
 }
 
 #[tauri::command]
+// Аргументы команды приходят из интерфейса по именам — структура тут ничего не упростит.
+#[allow(clippy::too_many_arguments)]
 fn autosave_write(
     app: tauri::AppHandle,
     campaign: String,
