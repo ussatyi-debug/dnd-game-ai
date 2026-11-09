@@ -70,8 +70,14 @@ pub async fn list_models(client: &reqwest::Client, key: &str) -> Result<Vec<Mode
         .map_err(network_error)?;
     let status = response.status();
     let body: Value = response.json().await.unwrap_or(Value::Null);
-    if status.as_u16() == 401 || status.as_u16() == 403 {
+    // 401 — неверный ключ. 403 на списке не значит, что модели недоступны: сервису списка
+    // нужны свои права, а генерации хватает ai.languageModels.user. Тогда — известные модели,
+    // и настоящую ошибку доступа покажет первый запрос к мастеру.
+    if status.as_u16() == 401 {
         return Err(api_error(status.as_u16(), &body));
+    }
+    if !status.is_success() {
+        return Ok(known_models());
     }
     let listed = parse_models(&body, &key.folder);
     Ok(if listed.is_empty() { known_models() } else { listed })
@@ -188,7 +194,7 @@ pub(crate) fn api_error(status: u16, body: &Value) -> String {
     match status {
         401 => "Ключ Яндекса не принят — проверьте API-ключ в меню «Модели ИИ»".into(),
         403 => format!(
-            "Нет доступа к модели Яндекса: у сервисного аккаунта нужна роль ai.languageModels.user в этом каталоге ({message})"
+            "Нет доступа к модели Яндекса ({message}). Проверьте: роль ai.languageModels.user выдана сервисному аккаунту в том же каталоге, чей ID указан в ключе; у API-ключа область действия yc.ai.foundationModels.execute; после выдачи роли подождите пару минут"
         ),
         404 => format!("Модель или каталог не найдены — проверьте ID каталога ({message})"),
         429 => format!("Превышен лимит запросов Яндекса — подождите минуту ({message})"),
