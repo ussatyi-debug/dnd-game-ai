@@ -87,7 +87,7 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-ink">
       <img src={worldMap} alt="" aria-hidden="true" className="pointer-events-none fixed inset-0 h-full w-full object-cover opacity-15" />
-      <header className="relative border-b border-edge bg-ink/90 backdrop-blur-sm">
+      <header className="relative border-b border-edge bg-ink/90 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <h2 className="font-serif text-lg text-gold sm:text-xl">Новый герой</h2>
           <div className="flex items-center gap-1">

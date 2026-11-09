@@ -21,6 +21,11 @@ body,
 }
 
 body {
+  margin: 0;
+  background: var(--color-ink);
+  color: var(--color-parchment);
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  /* Вырезы и системные панели телефона. */
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
