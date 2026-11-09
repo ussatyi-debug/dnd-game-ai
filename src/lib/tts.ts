@@ -566,6 +566,28 @@ class TtsPlayer {
 
 export const ttsPlayer = new TtsPlayer();
 
+// Приложение свёрнуто или экран погашен — озвучка на паузе; при возврате продолжается,
+// если её поставили на паузу именно поэтому (а не кнопкой).
+if (typeof document !== "undefined") {
+  let pausedByHide = false;
+  let status: TtsStatus = "idle";
+  ttsPlayer.subscribe((state) => {
+    status = state.status;
+    if (state.status !== "paused") pausedByHide = false;
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      if (status === "playing" || status === "loading") {
+        ttsPlayer.pause();
+        pausedByHide = true;
+      }
+    } else if (pausedByHide) {
+      pausedByHide = false;
+      ttsPlayer.resume();
+    }
+  });
+}
+
 /** Фраза для прослушивания голосов в настройках (её же озвучивают образцы движков). */
 export const PREVIEW_TEXT =
   "Мистический заряд по метнувшему камень. Вы стоите глубоко в сфере, и снаружи вас не видят. Атака невидимого противника идёт с преимуществом. Я беру больший куб из каждой пары, а до уступа вы достаёте: «Взор дьявола» видит сквозь свою же тьму, а дальность заклинания сто двадцать футов.";

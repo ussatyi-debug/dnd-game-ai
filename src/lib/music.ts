@@ -81,6 +81,13 @@ class MusicPlayer {
   private listeners = new Set<Listener>();
   private state: MusicState = { available: false, track: null, mood: null };
   private fades = new Map<HTMLAudioElement, number>();
+  /**
+   * Звук через Web Audio: усиление трека может быть больше 1 (тихие треки поднимаются до общей
+   * громкости), пики срезает ограничитель. Нет Web Audio — громкость элемента, не выше 1.
+   */
+  private audio: { ctx: AudioContext; out: AudioNode } | null = null;
+  private gains = new Map<HTMLAudioElement, GainNode>();
+  private hidden = false;
 
   constructor() {
     if (typeof window === "undefined") return;
@@ -90,10 +97,24 @@ class MusicPlayer {
       this.unlocked = true;
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
+      this.audio = createGraph();
       void this.apply();
     };
     window.addEventListener("pointerdown", unlock);
     window.addEventListener("keydown", unlock);
+    // Приложение свёрнуто или экран погашен — музыка на паузе, при возврате продолжается.
+    document.addEventListener("visibilitychange", () => {
+      this.hidden = document.visibilityState === "hidden";
+      const el = this.current?.el;
+      if (this.hidden) {
+        el?.pause();
+        void this.audio?.ctx.suspend().catch(() => undefined);
+      } else {
+        void this.audio?.ctx.resume().catch(() => undefined);
+        if (el) void el.play().catch(() => undefined);
+        else void this.apply();
+      }
+    });
     ttsPlayer.subscribe((s) => {
       const ducked = s.status === "playing" || s.status === "loading";
       if (ducked !== this.ducked) {
@@ -145,11 +166,12 @@ class MusicPlayer {
 
   private target(): number {
     const gain = this.current?.track.gain ?? 1;
-    return Math.min(1, this.settings.volume * gain * (this.ducked ? DUCK : 1));
+    const level = this.settings.volume * gain * (this.ducked ? DUCK : 1);
+    return this.audio ? level : Math.min(1, level);
   }
 
   private async apply() {
-    if (!this.unlocked || !this.settings.enabled || !this.mood) return;
+    if (!this.unlocked || this.hidden || !this.settings.enabled || !this.mood) return;
     const tracks = await this.list();
     const pool = tracks.filter((t) => t.mood === this.mood);
     if (pool.length === 0) return;
@@ -168,6 +190,18 @@ class MusicPlayer {
     this.stopCurrent();
     const el = new Audio(`${BASE}${track.file}`);
     el.volume = 0;
+    if (this.audio) {
+      try {
+        const source = this.audio.ctx.createMediaElementSource(el);
+        const gain = this.audio.ctx.createGain();
+        gain.gain.value = 0;
+        source.connect(gain).connect(this.audio.out);
+        this.gains.set(el, gain);
+        el.volume = 1;
+      } catch {
+        // Без Web Audio — громкость самого элемента.
+      }
+    }
     const start = track.start ?? 0;
     if (start > 0) {
       // Перемотка надёжна только после загрузки длительности.
@@ -177,6 +211,13 @@ class MusicPlayer {
     }
     el.preload = "auto";
     const pool = async () => (await this.list()).filter((t) => t.mood === track.mood);
+    // Сбой файла или декодера — через пару секунд следующий трек того же настроения.
+    el.addEventListener("error", () => {
+      window.setTimeout(() => {
+        if (this.current?.el !== el) return;
+        void pool().then((p) => this.start(this.pick(p.length > 1 ? p.filter((t) => t.id !== track.id) : p)));
+      }, 2000);
+    });
     el.addEventListener("ended", () => {
       void pool().then((p) => {
         if (this.current?.el !== el) return;
@@ -208,12 +249,27 @@ class MusicPlayer {
     this.fadeTo(cur.el, 0, FADE_MS, () => {
       cur.el.pause();
       cur.el.src = "";
+      this.gains.get(cur.el)?.disconnect();
+      this.gains.delete(cur.el);
     });
   }
 
   private fadeTo(el: HTMLAudioElement, volume: number, ms: number, done?: () => void) {
     const prev = this.fades.get(el);
     if (prev !== undefined) window.clearInterval(prev);
+    const node = this.gains.get(el);
+    if (node && this.audio) {
+      const now = this.audio.ctx.currentTime;
+      node.gain.cancelScheduledValues(now);
+      node.gain.setValueAtTime(node.gain.value, now);
+      node.gain.linearRampToValueAtTime(Math.max(0, volume), now + ms / 1000);
+      const id = window.setTimeout(() => {
+        this.fades.delete(el);
+        done?.();
+      }, ms);
+      this.fades.set(el, id);
+      return;
+    }
     const from = el.volume;
     const steps = Math.max(1, Math.round(ms / 50));
     let i = 0;
@@ -227,6 +283,25 @@ class MusicPlayer {
       }
     }, 50);
     this.fades.set(el, id);
+  }
+}
+
+/** Web Audio: общий выход с ограничителем пиков (после выравнивающего усиления). */
+function createGraph(): { ctx: AudioContext; out: AudioNode } | null {
+  try {
+    const Ctx = window.AudioContext;
+    if (!Ctx) return null;
+    const ctx = new Ctx();
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.25;
+    limiter.connect(ctx.destination);
+    return { ctx, out: limiter };
+  } catch {
+    return null;
   }
 }
 

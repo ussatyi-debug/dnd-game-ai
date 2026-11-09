@@ -59,9 +59,9 @@ export type StepId = (typeof STEPS)[number]["id"];
 
 /** Ступени начала игры: уровни и день кампании, в который появляется герой. */
 export const TIERS = [
-  { id: 1, label: "Уровни 1–3", levels: [1, 2, 3], days: [20, 50] as [number, number] | null },
-  { id: 2, label: "Уровни 4–6", levels: [4, 5, 6], days: [50, 70] as [number, number] | null },
-  { id: 3, label: "Уровни 7–9", levels: [7, 8, 9], days: null },
+  { id: 1, label: "Уровни 1–3", levels: [1, 2, 3], days: [15, 35] as [number, number] | null },
+  { id: 2, label: "Уровни 4–6", levels: [4, 5, 6], days: [36, 60] as [number, number] | null },
+  { id: 3, label: "Уровни 7–9", levels: [7, 8, 9], days: [60, 80] as [number, number] | null },
 ] as const;
 
 /** День «актуального времени» для ступени 7–9. */
