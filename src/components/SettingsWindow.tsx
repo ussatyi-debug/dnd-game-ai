@@ -7,6 +7,7 @@ import {
   preview,
   saveTtsSettings,
   ttsPlayer,
+  type TtsEngine,
   type Gender,
   type TtsSettings,
 } from "../lib/tts";
@@ -100,7 +101,7 @@ const input =
   "rounded-md border border-edge bg-ink px-2 py-1.5 text-sm text-parchment placeholder:text-muted/70 focus:border-gold focus:outline-none";
 
 function TtsSettingsPanel({ tts, onChange }: { tts: TtsSettings; onChange: (s: TtsSettings) => void }) {
-  const [engine, setEngine] = useState<"piper" | "system" | null | undefined>(undefined);
+  const [engine, setEngine] = useState<TtsEngine | null | undefined>(undefined);
   useEffect(() => {
     void ttsPlayer.engine().then(setEngine);
   }, []);
@@ -113,7 +114,9 @@ function TtsSettingsPanel({ tts, onChange }: { tts: TtsSettings; onChange: (s: T
           ? "Проверяю голоса…"
           : engine === "piper"
             ? "Голоса Piper (Дима и Ира) установлены вместе с приложением и работают без интернета."
-            : engine === "system"
+            : engine === "android"
+              ? "Голоса Piper не найдены — читает синтез речи Android (Google TTS). Если тишина: Настройки телефона → Синтез речи → установите русский язык."
+              : engine === "system"
               ? "Голоса Piper в этой версии недоступны (веб-версия внутри Claude не может запускать модели) — читает системный голос устройства."
               : "Озвучка недоступна: на устройстве нет голосов."}
       </p>

@@ -404,9 +404,12 @@ export interface TtsState {
   label: string;
   index: number;
   total: number;
-  engine: "piper" | "system" | null;
+  engine: TtsEngine | null;
   error: string | null;
 }
+
+/** Piper в приложении; голос браузера; синтез речи Android (мост из MainActivity). */
+export type TtsEngine = "piper" | "system" | "android";
 
 const IDLE: TtsState = { status: "idle", messageId: null, label: "", index: 0, total: 0, engine: null, error: null };
 
@@ -415,6 +418,31 @@ type Listener = (state: TtsState) => void;
 /** Есть ли системный синтез речи (запасной путь без Piper). */
 function systemSpeech(): SpeechSynthesis | null {
   return typeof window !== "undefined" && "speechSynthesis" in window ? window.speechSynthesis : null;
+}
+
+interface AndroidTtsBridge {
+  available(): boolean;
+  speak(text: string, id: string, rate: number, pitch: number, volume: number, flush: boolean): void;
+  stop(): void;
+}
+
+/** Синтез речи Android: WebView не даёт speechSynthesis, его заменяет мост window.AndroidTts. */
+function androidSpeech(): AndroidTtsBridge | null {
+  if (typeof window === "undefined") return null;
+  const bridge = (window as unknown as { AndroidTts?: AndroidTtsBridge }).AndroidTts;
+  if (!bridge) return null;
+  try {
+    return bridge.available() ? bridge : null;
+  } catch {
+    return null;
+  }
+}
+
+/** События моста: id фразы → обработчик. */
+const androidHandlers = new Map<string, (event: string) => void>();
+if (typeof window !== "undefined") {
+  (window as unknown as { __androidTts?: (event: string, id: string) => void }).__androidTts = (event, id) =>
+    androidHandlers.get(id)?.(event);
 }
 
 function systemVoice(gender: Gender): SpeechSynthesisVoice | null {
@@ -446,8 +474,9 @@ class TtsPlayer {
   }
 
   /** Какой движок доступен: Piper, системный голос или ничего. */
-  async engine(): Promise<"piper" | "system" | null> {
+  async engine(): Promise<TtsEngine | null> {
     if (await piper.available()) return "piper";
+    if (androidSpeech()) return "android";
     return systemSpeech() ? "system" : null;
   }
 
@@ -465,6 +494,11 @@ class TtsPlayer {
     this.set({ status: "loading", messageId, label, index: from, total: parts.length, engine, error: null });
     if (engine === "system") {
       this.playSystem(run, parts, settings, from);
+      return;
+    }
+    if (engine === "android") {
+      this.parts = parts;
+      this.playAndroid(run, from);
       return;
     }
     try {
@@ -507,6 +541,36 @@ class TtsPlayer {
     });
   }
 
+  private parts: Segment[] = [];
+
+  /** Android: по одной фразе, чтобы знать текущую и продолжать с неё после паузы. */
+  private playAndroid(run: number, index: number) {
+    const bridge = androidSpeech();
+    const part = this.parts[index];
+    const settings = this.current?.settings;
+    if (!bridge || !settings || run !== this.run) return;
+    if (!part) {
+      this.set(IDLE);
+      return;
+    }
+    const id = `${run}-${index}`;
+    androidHandlers.set(id, (event) => {
+      if (run !== this.run) return androidHandlers.delete(id);
+      if (event === "start") this.set({ status: "playing", index });
+      else if (event === "done") {
+        androidHandlers.delete(id);
+        if (this.state.status !== "paused") this.playAndroid(run, index + 1);
+      } else if (event === "error") {
+        androidHandlers.delete(id);
+        this.set({ ...IDLE, error: "Синтез речи Android не смог прочитать текст." });
+      } else if (event === "stop") androidHandlers.delete(id);
+    });
+    // Голоса различаются высотой: у системного синтеза нет надёжной пометки пола голоса.
+    const pitch = part.voice === "irina" ? 1.15 : 0.85;
+    this.set({ index });
+    bridge.speak(part.text, id, settings.rate, pitch, settings.volume, true);
+  }
+
   private playSystem(run: number, parts: Segment[], settings: TtsSettings, from: number) {
     const speech = systemSpeech();
     if (!speech) return;
@@ -534,6 +598,7 @@ class TtsPlayer {
   pause() {
     if (this.state.status !== "playing" && this.state.status !== "loading") return;
     if (this.state.engine === "system") systemSpeech()?.pause();
+    else if (this.state.engine === "android") androidSpeech()?.stop();
     else void this.ctx?.suspend();
     this.set({ status: "paused" });
   }
@@ -541,7 +606,12 @@ class TtsPlayer {
   resume() {
     if (this.state.status !== "paused") return;
     if (this.state.engine === "system") systemSpeech()?.resume();
-    else void this.ctx?.resume();
+    else if (this.state.engine === "android") {
+      // У синтеза Android нет паузы: фраза, на которой остановились, звучит заново.
+      this.set({ status: "playing" });
+      this.playAndroid(this.run, this.state.index);
+      return;
+    } else void this.ctx?.resume();
     this.set({ status: "playing" });
   }
 
@@ -554,6 +624,8 @@ class TtsPlayer {
     }
     this.source = null;
     systemSpeech()?.cancel();
+    if (this.state.engine === "android") androidSpeech()?.stop();
+    androidHandlers.clear();
     void this.ctx?.resume();
     if (this.state.status !== "idle") this.set(IDLE);
   }

@@ -262,6 +262,12 @@ jobs:
           key: music-${{ hashFiles('scripts/fetch-music.mjs') }}
       - name: Фоновая музыка
         run: node scripts/fetch-music.mjs
+      - uses: actions/cache@v4
+        with:
+          path: public/tts
+          key: tts-${{ hashFiles('scripts/fetch-tts.mjs') }}
+      - name: Голоса озвучки (Piper)
+        run: node scripts/fetch-tts.mjs
       - name: Проект Android
         shell: bash
         run: |

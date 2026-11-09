@@ -44,7 +44,7 @@ export default function MiniPlayer({ onError }: { onError: (text: string) => voi
               : "Готовлю…"
             : `фраза ${state.index + 1} из ${state.total}`}
           {paused ? " · пауза" : ""}
-          {state.engine === "system" ? " · системный голос" : ""}
+          {state.engine === "system" || state.engine === "android" ? " · системный голос" : ""}
         </div>
       </div>
     </div>
