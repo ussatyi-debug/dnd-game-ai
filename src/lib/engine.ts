@@ -4,12 +4,13 @@
 // - в приложении — через команды Tauri;
 // - в веб-версии — в браузере, через модуль, скомпилированный из Rust в JavaScript.
 
+import type { CampaignSpec, HeroSpec } from "./heroSpec";
 import { invoke } from "@tauri-apps/api/core";
 import * as webModule from "engine-web-module";
 import { createWebEngine, type WebEngine } from "./webBridge";
 
 export type RestKind = "short" | "long";
-export type Recovery = "short_rest" | "long_rest" | "daily" | "manual";
+export type Recovery = "short_rest" | "long_rest" | "one_on_short_rest" | "daily" | "manual";
 
 export interface DiceGroupRoll {
   count: number;
@@ -252,7 +253,7 @@ export function takeRest(kind: RestKind): Promise<RestResult> {
 
 export type SpellClass = "bard" | "cleric" | "druid" | "paladin" | "ranger" | "sorcerer" | "warlock" | "wizard";
 export type Preparation = "known" | "prepared" | "spellbook";
-export type Progression = "full" | "half" | "third" | "pact";
+export type Progression = "full" | "half" | "half_2024" | "third" | "pact" | "innate";
 export type CastMethod = "cantrip" | "slot" | "pact" | "ritual" | "granted" | "scroll";
 export type SlotRef = "pact" | { level: number };
 
@@ -292,6 +293,8 @@ export interface CasterView {
   max_known: number | null;
   prepared_count: number | null;
   prepared_limit: number | null;
+  /** Лимит по таблице класса (правила 2024 года). */
+  prepared_by_table: boolean;
   over_limit: boolean;
   spellbook: SpellEntry[];
 }
@@ -782,6 +785,30 @@ export function deleteNote(id: number): Promise<boolean> {
 /** Загрузка сохранения: передаётся часть `engine` файла. */
 export function loadState(save: unknown): Promise<LoadReport> {
   return call<LoadReport>("load_state", { save });
+}
+
+/** Проверка листа героя движком: список нарушений (пусто — лист в порядке). */
+export function validateHero(spec: HeroSpec): Promise<string[]> {
+  return call<string[]>("validate_hero", { spec });
+}
+
+/** Сцена начала новой кампании. */
+export interface StartScene {
+  day: number;
+  time: string | null;
+  location: string;
+  situation: string;
+  mood: Mood;
+}
+
+/** Новая своя кампания вместо текущей игры. */
+export function startCampaign(campaign: CampaignSpec, scene: StartScene, gold: number): Promise<PartyView> {
+  return call<PartyView>("start_campaign", { campaign, scene, gold });
+}
+
+/** Кампания «Дом Стрэндж» с начала. */
+export function restartDemo(): Promise<PartyView> {
+  return call<PartyView>("restart_demo");
 }
 
 export interface UndoInfo {

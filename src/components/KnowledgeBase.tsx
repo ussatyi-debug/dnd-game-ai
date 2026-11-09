@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   KB_BY_ID,
-  KB_ENTRIES,
   KB_LAYERS,
+  kbEntries,
+  kbLayers,
   matchesQuery,
   REVEAL_LABEL,
   STATUS_LABEL,
@@ -372,7 +373,7 @@ export default function KnowledgeBase({
   }, []);
 
   /** Все карточки: из файлов базы и созданные по ходу игры. */
-  const entries = useMemo(() => [...KB_ENTRIES, ...customs.map(customEntry)], [customs]);
+  const entries = useMemo(() => [...kbEntries(), ...customs.map(customEntry)], [customs]);
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   const cardTitle: CardTitle = useCallback((id: string) => byId.get(id)?.title ?? null, [byId]);
   const cardOptions: CardOption[] = useMemo(
@@ -391,7 +392,7 @@ export default function KnowledgeBase({
   const overrideOf = (id: string) => overrides.find((o) => o.card_id === id);
   const notesOf = (id: string) => notes.filter((n) => n.card === id);
 
-  const baseLayer = KB_LAYERS.find((l) => l.id === layerId) ?? KB_LAYERS[0];
+  const baseLayer = kbLayers().find((l) => l.id === layerId) ?? kbLayers()[0];
   const layer = useMemo(() => {
     if (!baseLayer) return undefined;
     // Записи журнала мастера показываются в разделе «Журнал мастера» слоя мастера.
@@ -497,7 +498,7 @@ export default function KnowledgeBase({
   return (
     <Modal title="База знаний" onClose={onClose} size="xl">
       <div className="grid grid-cols-3 gap-1 border-b border-edge p-2" role="tablist" aria-label="Слои">
-        {KB_LAYERS.map((l) => (
+        {kbLayers().map((l) => (
           <button
             key={l.id}
             type="button"

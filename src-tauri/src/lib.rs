@@ -12,11 +12,11 @@ use ai::{
     AiSettings, AiSettingsView, ChatMessage, MasterReply, ModelInfo, Provider, SettingsStore,
 };
 use dnd_engine::{
-    CardDraft, CastMethod, CastOutcome, CastRequest, CharacterSheet, CustomCard, ExprRoll,
-    InventoryView, KbCard, KbOverride, LoadReport, LuckyReroll, MasterNote, NewNote, NoteEdit,
-    NoteKind, NoteLayer, PartyView, RestKind, RestResult, SaveData, SaveState, Session,
-    SheetDetails, SheetEdit, SheetProposal, SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView,
-    TreasuryView, UndoInfo,
+    validate_hero as check_hero, Campaign, CardDraft, CastMethod, CastOutcome, CastRequest,
+    CharacterSheet, CustomCard, ExprRoll, HeroSpec, InventoryView, KbCard, KbOverride, LoadReport,
+    LuckyReroll, MasterNote, NewNote, NoteEdit, NoteKind, NoteLayer, PartyView, RestKind,
+    RestResult, SaveData, SaveState, Scene, Session, SheetDetails, SheetEdit, SheetProposal,
+    SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView, TreasuryView, UndoInfo,
 };
 use tauri::{Manager, State};
 
@@ -279,6 +279,39 @@ fn load_state(
     lock(&state)?.load(data).map_err(|e| e.to_string())
 }
 
+/// Проверка листа героя из мастера создания: список нарушений (пусто — лист в порядке).
+#[tauri::command]
+fn validate_hero(spec: serde_json::Value) -> Result<Vec<String>, String> {
+    let spec: HeroSpec =
+        serde_json::from_value(spec).map_err(|e| format!("Лист героя не прочитан: {e}"))?;
+    Ok(check_hero(&spec))
+}
+
+/// Новая своя кампания вместо текущей игры.
+#[tauri::command]
+fn start_campaign(
+    campaign: serde_json::Value,
+    scene: serde_json::Value,
+    gold: u32,
+    state: State<'_, SessionState>,
+) -> Result<PartyView, String> {
+    let campaign: Campaign =
+        serde_json::from_value(campaign).map_err(|e| format!("Кампания не прочитана: {e}"))?;
+    let scene: Scene =
+        serde_json::from_value(scene).map_err(|e| format!("Сцена не прочитана: {e}"))?;
+    let mut session = lock(&state)?;
+    session.start_campaign(campaign, scene, gold).map_err(|e| e.to_string())?;
+    Ok(session.party_view())
+}
+
+/// Кампания «Дом Стрэндж» с начала.
+#[tauri::command]
+fn restart_demo(state: State<'_, SessionState>) -> Result<PartyView, String> {
+    let mut session = lock(&state)?;
+    session.restart_demo();
+    Ok(session.party_view())
+}
+
 /// Автосохранение: файл `auto-N.json` и сведения о нём `auto-N.meta.json`
 /// в папке данных приложения.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -291,12 +324,28 @@ struct AutosaveMeta {
 
 const AUTOSAVE_SLOTS: u8 = 3;
 
-fn autosave_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Нет папки данных приложения: {e}"))?
-        .join("autosaves");
+/// ID кампании для имени папки: «strange» — «Дом Стрэндж» (старая папка), иначе своя.
+fn check_campaign(campaign: &str) -> Result<(), String> {
+    let ok = !campaign.is_empty()
+        && campaign.len() <= 40
+        && campaign
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_');
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("Недопустимый ID кампании «{campaign}»"))
+    }
+}
+
+fn data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path().app_data_dir().map_err(|e| format!("Нет папки данных приложения: {e}"))
+}
+
+fn autosave_dir(app: &tauri::AppHandle, campaign: &str) -> Result<std::path::PathBuf, String> {
+    check_campaign(campaign)?;
+    let root = data_dir(app)?.join("autosaves");
+    let dir = if campaign == "strange" { root } else { root.join(campaign) };
     std::fs::create_dir_all(&dir).map_err(|e| format!("Не создать папку автосохранений: {e}"))?;
     Ok(dir)
 }
@@ -310,8 +359,8 @@ fn check_slot(slot: u8) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn autosave_list(app: tauri::AppHandle) -> Result<Vec<AutosaveMeta>, String> {
-    let dir = autosave_dir(&app)?;
+fn autosave_list(app: tauri::AppHandle, campaign: String) -> Result<Vec<AutosaveMeta>, String> {
+    let dir = autosave_dir(&app, &campaign)?;
     Ok((0..AUTOSAVE_SLOTS)
         .filter_map(|slot| {
             let text = std::fs::read_to_string(dir.join(format!("auto-{slot}.meta.json"))).ok()?;
@@ -324,6 +373,7 @@ fn autosave_list(app: tauri::AppHandle) -> Result<Vec<AutosaveMeta>, String> {
 #[tauri::command]
 fn autosave_write(
     app: tauri::AppHandle,
+    campaign: String,
     slot: u8,
     json: String,
     saved_at: String,
@@ -331,7 +381,7 @@ fn autosave_write(
     location: String,
 ) -> Result<bool, String> {
     check_slot(slot)?;
-    let dir = autosave_dir(&app)?;
+    let dir = autosave_dir(&app, &campaign)?;
     let tmp = dir.join(format!("auto-{slot}.json.tmp"));
     std::fs::write(&tmp, json).map_err(|e| format!("Автосохранение не записано: {e}"))?;
     std::fs::rename(&tmp, dir.join(format!("auto-{slot}.json")))
@@ -344,10 +394,34 @@ fn autosave_write(
 }
 
 #[tauri::command]
-fn autosave_read(app: tauri::AppHandle, slot: u8) -> Result<String, String> {
+fn autosave_read(app: tauri::AppHandle, campaign: String, slot: u8) -> Result<String, String> {
     check_slot(slot)?;
-    std::fs::read_to_string(autosave_dir(&app)?.join(format!("auto-{slot}.json")))
+    std::fs::read_to_string(autosave_dir(&app, &campaign)?.join(format!("auto-{slot}.json")))
         .map_err(|e| format!("Автосохранение не прочитано: {e}"))
+}
+
+/// Список своих кампаний (`campaigns.json` в папке данных; ведёт интерфейс).
+#[tauri::command]
+fn campaigns_read(app: tauri::AppHandle) -> Result<String, String> {
+    let path = data_dir(&app)?.join("campaigns.json");
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("[]".into()),
+        Err(e) => Err(format!("Список кампаний не прочитан: {e}")),
+    }
+}
+
+#[tauri::command]
+fn campaigns_write(app: tauri::AppHandle, json: String) -> Result<bool, String> {
+    serde_json::from_str::<serde_json::Value>(&json)
+        .map_err(|e| format!("Список кампаний повреждён: {e}"))?;
+    let dir = data_dir(&app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Нет папки данных: {e}"))?;
+    let tmp = dir.join("campaigns.json.tmp");
+    std::fs::write(&tmp, json).map_err(|e| format!("Список кампаний не записан: {e}"))?;
+    std::fs::rename(&tmp, dir.join("campaigns.json"))
+        .map_err(|e| format!("Список кампаний не записан: {e}"))?;
+    Ok(true)
 }
 
 /// Ссылка открывается в системном браузере (окно приложения внешние ссылки не открывает).
@@ -376,6 +450,9 @@ fn ai_set_key(
     key: String,
     ai: State<'_, AiState>,
 ) -> Result<AiSettingsView, String> {
+    if !provider.allowed_here() {
+        return Err("На телефоне доступна только локальная модель на ПК в домашней сети".into());
+    }
     let mut settings = lock(&ai.settings)?;
     settings.set_key(provider, &key)?;
     ai.store.save(&settings)?;
@@ -388,6 +465,9 @@ fn ai_select_model(
     model: String,
     ai: State<'_, AiState>,
 ) -> Result<AiSettingsView, String> {
+    if !provider.allowed_here() {
+        return Err("На телефоне доступна только локальная модель на ПК в домашней сети".into());
+    }
     let mut settings = lock(&ai.settings)?;
     settings.provider = provider;
     settings.model = Some(model);
@@ -487,7 +567,11 @@ pub fn run() {
         .setup(|app| {
             let path = app.path().app_config_dir().ok().map(|dir| dir.join("ai-settings.json"));
             let store = SettingsStore::new(path);
-            let settings = store.load();
+            let mut settings = store.load();
+            if !settings.provider.allowed_here() {
+                settings.provider = Provider::Local;
+                settings.model = None;
+            }
             let client = reqwest::Client::builder()
                 .timeout(Duration::from_secs(120))
                 .build()
@@ -533,6 +617,11 @@ pub fn run() {
             autosave_list,
             autosave_write,
             autosave_read,
+            campaigns_read,
+            campaigns_write,
+            validate_hero,
+            start_campaign,
+            restart_demo,
             open_url,
             load_state,
             ai_settings,

@@ -100,6 +100,15 @@ jobs:
             exit 1
           fi
           echo "$out"
+      - name: Мастер создания героя — все классы через движок
+        shell: bash
+        run: |
+          if ! out=$(node --experimental-strip-types scripts/test-creation.ts 2>&1); then
+            echo "$out" | tail -n 40
+            echo "::error title=creation::$(echo "$out" | tail -n 6 | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "$out"
       - name: Сборка страницы
         run: npm run build:web
       - name: Публикация в ветку web-preview
@@ -212,9 +221,88 @@ jobs:
           path: target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
+  android:
+    name: Сборка Android (.apk)
+    needs: [engine, frontend]
+    runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: 27.2.12479018
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Android NDK
+        shell: bash
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}" "build-tools;35.0.0" "platforms;android-35" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - uses: actions/cache@v4
+        with:
+          path: public/music
+          key: music-${{ hashFiles('scripts/fetch-music.mjs') }}
+      - name: Фоновая музыка
+        run: node scripts/fetch-music.mjs
+      - name: Проект Android
+        shell: bash
+        run: |
+          npx tauri android init --ci
+          npx tauri icon src-tauri/icons/icon.png
+      - name: Сборка APK
+        shell: bash
+        run: |
+          if ! out=$(npx tauri android build --apk --target aarch64 --target armv7 2>&1); then
+            echo "$out" | tail -n 60
+            echo "::error title=android::$(echo "$out" | grep -E 'error|Error' | tail -n 6 | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "$out" | tail -n 15
+      - name: Подпись APK
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          unsigned=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-unsigned.apk' | head -n 1)
+          if [ -z "$unsigned" ]; then echo "::error::APK не найден"; exit 1; fi
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > release.jks
+            pass="$KEYSTORE_PASSWORD"
+          else
+            echo "::warning title=android::Нет секрета ANDROID_KEYSTORE_B64 — APK подписан временным ключом: обновление поверх старой версии потребует переустановки."
+            pass="dndgameai-temp"
+            keytool -genkeypair -keystore release.jks -storepass "$pass" -keypass "$pass" -alias dnd \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=DnD Game AI" > /dev/null
+          fi
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          "$tools/zipalign" -f -p 4 "$unsigned" aligned.apk
+          mkdir -p apk
+          "$tools/apksigner" sign --ks release.jks --ks-pass "pass:$pass" --out "apk/dnd-game-ai-${version}.apk" aligned.apk
+          "$tools/apksigner" verify "apk/dnd-game-ai-${version}.apk"
+          rm -f release.jks
+          ls -l apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dnd-game-ai-android-${{ github.run_id }}
+          path: apk/*.apk
+          if-no-files-found: error
+
   release:
     name: Тег версии и релиз
-    needs: [windows]
+    needs: [windows, android]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -241,6 +329,12 @@ jobs:
         with:
           name: dnd-game-ai-windows-${{ github.run_id }}
           path: release-files
+      - name: Загрузка APK
+        if: steps.version.outputs.exists == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: dnd-game-ai-android-${{ github.run_id }}
+          path: release-files
       - name: Создание тега и релиза
         if: steps.version.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
@@ -248,5 +342,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: DnD Game AI ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          files: release-files/*.exe
+          files: |
+            release-files/*.exe
+            release-files/*.apk
           generate_release_notes: true

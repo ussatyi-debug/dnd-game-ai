@@ -17,6 +17,7 @@ import SpellbookPanel from "./SpellbookPanel";
 const recoveryLabel: Record<Recovery, string> = {
   short_rest: "короткий отдых",
   long_rest: "длительный отдых",
+  one_on_short_rest: "1 на коротком, все на длительном",
   daily: "1/день",
   manual: "вручную",
 };

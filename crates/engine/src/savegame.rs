@@ -7,6 +7,7 @@
 //! в файле, дополняется из приложения, и загрузка сообщает, что именно дополнено.
 
 use crate::character::{Character, HitPoints};
+use crate::creation::{build_party, Campaign};
 use crate::error::EngineError;
 use crate::fixtures::{demo_party, VALERIA_PREPARED};
 use crate::inventory::{Inventory, NewItem, ON_PERSON};
@@ -101,6 +102,9 @@ pub struct SaveData {
     pub turns_without_notes: u32,
     #[cfg_attr(feature = "serde", serde(default))]
     pub proposals: Vec<SheetProposal>,
+    /// Своя кампания с листами созданных героев (формат 8+); нет — «Дом Стрэндж».
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub campaign: Option<Campaign>,
 }
 
 /// Итог загрузки.
@@ -311,7 +315,11 @@ impl Session {
         treasury.validate_loaded()?;
 
         let mut report = Vec::new();
-        let mut party = demo_party();
+        let mut party = match &save.campaign {
+            Some(campaign) => build_party(campaign, &save.scene.location)
+                .map_err(|e| EngineError::InvalidSave(e.to_string()))?,
+            None => demo_party(),
+        };
         let mut saved_party = save.party;
         for c in &mut party {
             match saved_party.iter().position(|s| s.id == c.id) {
@@ -322,13 +330,14 @@ impl Session {
         for s in saved_party {
             report.push(format!("Персонаж «{}» из файла не найден в приложении — пропущен", s.id));
         }
-        if save.format_version < 5 {
+        let strange = save.campaign.is_none();
+        if strange && save.format_version < 5 {
             report.extend(migrate_to_v5(&mut party));
         }
-        if save.format_version < 6 {
+        if strange && save.format_version < 6 {
             report.extend(migrate_to_v6(&mut party));
         }
-        if save.format_version < 7 {
+        if strange && save.format_version < 7 {
             report.extend(migrate_to_v7(&mut party));
         }
 
@@ -349,6 +358,7 @@ impl Session {
         self.next_proposal_id = save.proposals.iter().map(|p| p.id).max().unwrap_or(0) + 1;
         self.proposals = save.proposals;
         self.undo = None;
+        self.campaign = save.campaign;
         self.log(format!("Загружено сохранение: День {}", self.scene.day));
 
         Ok(LoadReport {
@@ -416,6 +426,7 @@ mod tests {
             custom_cards: state.custom_cards,
             turns_without_notes: state.turns_without_notes,
             proposals: state.proposals,
+            campaign: state.campaign,
         }
     }
 
@@ -604,6 +615,40 @@ mod tests {
         assert_eq!(v.skill_total(crate::Skill::Persuasion), 3);
         assert_eq!(v.resource("cleric.sentinel").unwrap().max(), 5);
         assert_eq!(v.resource("cleric.eyes_of_grave").unwrap().max(), 5);
+    }
+
+    #[test]
+    fn custom_campaign_round_trip_rebuilds_heroes() {
+        use crate::creation::tests::wizard_spec;
+        use crate::creation::Campaign;
+        let campaign =
+            Campaign {
+                id: "camp.test".into(), title: "Проба".into(), heroes: vec![wizard_spec()]
+            };
+        let scene = Scene {
+            day: 30,
+            time: None,
+            location: "Перекрёсток".into(),
+            situation: String::new(),
+            mood: crate::session::Mood::Calm,
+        };
+        let mut s = Session::new_campaign(Xoshiro256::from_seed(4), campaign, scene, 30).unwrap();
+        assert_eq!(s.party().len(), 1);
+        assert_eq!(s.treasury().quantity("gp", "purse"), 30);
+        s.character_mut("pc.hero").unwrap().hit_points.current = 7;
+        let save = round_trip(&s);
+        assert!(save.campaign.is_some());
+
+        let mut other = session();
+        let report = other.load(save).unwrap();
+        assert_eq!(report.day, 30);
+        assert_eq!(other.party().len(), 1);
+        let hero = other.character("pc.hero").unwrap();
+        assert_eq!(hero.hit_points.current, 7);
+        assert_eq!(hero.hit_points.max, 20);
+        assert_eq!(other.campaign().map(|c| c.title.as_str()), Some("Проба"));
+        // Миграции «Дома Стрэндж» к своей кампании не применяются.
+        assert!(report.supplemented.iter().all(|r| !r.contains("Валерия")));
     }
 
     #[test]

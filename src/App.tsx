@@ -41,7 +41,10 @@ import {
   masterRolls,
   repairRequest,
   partyView,
+  restartDemo,
   setKbCards,
+  startCampaign,
+  validateHero,
   spellbook,
   takeRest,
   type InventoryView,
@@ -65,8 +68,27 @@ import {
   sampleErrorText,
   type ClaudeTier,
 } from "./lib/claude";
-import { kbExtraFor, kbIndex } from "./data/kb/index.ts";
-import { AUTOSAVE_EVERY, listAutosaves, readAutosave, writeAutosave, type AutosaveInfo } from "./lib/autosave";
+import { kbExtraFor, kbIndex, setKbScope, worldLocations } from "./data/kb/index.ts";
+import {
+  AUTOSAVE_EVERY,
+  listAutosaves,
+  readAutosave,
+  setAutosaveCampaign,
+  writeAutosave,
+  type AutosaveInfo,
+} from "./lib/autosave";
+import {
+  addCampaign,
+  currentCampaignId,
+  listCampaigns,
+  newCampaignId,
+  setCurrentCampaignId,
+  STRANGE_ID,
+  type CampaignInfo,
+} from "./lib/campaigns";
+import { CURRENT_DAY, equipment, heroSummary, TIERS, type Draft } from "./lib/creation.ts";
+import type { HeroSpec } from "./lib/heroSpec";
+import CreationWizard from "./components/creation/CreationWizard.tsx";
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
 import type { RollResult, TrayRoll } from "./lib/rolls";
@@ -74,7 +96,21 @@ import type { RollResult, TrayRoll } from "./lib/rolls";
 const MAX_ROLLS = 200;
 /** Раундов запросов бросков мастера за ход (как в движке). */
 const MAX_ROLL_ROUNDS = 3;
-const PLAYER_ID = "pc.nikis";
+const STRANGE_PLAYER = "pc.nikis";
+const HERO_PLAYER = "pc.hero";
+
+/** Включает кампанию до первого обращения к сохранениям и базе знаний. */
+function applyCampaign(id: string): void {
+  setAutosaveCampaign(id);
+  setKbScope(id === STRANGE_ID ? "all" : "world");
+}
+
+/** Кампания при запуске: последняя выбранная. */
+function initialCampaign(): string {
+  const id = currentCampaignId();
+  applyCampaign(id);
+  return id;
+}
 /** Сколько последних сообщений чата получает мастер; остальное — в базе знаний. */
 const MASTER_HISTORY = 40;
 
@@ -91,7 +127,7 @@ const now = () => new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minu
 
 const ROLL_HINT =
   "Броски — кнопкой 🎲 или своими кубами: присылайте только значение на кубе, модификаторы прибавит мастер.";
-const WELCOME_APP = `Мастер готов. Выберите модель в меню «Модели ИИ» и опишите, что делает сэр Никис. ${ROLL_HINT}`;
+const WELCOME_APP = `Мастер готов. Выберите модель в меню «Модели ИИ» и опишите, что делает ваш герой. ${ROLL_HINT}`;
 const WELCOME_CLAUDE =
   `Мастера ведёт Claude от вашего аккаунта — при первой заявке Claude попросит разрешение. ${ROLL_HINT}`;
 const WELCOME_NONE =
@@ -130,6 +166,10 @@ export default function App() {
   const [diceOpen, setDiceOpen] = useState(false);
 
   const [party, setParty] = useState<PartyView | null>(null);
+  const [campaignId, setCampaignId] = useState<string>(initialCampaign);
+  const [campaigns, setCampaigns] = useState<CampaignInfo[]>([]);
+  const [creating, setCreating] = useState(false);
+  const PLAYER_ID = campaignId === STRANGE_ID ? STRANGE_PLAYER : HERO_PLAYER;
   const [activeId, setActiveId] = useState(PLAYER_ID);
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
   const [book, setBook] = useState<SpellbookView | null>(null);
@@ -207,12 +247,10 @@ export default function App() {
   }, [autosave]);
 
   const refresh = useCallback(async () => {
-    const [nextParty, nextPlayer, nextUndo, nextProposals] = await Promise.all([
-      partyView(),
-      characterSheet(PLAYER_ID),
-      masterUndoInfo(),
-      sheetProposals(),
-    ]);
+    const [nextParty, nextUndo, nextProposals] = await Promise.all([partyView(), masterUndoInfo(), sheetProposals()]);
+    // Герой игрока — по отряду: в «Доме Стрэндж» это Никис, в своей кампании — созданный герой.
+    const playerId = nextParty.members.find((m) => m.kind === "player")?.id ?? STRANGE_PLAYER;
+    const nextPlayer = await characterSheet(playerId);
     setParty(nextParty);
     setPlayerSheet(nextPlayer);
     setUndo(nextUndo);
@@ -264,9 +302,19 @@ export default function App() {
 
   useEffect(() => {
     if (!engineAvailable) return;
+    listCampaigns()
+      .then(setCampaigns)
+      .catch(() => undefined);
     // Есть сохранение — игра сразу продолжается с последнего; нет — главный экран.
     listAutosaves()
       .then(async (list) => {
+        if (list.length === 0 && currentCampaignId() !== STRANGE_ID) {
+          // У своей кампании нет сохранений — вернуться к «Дому Стрэндж».
+          applyCampaign(STRANGE_ID);
+          setCurrentCampaignId(STRANGE_ID);
+          setCampaignId(STRANGE_ID);
+          list = await listAutosaves();
+        }
         setAutosaves(list);
         const last = list[0];
         if (!last) return;
@@ -350,7 +398,7 @@ export default function App() {
 
   function updateLucky(pool: ResourcePool) {
     const patch = (s: CharacterSheet | null) =>
-      s && s.id === PLAYER_ID
+      s && s.id === playerSheet?.id
         ? { ...s, resources: s.resources.map((r) => (r.id === pool.id ? pool : r)) }
         : s;
     setPlayerSheet(patch);
@@ -552,8 +600,11 @@ export default function App() {
     nextId.current = maxId + 1;
     setMessages(save.chat);
     setRolls(save.rolls);
-    setActiveId(PLAYER_ID);
+    partyView()
+      .then((p) => setActiveId(p.members.find((m) => m.kind === "player")?.id ?? STRANGE_PLAYER))
+      .catch(() => undefined);
     setOpenWindow(null);
+    setCreating(false);
     setHome(false);
     setPlayed(true);
     const extra =
@@ -594,7 +645,10 @@ export default function App() {
         return;
       }
       case "campaign":
-        setOpenWindow("continue");
+        switchCampaign(STRANGE_ID, true);
+        return;
+      case "new":
+        setCreating(true);
         return;
       case "load":
         setOpenWindow("load");
@@ -610,6 +664,92 @@ export default function App() {
         void exitApp();
         return;
     }
+  }
+
+  /**
+   * Переход к другой кампании: сохранения и база знаний переключаются, игра продолжается
+   * с последнего автосохранения кампании. `ask` — показать окно сохранений «Дома Стрэндж».
+   */
+  function switchCampaign(id: string, ask = false) {
+    const same = id === campaignId;
+    applyCampaign(id);
+    setCurrentCampaignId(id);
+    setCampaignId(id);
+    if (!same) setPlayed(false);
+    setKbCards(kbIndex()).catch(() => undefined);
+    listAutosaves()
+      .then(async (list) => {
+        setAutosaves(list);
+        if (ask) {
+          setOpenWindow("continue");
+          return;
+        }
+        const last = list[0];
+        if (last) continueFrom(await readAutosave(last.slot));
+        else addMessage("system", "У этой кампании нет сохранений.");
+      })
+      .catch((e: unknown) => addMessage("system", errorText(e)));
+  }
+
+  /** Новая кампания с созданным героем: движок проверяет лист и собирает мир. */
+  async function startNewCampaign(draft: Draft, spec: HeroSpec) {
+    const errors = await validateHero(spec);
+    if (errors.length > 0) throw new Error(`Движок не принял лист: ${errors.join("; ")}`);
+    const tier = TIERS.find((t) => t.id === draft.tier);
+    const day = tier?.days ? tier.days[0] + Math.floor(Math.random() * (tier.days[1] - tier.days[0] + 1)) : CURRENT_DAY;
+    const places = worldLocations();
+    const place = places[Math.floor(Math.random() * places.length)];
+    const location = place?.title ?? "Тракт";
+    const id = newCampaignId();
+    const title = `Путь героя ${spec.name}`;
+    const gold = equipment(draft).gold;
+    applyCampaign(id);
+    await startCampaign(
+      { id, title, heroes: [spec] },
+      {
+        day,
+        time: "утро",
+        location,
+        situation:
+          `Начало новой кампании. ${spec.name} (${heroSummary(draft)}, предыстория «${spec.background}») только что прибыл(а) в ${location}. ` +
+          "Опиши место и людей вокруг, дай завязку и спроси, что делает герой. Спутников пока нет.",
+        mood: "calm",
+      },
+      gold,
+    ).catch((e: unknown) => {
+      applyCampaign(campaignId);
+      throw e;
+    });
+    const info: CampaignInfo = {
+      id,
+      title,
+      createdAt: new Date().toISOString(),
+      startDay: day,
+      hero: { name: spec.name, summary: heroSummary(draft), portrait: spec.portrait },
+    };
+    await addCampaign(info).catch(() => undefined);
+    setCampaigns((prev) => [info, ...prev.filter((c) => c.id !== id)]);
+    setCurrentCampaignId(id);
+    setCampaignId(id);
+    await setKbCards(kbIndex()).catch(() => undefined);
+    nextId.current = 1;
+    setMessages([
+      {
+        id: nextId.current++,
+        author: "system",
+        text: `Новая кампания: ${title}. День ${day}, ${location}. ${aiAvailable ? WELCOME_APP : ""}`.trim(),
+        time: now(),
+      },
+    ]);
+    setRolls([]);
+    setActiveId(HERO_PLAYER);
+    setCreating(false);
+    setOpenWindow(null);
+    setHome(false);
+    setPlayed(true);
+    setFailed(null);
+    await refresh();
+    autosave();
   }
 
   function speak(m: ChatMessage) {
@@ -808,16 +948,35 @@ export default function App() {
           canStartNew={!played}
           onClose={() => setOpenWindow(null)}
           onNewGame={() => {
-            setOpenWindow(null);
-            setHome(false);
-            setPlayed(true);
+            restartDemo()
+              .then(async () => {
+                nextId.current = 1;
+                setMessages(aiAvailable ? [{ id: nextId.current++, author: "system", text: WELCOME_APP, time: now() }] : []);
+                setRolls([]);
+                setActiveId(STRANGE_PLAYER);
+                setOpenWindow(null);
+                setHome(false);
+                setPlayed(true);
+                await refresh();
+              })
+              .catch((e: unknown) => addMessage("system", errorText(e)));
           }}
         />
       )}
+      {creating && <CreationWizard onClose={() => setCreating(false)} onConfirm={startNewCampaign} />}
       {openWindow === "reference" && <ReferenceWindow onClose={() => setOpenWindow(null)} />}
       {openWindow === "log" && <LogWindow onClose={() => setOpenWindow(null)} />}
       {home && (
-        <HomeScreen last={autosaves[0] ?? null} inGame={played} canExit={canExitApp()} onAction={homeAction} />
+        <HomeScreen
+          last={autosaves[0] ?? null}
+          inGame={played}
+          canExit={canExitApp()}
+          onAction={homeAction}
+          campaignTitle={campaignId === STRANGE_ID ? "Кампания «Дом Стрэндж»" : (campaigns.find((c) => c.id === campaignId)?.title ?? "Своя кампания")}
+          campaigns={campaigns}
+          currentCampaign={campaignId}
+          onOpenCampaign={(id) => switchCampaign(id)}
+        />
       )}
     </div>
   );

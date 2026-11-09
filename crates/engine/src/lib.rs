@@ -19,10 +19,12 @@
 //! - [`knowledge`] — записи мастера и игрока, статусы карточек базы знаний;
 //! - [`fixtures`] — демо-персонаж до появления импорта кампании;
 //! - [`treasury`] — казна отряда с журналом операций;
+//! - [`creation`] — герои из мастера создания и новые кампании;
 //! - [`session`] — сессия, общая для приложения и веб-версии.
 
 pub mod character;
 pub mod check;
+pub mod creation;
 pub mod error;
 pub mod expr;
 pub mod fixtures;
@@ -47,6 +49,10 @@ pub use character::{
     CharacterKind, CharacterSheet, ClassLevel, HitPoints,
 };
 pub use check::{player_d20, roll_d20, AttackResult, D20Roll, Modifier, RollMode, RollSource};
+pub use creation::{
+    build_hero, build_party, level_for_xp, starting_treasury, validate_hero, Campaign, HeroSpec,
+    SpecClass, SpecHp, SpecItem, SpecResource, MAX_HERO_LEVEL, XP_THRESHOLDS,
+};
 pub use error::EngineError;
 pub use expr::{DiceExpr, DiceGroupRoll, ExprRoll, Term};
 pub use inventory::{

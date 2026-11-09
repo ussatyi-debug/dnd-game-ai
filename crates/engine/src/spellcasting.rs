@@ -55,12 +55,19 @@ const SLOT_TABLE: [[u32; 9]; 20] = [
 pub enum Progression {
     /// Полный заклинатель: жрец, друид, волшебник, бард, чародей.
     Full,
-    /// Половинный: паладин, следопыт.
+    /// Половинный: паладин, следопыт (правила 2014 года — ячейки со 2 уровня).
     Half,
+    /// Половинный по правилам 2024 года: ячейки с 1 уровня, в мультиклассе уровни делятся
+    /// пополам с округлением вверх.
+    #[cfg_attr(feature = "serde", serde(rename = "half_2024"))]
+    Half2024,
     /// Третичный: Мистический рыцарь, Мистический ловкач.
     Third,
     /// Магия договора колдуна: отдельные ячейки одного круга.
     Pact,
+    /// Врождённая магия вида или таланта (наследие эльфа, «Посвящённый в магию»): своих
+    /// ячеек нет, класс задаёт только список и заклинательную характеристику.
+    Innate,
 }
 
 /// Как класс выбирает заклинания.
@@ -121,6 +128,9 @@ pub struct Caster {
     pub known: Vec<String>,
     /// Лимит известных заклинаний (`Known`).
     pub max_known: Option<u32>,
+    /// Лимит подготовки по таблице класса (правила 2024 года); `None` — по формуле 2014 года.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub max_prepared: Option<u32>,
     /// Подготовленные заклинания (`Prepared`, `Spellbook`), без всегда подготовленных.
     pub prepared: Vec<String>,
     /// Заклинания, подготовленные всегда (домен, клятва), и откуда они.
@@ -170,6 +180,7 @@ impl Caster {
             max_cantrips: 0,
             known: Vec::new(),
             max_known: None,
+            max_prepared: None,
             prepared: Vec::new(),
             always: Vec::new(),
             always_source: String::new(),
@@ -193,6 +204,12 @@ impl Caster {
     pub fn known(mut self, max: Option<u32>, list: &[&str]) -> Self {
         self.max_known = max;
         self.known = ids(list);
+        self
+    }
+
+    /// Лимит подготовки по таблице класса (правила 2024 года).
+    pub fn max_prepared(mut self, max: u32) -> Self {
+        self.max_prepared = Some(max);
         self
     }
 
@@ -254,6 +271,7 @@ impl Caster {
         let level = match self.progression {
             Progression::Full => l.div_ceil(2),
             Progression::Half if l >= 2 => l.div_ceil(4),
+            Progression::Half2024 => l.div_ceil(4),
             Progression::Third if l >= 3 => match l {
                 3..=6 => 1,
                 7..=12 => 2,
@@ -265,14 +283,18 @@ impl Caster {
         };
         let cap = match self.progression {
             Progression::Full => 9,
-            Progression::Half | Progression::Pact => 5,
+            Progression::Half | Progression::Half2024 | Progression::Pact => 5,
             Progression::Third => 4,
+            Progression::Innate => 0,
         };
         level.min(cap) as u8
     }
 
     /// Лимит подготовки: модификатор + уровень (паладин — половина уровня), не меньше 1.
     pub fn prepared_limit(&self, ability_modifier: i32) -> Option<u32> {
+        if let Some(max) = self.max_prepared {
+            return (self.preparation != Preparation::Known).then_some(max);
+        }
         let level = match (self.preparation, self.progression) {
             (Preparation::Known, _) => return None,
             (_, Progression::Half) => self.level / 2,
@@ -296,7 +318,7 @@ impl Caster {
             return has(&self.cantrips);
         }
         match self.preparation {
-            Preparation::Known => has(&self.known),
+            Preparation::Known => has(&self.known) || has(&self.always),
             Preparation::Prepared | Preparation::Spellbook => {
                 has(&self.prepared) || has(&self.always)
             }
@@ -405,13 +427,17 @@ impl Spellcasting {
     /// Уровень заклинателя для таблицы ячеек: один класс — по своей таблице (половинный
     /// округляется вверх), мультикласс — по правилам мультикласса (вниз).
     pub fn caster_level(&self) -> u32 {
-        let slotted: Vec<&Caster> =
-            self.casters.iter().filter(|c| c.progression != Progression::Pact).collect();
+        let slotted: Vec<&Caster> = self
+            .casters
+            .iter()
+            .filter(|c| !matches!(c.progression, Progression::Pact | Progression::Innate))
+            .collect();
         match slotted.as_slice() {
             [] => 0,
             [single] => match single.progression {
                 Progression::Full => single.level,
                 Progression::Half if single.level >= 2 => single.level.div_ceil(2),
+                Progression::Half2024 => single.level.div_ceil(2),
                 Progression::Third if single.level >= 3 => single.level.div_ceil(3),
                 _ => 0,
             },
@@ -420,8 +446,9 @@ impl Spellcasting {
                 .map(|c| match c.progression {
                     Progression::Full => c.level,
                     Progression::Half => c.level / 2,
+                    Progression::Half2024 => c.level.div_ceil(2),
                     Progression::Third => c.level / 3,
-                    Progression::Pact => 0,
+                    Progression::Pact | Progression::Innate => 0,
                 })
                 .sum(),
         }
@@ -526,6 +553,8 @@ pub struct CasterView {
     pub max_known: Option<u32>,
     pub prepared_count: Option<u32>,
     pub prepared_limit: Option<u32>,
+    /// Лимит взят из таблицы класса (правила 2024 года), а не из формулы.
+    pub prepared_by_table: bool,
     /// Подготовлено больше лимита (данные листа нарушают правила).
     pub over_limit: bool,
     /// Книга волшебника.
@@ -781,6 +810,7 @@ impl Character {
                     max_known: c.max_known,
                     prepared_count,
                     prepared_limit,
+                    prepared_by_table: c.max_prepared.is_some(),
                     over_limit: matches!((prepared_count, prepared_limit), (Some(n), Some(l)) if n > l),
                     spellbook: if c.preparation == Preparation::Spellbook {
                         self.entries(c, &c.known)

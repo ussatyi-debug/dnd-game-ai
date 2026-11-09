@@ -12,8 +12,9 @@
 use std::cell::RefCell;
 
 use dnd_engine::{
-    CardDraft, CardFact, CastMethod, CastRequest, KbCard, NewNote, NoteEdit, NoteKind, NoteLayer,
-    RestKind, SaveData, Session, SheetEdit, SlotRef, Xoshiro256,
+    validate_hero, Campaign, CardDraft, CardFact, CastMethod, CastRequest, HeroSpec, KbCard,
+    NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SaveData, Scene, Session, SheetEdit, SlotRef,
+    Xoshiro256,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -157,6 +158,18 @@ pub enum Request {
     LoadState {
         save: Value,
     },
+    /// Проверка листа героя из мастера создания: список нарушений (пусто — лист в порядке).
+    ValidateHero {
+        spec: Value,
+    },
+    /// Новая своя кампания вместо текущей игры.
+    StartCampaign {
+        campaign: Value,
+        scene: Value,
+        gold: u32,
+    },
+    /// Кампания «Дом Стрэндж» с начала.
+    RestartDemo,
     /// Выполняет команды движка из ответа мастера и возвращает текст без них.
     MasterApply {
         text: String,
@@ -316,6 +329,23 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             let data: SaveData = serde_json::from_value(save)
                 .map_err(|e| format!("Сохранение не загружено: файл повреждён ({e})"))?;
             to_value(session.load(data).map_err(|e| e.to_string())?)
+        }
+        Request::ValidateHero { spec } => {
+            let spec: HeroSpec =
+                serde_json::from_value(spec).map_err(|e| format!("Лист героя не прочитан: {e}"))?;
+            to_value(validate_hero(&spec))
+        }
+        Request::StartCampaign { campaign, scene, gold } => {
+            let campaign: Campaign = serde_json::from_value(campaign)
+                .map_err(|e| format!("Кампания не прочитана: {e}"))?;
+            let scene: Scene =
+                serde_json::from_value(scene).map_err(|e| format!("Сцена не прочитана: {e}"))?;
+            session.start_campaign(campaign, scene, gold).map_err(|e| e.to_string())?;
+            to_value(session.party_view())
+        }
+        Request::RestartDemo => {
+            session.restart_demo();
+            to_value(session.party_view())
         }
         Request::UndoMasterTurn => to_value(session.undo_master_turn().map_err(|e| e.to_string())?),
         Request::MasterApply { text, rolled, player } => {
@@ -521,7 +551,7 @@ mod tests {
         assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
         assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
         let save = call(&mut s, json!({ "cmd": "save_state" }));
-        assert_eq!(save["ok"]["format_version"], 7);
+        assert_eq!(save["ok"]["format_version"], 8);
         assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
         let added = call(
             &mut s,

@@ -46,6 +46,22 @@ export async function buildSave(messages: ChatMessage[], rolls: TrayRoll[]): Pro
   };
 }
 
+/** Кампания, в которую пишутся автосохранения: «strange» — «Дом Стрэндж», иначе своя. */
+let campaignId = "strange";
+
+export function setAutosaveCampaign(id: string): void {
+  campaignId = id;
+}
+
+export function autosaveCampaign(): string {
+  return campaignId;
+}
+
+/** Имя записи хранилища: у «Дома Стрэндж» — прежнее, чтобы старые автосохранения остались видны. */
+function webKey(slot: number): string {
+  return campaignId === "strange" ? `autosave_${slot}` : `autosave_${campaignId}_${slot}`;
+}
+
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -61,11 +77,12 @@ interface TauriAutosave {
 
 const tauriStore = {
   async list(): Promise<AutosaveInfo[]> {
-    const list = await invoke<TauriAutosave[]>("autosave_list");
+    const list = await invoke<TauriAutosave[]>("autosave_list", { campaign: campaignId });
     return list.map((a) => ({ slot: a.slot, savedAt: a.saved_at, day: a.day, location: a.location }));
   },
   async write(slot: number, json: string, info: Omit<AutosaveInfo, "slot">): Promise<void> {
     await invoke("autosave_write", {
+      campaign: campaignId,
       slot,
       json,
       savedAt: info.savedAt,
@@ -74,7 +91,7 @@ const tauriStore = {
     });
   },
   read(slot: number): Promise<string> {
-    return invoke<string>("autosave_read", { slot });
+    return invoke<string>("autosave_read", { campaign: campaignId, slot });
   },
 };
 
@@ -136,7 +153,7 @@ function connectWebDb(): Promise<{ db: Db; uid: string } | null> {
   return webDb;
 }
 
-const LOCAL_KEY = (slot: number) => `dnd.autosave.${slot}`;
+const LOCAL_KEY = (slot: number) => (campaignId === "strange" ? `dnd.autosave.${slot}` : `dnd.autosave.${campaignId}.${slot}`);
 
 const webStore = {
   async list(): Promise<AutosaveInfo[]> {
@@ -144,7 +161,7 @@ const webStore = {
     const out: AutosaveInfo[] = [];
     for (let slot = 0; slot < AUTOSAVE_SLOTS; slot++) {
       if (conn) {
-        const snap = await conn.db.doc(`data/users/${conn.uid}/autosave_${slot}`).get();
+        const snap = await conn.db.doc(`data/users/${conn.uid}/${webKey(slot)}`).get();
         const d = snap.exists ? snap.data() : undefined;
         if (d && typeof d.savedAt === "string") {
           out.push({
@@ -174,10 +191,10 @@ const webStore = {
       const parts = Math.ceil(packed.length / PART_SIZE);
       for (let i = 0; i < parts; i++) {
         await conn.db
-          .doc(`data/users/${conn.uid}/autosave_${slot}_part${i}`)
+          .doc(`data/users/${conn.uid}/${webKey(slot)}_part${i}`)
           .set({ data: packed.slice(i * PART_SIZE, (i + 1) * PART_SIZE) });
       }
-      await conn.db.doc(`data/users/${conn.uid}/autosave_${slot}`).set({ ...info, parts });
+      await conn.db.doc(`data/users/${conn.uid}/${webKey(slot)}`).set({ ...info, parts });
       return;
     }
     try {
@@ -189,11 +206,11 @@ const webStore = {
   async read(slot: number): Promise<string> {
     const conn = await connectWebDb();
     if (conn) {
-      const meta = await conn.db.doc(`data/users/${conn.uid}/autosave_${slot}`).get();
+      const meta = await conn.db.doc(`data/users/${conn.uid}/${webKey(slot)}`).get();
       const parts = Number(meta.data()?.parts ?? 0);
       let packed = "";
       for (let i = 0; i < parts; i++) {
-        const snap = await conn.db.doc(`data/users/${conn.uid}/autosave_${slot}_part${i}`).get();
+        const snap = await conn.db.doc(`data/users/${conn.uid}/${webKey(slot)}_part${i}`).get();
         packed += String(snap.data()?.data ?? "");
       }
       return gunzipBase64(packed);

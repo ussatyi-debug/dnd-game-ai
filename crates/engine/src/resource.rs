@@ -16,6 +16,9 @@ pub enum Recovery {
     ShortRest,
     /// Только на длительном отдыхе (Везунчик).
     LongRest,
+    /// Одно применение на коротком отдыхе, все — на длительном (ярость, божественный канал,
+    /// второе дыхание по правилам 2024 года).
+    OneOnShortRest,
     /// С наступлением нового игрового дня (свойства предметов «1/день»).
     Daily,
     /// Только вручную (заряды предметов, расходники).
@@ -132,9 +135,17 @@ impl ResourcePool {
 
     /// Применяет отдых. Возвращает `true`, если пул восстановился.
     pub fn apply_rest(&mut self, rest: RestKind) -> bool {
+        if self.recovery == Recovery::OneOnShortRest && rest == RestKind::Short {
+            if self.current < self.max {
+                self.current += 1;
+                return true;
+            }
+            return false;
+        }
         let recovers = matches!(
             (self.recovery, rest),
-            (Recovery::ShortRest, _) | (Recovery::LongRest, RestKind::Long)
+            (Recovery::ShortRest, _)
+                | (Recovery::LongRest | Recovery::OneOnShortRest, RestKind::Long)
         );
         self.refill_if(recovers)
     }

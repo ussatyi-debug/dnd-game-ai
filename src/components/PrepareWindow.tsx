@@ -77,7 +77,9 @@ export default function PrepareWindow({ book, caster, onClose, onPrepared, onOpe
           )}
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted">
-              Лимит: мод. {caster.ability_label} + {caster.progression === "half" ? "½ уровня" : "уровень"}
+              {caster.prepared_by_table
+                ? "Лимит: по таблице класса"
+                : `Лимит: мод. ${caster.ability_label} + ${caster.progression === "half" ? "½ уровня" : "уровень"}`}
             </span>
             <span className={`font-mono ${over ? "text-fumble" : "text-gold"}`}>
               {selected.size}/{limit}

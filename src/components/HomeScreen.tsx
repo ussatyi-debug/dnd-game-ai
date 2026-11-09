@@ -1,9 +1,11 @@
 // Главный экран: карта известного мира, кампании, загрузка, настройки, справочник.
 
 import worldMap from "../assets/world-map.webp";
+import { portraitUrl } from "../data/rules/portraits.ts";
 import { ago, type AutosaveInfo } from "../lib/autosave";
+import type { CampaignInfo } from "../lib/campaigns";
 
-export type HomeAction = "continue" | "campaign" | "load" | "settings" | "reference" | "exit";
+export type HomeAction = "continue" | "campaign" | "new" | "load" | "settings" | "reference" | "exit";
 
 interface HomeScreenProps {
   /** Последнее автосохранение (или null). */
@@ -13,6 +15,12 @@ interface HomeScreenProps {
   /** Показывать «Выход» (приложение на ПК). */
   canExit: boolean;
   onAction: (action: HomeAction) => void;
+  /** Название текущей кампании. */
+  campaignTitle: string;
+  /** Свои кампании (новые первыми). */
+  campaigns: CampaignInfo[];
+  currentCampaign: string;
+  onOpenCampaign: (id: string) => void;
 }
 
 function Item({
@@ -41,7 +49,16 @@ function Item({
   );
 }
 
-export default function HomeScreen({ last, inGame, canExit, onAction }: HomeScreenProps) {
+export default function HomeScreen({
+  last,
+  inGame,
+  canExit,
+  onAction,
+  campaignTitle,
+  campaigns,
+  currentCampaign,
+  onOpenCampaign,
+}: HomeScreenProps) {
   const canContinue = inGame || last !== null;
   return (
     <div className="fixed inset-0 z-30 overflow-y-auto bg-ink">
@@ -63,7 +80,7 @@ export default function HomeScreen({ last, inGame, canExit, onAction }: HomeScre
       <main className="relative mx-auto flex min-h-full max-w-md flex-col justify-center gap-6 px-5 py-10">
         <header className="text-center">
           <h1 className="font-serif text-4xl text-gold drop-shadow">DnD Game AI</h1>
-          <p className="mt-1 text-sm text-parchment/80">Кампания «Дом Стрэндж»</p>
+          <p className="mt-1 text-sm text-parchment/80">{campaignTitle}</p>
         </header>
 
         {canContinue && (
@@ -86,7 +103,36 @@ export default function HomeScreen({ last, inGame, canExit, onAction }: HomeScre
 
         <ul className="space-y-2">
           <Item label="Кампания «Дом Стрэндж»" hint="сохранения" onClick={() => onAction("campaign")} />
-          <Item label="Новая кампания" soon />
+          <Item label="Новая кампания" hint="создать героя" onClick={() => onAction("new")} />
+          {campaigns.length > 0 && (
+            <li className="rounded-lg border border-edge/70 bg-ink/70 p-2 backdrop-blur-sm">
+              <p className="px-2 pb-1 text-[11px] uppercase tracking-wider text-muted">Свои кампании</p>
+              <ul className="space-y-1">
+                {campaigns.map((c) => {
+                  const img = c.hero.portrait ? portraitUrl(c.hero.portrait) : null;
+                  return (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenCampaign(c.id)}
+                        className={`flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left hover:bg-gold/10 ${c.id === currentCampaign ? "text-gold" : ""}`}
+                      >
+                        {img ? (
+                          <img src={img} alt="" className="h-10 w-8 rounded object-cover object-top" />
+                        ) : (
+                          <span className="h-10 w-8 rounded bg-panel" />
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm">{c.hero.name}</span>
+                          <span className="block truncate text-[11px] text-muted">{c.hero.summary}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          )}
           <Item label="Загрузить из файла" onClick={() => onAction("load")} />
           <Item label="Справочник" hint="заклинания, правила" onClick={() => onAction("reference")} />
           <Item label="Настройки" hint="озвучка, музыка, ИИ-мастер" onClick={() => onAction("settings")} />

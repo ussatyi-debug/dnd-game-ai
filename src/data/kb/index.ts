@@ -12,6 +12,35 @@ export const KB_ENTRIES: KbEntry[] = [...PLAYER_ENTRIES, ...MASTER_ENTRIES, ...W
 
 export const KB_BY_ID: ReadonlyMap<string, KbEntry> = new Map(KB_ENTRIES.map((e) => [e.id, e]));
 
+/**
+ * Какая часть базы видна в текущей кампании: «Дом Стрэндж» — вся база, своя кампания —
+ * только слой «Мир» (записи игрока и мастера относятся к героям «Дома Стрэндж»).
+ */
+let scope: "all" | "world" = "all";
+
+export function setKbScope(next: "all" | "world"): void {
+  scope = next;
+}
+
+export function kbScope(): "all" | "world" {
+  return scope;
+}
+
+/** Карточки, видимые в текущей кампании. */
+export function kbEntries(): KbEntry[] {
+  return scope === "all" ? KB_ENTRIES : KB_ENTRIES.filter((e) => e.layer === "world");
+}
+
+/** Слои базы: в своей кампании слои игрока и мастера наполняются по ходу игры. */
+export function kbLayers(): KbLayerInfo[] {
+  return KB_LAYERS;
+}
+
+/** Места мира для появления героя новой кампании. */
+export function worldLocations(): KbEntry[] {
+  return KB_ENTRIES.filter((e) => e.layer === "world" && e.id.startsWith("loc."));
+}
+
 /** Текст карточки для поиска. */
 export function searchText(entry: KbEntry): string {
   return [
@@ -48,7 +77,7 @@ export function matchesQuery(entry: KbEntry, query: string): boolean {
 
 /** Указатель карточек для движка: мастер видит оглавление базы и ссылается на карточки. */
 export function kbIndex(): { id: string; title: string; layer: string; status: string | null }[] {
-  return KB_ENTRIES.map((e) => ({ id: e.id, title: e.title, layer: e.layer, status: e.status ?? null }));
+  return kbEntries().map((e) => ({ id: e.id, title: e.title, layer: e.layer, status: e.status ?? null }));
 }
 
 function stems(text: string): string[] {
@@ -69,7 +98,7 @@ export function relevantEntries(query: string, limit = 4): KbEntry[] {
   const words = stems(query);
   if (words.length === 0) return [];
   const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е");
-  return KB_ENTRIES.map((entry) => {
+  return kbEntries().map((entry) => {
     const title = norm(`${entry.title} ${entry.subtitle ?? ""} ${(entry.tags ?? []).join(" ")}`);
     const body = searchText(entry);
     const score = words.reduce((sum, w) => sum + (title.includes(w) ? 3 : body.includes(w) ? 1 : 0), 0);

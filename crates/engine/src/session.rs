@@ -10,6 +10,7 @@
 
 use crate::character::{Character, CharacterKind, CharacterSheet, HitPoints};
 use crate::check::{roll_d20, D20Roll, Modifier, RollMode};
+use crate::creation::{build_party, starting_treasury, Campaign};
 use crate::error::EngineError;
 use crate::expr::{DiceExpr, ExprRoll};
 use crate::fixtures::{demo_party, demo_scene, demo_treasury};
@@ -28,7 +29,7 @@ use crate::treasury::{EntrySource, NewEntry, Treasury, TreasuryView};
 pub const LUCKY_ID: &str = "feat.lucky";
 
 /// Версия формата сохранения.
-pub const SAVE_FORMAT_VERSION: u32 = 7;
+pub const SAVE_FORMAT_VERSION: u32 = 8;
 
 /// Самый старый формат, который загружается (сохранения 0.5.0).
 pub const MIN_SAVE_FORMAT: u32 = 3;
@@ -158,6 +159,8 @@ pub struct SaveState {
     pub custom_cards: Vec<CustomCard>,
     pub turns_without_notes: u32,
     pub proposals: Vec<SheetProposal>,
+    /// Своя кампания с созданными героями; `None` — кампания «Дом Стрэндж».
+    pub campaign: Option<Campaign>,
 }
 
 /// Состояние сессии.
@@ -185,6 +188,8 @@ pub struct Session {
     pub(crate) next_proposal_id: u64,
     /// Последний ход мастера, который можно отменить.
     pub(crate) undo: Option<Box<UndoPoint>>,
+    /// Своя кампания; `None` — «Дом Стрэндж».
+    pub(crate) campaign: Option<Campaign>,
 }
 
 impl Session {
@@ -204,7 +209,50 @@ impl Session {
             proposals: Vec::new(),
             next_proposal_id: 1,
             undo: None,
+            campaign: None,
         }
+    }
+
+    /// Новая кампания с созданными героями: отряд собирается из листов, казна — из стартового
+    /// золота. Место появления у всех героев — место сцены.
+    pub fn new_campaign(
+        rng: Xoshiro256,
+        campaign: Campaign,
+        scene: Scene,
+        gold: u32,
+    ) -> Result<Self, EngineError> {
+        let party = build_party(&campaign, &scene.location)?;
+        let treasury = starting_treasury(scene.day, gold);
+        let mut session = Self::new(rng, scene, party, treasury);
+        session.log(format!("Новая кампания «{}»: День {}", campaign.title, session.scene.day));
+        session.campaign = Some(campaign);
+        Ok(session)
+    }
+
+    /// Начинает свою кампанию вместо текущей игры. Генератор кубов и указатель базы знаний
+    /// остаются текущими. При ошибке игра не меняется.
+    pub fn start_campaign(
+        &mut self,
+        campaign: Campaign,
+        scene: Scene,
+        gold: u32,
+    ) -> Result<(), EngineError> {
+        let mut next = Self::new_campaign(self.rng.clone(), campaign, scene, gold)?;
+        next.kb_cards = std::mem::take(&mut self.kb_cards);
+        *self = next;
+        Ok(())
+    }
+
+    /// Начинает кампанию «Дом Стрэндж» с начала (демо-данные приложения).
+    pub fn restart_demo(&mut self) {
+        let mut next = Self::demo(self.rng.clone());
+        next.kb_cards = std::mem::take(&mut self.kb_cards);
+        *self = next;
+    }
+
+    /// Своя кампания (если игра не «Дом Стрэндж»).
+    pub fn campaign(&self) -> Option<&Campaign> {
+        self.campaign.as_ref()
     }
 
     /// Сессия с демо-данными кампании на День 82 (до появления импорта).
@@ -493,6 +541,7 @@ impl Session {
             custom_cards: self.custom_cards.clone(),
             turns_without_notes: self.turns_without_notes,
             proposals: self.proposals.clone(),
+            campaign: self.campaign.clone(),
         }
     }
 }

@@ -77,6 +77,8 @@ pub enum EngineError {
     UnknownProposal(u64),
     /// Сохранение не подходит.
     InvalidSave(String),
+    /// Лист созданного героя нарушает правила.
+    InvalidHero(String),
     /// Ценность с таким ID уже есть.
     DuplicateAsset(String),
     /// После хода мастера состояние менялось — отмена вернула бы и чужие изменения.
@@ -231,6 +233,7 @@ impl fmt::Display for EngineError {
             Self::InvalidSheetValue(v) => write!(f, "Недопустимое значение в листе: {v}"),
             Self::UnknownProposal(id) => write!(f, "Нет предложения мастера № {id} (уже решено?)"),
             Self::InvalidSave(reason) => write!(f, "Сохранение не загружено: {reason}"),
+            Self::InvalidHero(reason) => write!(f, "Лист героя не принят: {reason}"),
             Self::DuplicateAsset(id) => write!(f, "Ценность «{id}» уже есть в казне"),
             Self::UndoStale => write!(
                 f,

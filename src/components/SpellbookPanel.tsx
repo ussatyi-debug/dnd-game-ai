@@ -157,6 +157,7 @@ function groupByLevel(rows: Row[]): [number, Row[]][] {
 }
 
 function casterCounter(c: CasterView): { text: string; warn: boolean } | null {
+  if (c.progression === "innate") return null;
   if (c.preparation === "known") {
     return c.max_known !== null ? { text: `Известно ${c.known_count ?? 0}/${c.max_known}`, warn: false } : null;
   }
@@ -176,7 +177,7 @@ export default function SpellbookPanel({ book, onChanged, onNote }: SpellbookPan
   useEffect(() => {
     if (filter !== "all") return;
     for (const c of book.casters) {
-      if (c.preparation === "known") continue;
+      if (c.preparation === "known" || c.progression === "innate") continue;
       preparationOptions(book.character_id, c.id)
         .then((list) => setClassLists((prev) => ({ ...prev, [c.id]: list })))
         .catch(() => undefined);
@@ -198,7 +199,10 @@ export default function SpellbookPanel({ book, onChanged, onNote }: SpellbookPan
     } else {
       for (const c of book.casters) {
         for (const e of c.cantrips) if (filter !== "rituals") out.push({ entry: e, note: sourceOf(c, e), dim: false });
-        const list = filter === "all" && c.preparation !== "known" ? (classLists[c.id] ?? c.spells) : c.spells;
+        const list =
+          filter === "all" && c.preparation !== "known" && c.progression !== "innate"
+            ? (classLists[c.id] ?? c.spells)
+            : c.spells;
         for (const e of list) {
           if (filter === "rituals" && !e.ritual) continue;
           out.push({ entry: e, note: sourceOf(c, e), dim: !e.ready });
@@ -283,7 +287,7 @@ export default function SpellbookPanel({ book, onChanged, onNote }: SpellbookPan
                   <span className={counter.warn ? " text-fumble" : ""}> · {counter.text}</span>
                 )}
               </span>
-              {c.preparation !== "known" && (
+              {c.preparation !== "known" && c.progression !== "innate" && (
                 <button
                   type="button"
                   onClick={() => setPreparing(c.id)}

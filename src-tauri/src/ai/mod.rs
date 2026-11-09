@@ -28,6 +28,12 @@ pub enum Provider {
 impl Provider {
     pub const ALL: [Provider; 3] = [Provider::Gemini, Provider::OpenAi, Provider::Local];
 
+    /// Доступен ли провайдер на этом устройстве. На телефоне — только локальная модель на ПК
+    /// в домашней сети: ключи облачных моделей хранятся только на ПК и на телефон не попадают.
+    pub fn allowed_here(self) -> bool {
+        !cfg!(mobile) || self == Provider::Local
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Provider::Gemini => "Google Gemini",
@@ -142,6 +148,7 @@ impl AiSettings {
             key_hint: key.map(|k| hint_for(self.provider, k)),
             providers: Provider::ALL
                 .into_iter()
+                .filter(|p| p.allowed_here())
                 .map(|p| {
                     let key = self.key_for(p);
                     ProviderView {

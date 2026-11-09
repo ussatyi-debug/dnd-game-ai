@@ -364,6 +364,7 @@ pub fn turn_context(session: &mut Session, query: &str, kb_extra: &str) -> Value
         session.party().iter().find(|c| c.kind == CharacterKind::Player).map(|c| c.sheet());
 
     json!({
+        "своя_кампания": session.campaign().map(|c| c.title.clone()),
         "сцена": party.scene,
         "отряд": party.members.iter().map(|m| json!({
             "id": m.id,
@@ -399,10 +400,47 @@ pub fn turn_context(session: &mut Session, query: &str, kb_extra: &str) -> Value
     })
 }
 
+/// Кодекс своей кампании (созданные герои, правила 2024 года): из кодекса «Дома Стрэндж»
+/// убраны герой, спутники и правила склонения его имени.
+pub fn custom_codex(title: &str, hero: &str) -> String {
+    let mut text = CODEX.replace("(правила 2014 года)", "(правила 2024 года)");
+    let swaps: [(&str, String); 6] = [
+        (
+            "- Тёмное фэнтези, политический триллер, оккультная экспансия, Tier 2+.",
+            format!("- Кампания «{title}». Тёмное фэнтези в известном мире кампании (карточки слоя «Мир»)."),
+        ),
+        (
+            "- Главный герой — сэр Никис Стрэндж (Гримм): холодный, расчётливый, прагматичный монарх-«хирург эпохи». Действует скрытно и жёстко, мыслит на несколько ходов вперёд.",
+            format!("- Главный герой — {hero}. Его характер, цели и прошлое раскрывает игрок: не приписывай герою мыслей и решений, опирайся на лист (предыстория, мировоззрение, внешность)."),
+        ),
+        (", проверки дозора фамильяра Юссача.", ".".into()),
+        (
+            "- Имя героя в косвенных падежах — строго через «а»: сэра Никиса, сэру Никису, сэром Никисом, о сэре Никисе. Формы вроде «Никисы» запрещены.\n",
+            String::new(),
+        ),
+        (
+            "- Характеры: сир Гюнтер «Бастион» — строгий рыцарь-фанатик чести и защиты слабых; Брокк Железнолом — грубый прагматичный дварф-ветеран, знаток камня и кузнечного дела; Сестра Валерия «Пепельная Дева» — спокойная отрешённая целительница с ледяной ясностью ума; Корвус «Немой» — безмолвный молниеносный телохранитель, общается жестами и грифельной доской.",
+            "- Спутники появляются по ходу игры; их характеры — в листах и записях базы знаний.".into(),
+        ),
+        ("БОИ (Tier 2+)", "БОИ".into()),
+    ];
+    for (from, to) in swaps {
+        text = text.replace(from, &to);
+    }
+    text.replace("атака по Никису", "атака по герою").replace("pc.nikis", "pc.hero")
+}
+
 /// Полный системный текст: кодекс и контекст хода.
 pub fn system_text(context: &Value) -> String {
+    let codex = match context["своя_кампания"].as_str() {
+        Some(title) => {
+            let hero = context["персонаж_игрока"]["name"].as_str().unwrap_or("герой игрока");
+            custom_codex(title, hero)
+        }
+        None => CODEX.to_string(),
+    };
     format!(
-        "{CODEX}\nСОСТОЯНИЕ ИГРЫ НА ЭТОТ ХОД (JSON):\n{}",
+        "{codex}\nСОСТОЯНИЕ ИГРЫ НА ЭТОТ ХОД (JSON):\n{}",
         serde_json::to_string_pretty(context).unwrap_or_default()
     )
 }
@@ -410,6 +448,26 @@ pub fn system_text(context: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_codex_drops_strange_specifics() {
+        for needle in [
+            "- Тёмное фэнтези, политический триллер, оккультная экспансия, Tier 2+.",
+            ", проверки дозора фамильяра Юссача.",
+            "строго через «а»",
+            "- Характеры: сир Гюнтер",
+            "БОИ (Tier 2+)",
+            "(правила 2014 года)",
+        ] {
+            assert!(CODEX.contains(needle), "в кодексе нет «{needle}»");
+        }
+        let text = custom_codex("Пепел", "Ирэль");
+        assert!(!text.contains("Никис"), "{text}");
+        assert!(!text.contains("Юссач"));
+        assert!(!text.contains("Гюнтер «Бастион»"));
+        assert!(text.contains("Главный герой — Ирэль"));
+        assert!(text.contains("правила 2024 года"));
+    }
     use dnd_engine::Xoshiro256;
 
     #[test]
