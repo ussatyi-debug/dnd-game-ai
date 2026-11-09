@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { getDownloads } from "../lib/claude";
+import { writeManualSave } from "../lib/autosave";
 import { errorText, saveState } from "../lib/engine";
 import type { TrayRoll } from "../lib/rolls";
 import type { ChatMessage } from "./ChatPanel";
@@ -11,6 +12,8 @@ interface SaveWindowProps {
   onClose: () => void;
   messages: ChatMessage[];
   rolls: TrayRoll[];
+  /** Ручное сохранение записано (обновить список сохранений). */
+  onSaved?: () => void;
 }
 
 function isTauri(): boolean {
@@ -22,9 +25,12 @@ function fileName(day: unknown): string {
   return `dnd-save-day${typeof day === "number" ? day : "x"}-${stamp}.json`;
 }
 
-/** Выгрузка сохранения: файл в приложении, а если скачивание недоступно — копирование. */
-export default function SaveWindow({ onClose, messages, rolls }: SaveWindowProps) {
+/** Сохранение: в игре (ручное, с названием), в файл и в буфер обмена. */
+export default function SaveWindow({ onClose, messages, rolls, onSaved }: SaveWindowProps) {
   const [json, setJson] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
   const [name, setName] = useState("dnd-save.json");
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -32,8 +38,10 @@ export default function SaveWindow({ onClose, messages, rolls }: SaveWindowProps
   useEffect(() => {
     saveState()
       .then((engine) => {
-        const day = (engine as { scene?: { day?: unknown } }).scene?.day;
+        const scene = (engine as { scene?: { day?: unknown; location?: unknown } }).scene;
+        const day = scene?.day;
         setName(fileName(day));
+        setTitle(`День ${typeof day === "number" ? day : "?"}${typeof scene?.location === "string" && scene.location ? `, ${scene.location}` : ""}`);
         setJson(
           JSON.stringify(
             {
@@ -50,6 +58,21 @@ export default function SaveWindow({ onClose, messages, rolls }: SaveWindowProps
       })
       .catch((e: unknown) => setError(errorText(e)));
   }, [messages, rolls]);
+
+  async function saveInGame() {
+    setSaving(true);
+    setSaved(null);
+    setError(null);
+    try {
+      const info = await writeManualSave(messages, rolls, title);
+      setSaved(`Сохранено: «${info.name ?? title}». Загрузить — в окне «Загрузить сохранение» или «Кампания».`);
+      onSaved?.();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function download() {
     if (!json) return;
@@ -86,31 +109,53 @@ export default function SaveWindow({ onClose, messages, rolls }: SaveWindowProps
   }
 
   return (
-    <Modal title="Выгрузить сохранение" onClose={onClose} size="md">
-      <div className="space-y-3 p-4 text-sm">
+    <Modal title="Сохранить" onClose={onClose} size="md">
+      <div className="space-y-4 p-4 text-sm">
         {error && <p className="text-fumble">{error}</p>}
         {!json && !error && <p className="text-muted">Собираю сохранение…</p>}
         {json && (
           <>
-            <p>
-              В файле — сцена, отряд с ресурсами, казна с журналом, история чата и бросков. Размер:{" "}
-              {(json.length / 1024).toFixed(1)} КБ.
-            </p>
-            <div className="flex flex-wrap gap-2">
+            <section className="space-y-2">
+              <h3 className="font-serif text-gold">Сохранить в игре</h3>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={title}
+                  maxLength={80}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="min-w-0 flex-1 rounded-md border border-edge bg-ink px-3 py-2"
+                  aria-label="Название сохранения"
+                />
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void saveInGame()}
+                  className="rounded-md bg-blood px-4 py-2 text-parchment hover:bg-blood/80 disabled:opacity-50"
+                >
+                  {saving ? "Сохраняю…" : "Сохранить"}
+                </button>
+              </div>
+              {saved && <p className="text-crit">{saved}</p>}
+              <p className="text-xs text-muted">Ручные сохранения не перезаписываются автосохранениями. До 10 на кампанию.</p>
+            </section>
+            <section className="space-y-2 border-t border-edge pt-3">
+              <h3 className="font-serif text-gold">Сохранить в файл</h3>
+              <p className="text-xs text-muted">
+                Сцена, отряд с ресурсами, казна, история чата и бросков · {(json.length / 1024).toFixed(1)} КБ
+              </p>
               <button
                 type="button"
                 onClick={() => void download()}
-                className="rounded-md bg-blood px-4 py-2 text-parchment hover:bg-blood/80"
+                className="rounded-md border border-gold px-4 py-2 text-gold hover:bg-gold/10"
               >
-                Скачать {name}
+                Сохранить {name}
               </button>
+              {note && <p className="text-crit">{note}</p>}
+            </section>
+            <section className="space-y-2 border-t border-edge pt-3">
+              <h3 className="font-serif text-gold">Скопировать в буфер</h3>
+              <p className="text-xs text-muted">Текст сохранения можно вставить в окно загрузки на другом устройстве.</p>
               <CopyButton text={json} className="px-4 py-2 text-sm" />
-            </div>
-            {note && <p className="text-crit">{note}</p>}
-            <p className="text-xs text-muted">
-              Если скачивание не началось (например, в просмотре внутри Claude), скопируйте сохранение и
-              вставьте в файл с расширением .json.
-            </p>
+            </section>
           </>
         )}
       </div>

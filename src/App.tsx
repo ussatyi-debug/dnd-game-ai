@@ -72,6 +72,7 @@ import { kbExtraFor, kbIndex, setKbScope, worldLocations } from "./data/kb/index
 import {
   AUTOSAVE_EVERY,
   listAutosaves,
+  deleteAllSaves,
   readAutosave,
   setAutosaveCampaign,
   writeAutosave,
@@ -79,6 +80,7 @@ import {
 } from "./lib/autosave";
 import {
   addCampaign,
+  removeCampaign,
   currentCampaignId,
   listCampaigns,
   newCampaignId,
@@ -89,6 +91,7 @@ import {
 import { CURRENT_DAY, equipment, heroSummary, TIERS, type Draft } from "./lib/creation.ts";
 import type { HeroSpec } from "./lib/heroSpec";
 import CreationWizard from "./components/creation/CreationWizard.tsx";
+import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { webAiGenerate } from "./lib/browserAi";
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
@@ -98,6 +101,13 @@ const MAX_ROLLS = 200;
 /** Раундов запросов бросков мастера за ход (как в движке). */
 const MAX_ROLL_ROUNDS = 3;
 const STRANGE_PLAYER = "pc.nikis";
+
+/** Скрытая метка в чате: новая игра началась без мастера, вступление ещё впереди. */
+const OPENING_PENDING = "[вступление мастера ждёт подключения модели]";
+
+function isTauriApp(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
 
 /** Служебная заявка в начале новой игры: мастер встречает игрока и описывает сцену. */
 const OPENING_REQUEST =
@@ -180,6 +190,11 @@ export default function App() {
   /** Веб-версия: мастера ведёт модель со своим ключом (Gemini, ChatGPT, YandexGPT). */
   const browserModel = !aiAvailable && ai !== null && ai.claude === false && Boolean(ai.model);
   const masterMode: MasterMode = aiAvailable ? "provider" : browserModel ? "browser" : sample ? "claude" : "none";
+  /** Настройки ИИ ещё грузятся — пока не показываем «Мастер не подключён». */
+  const masterKnown = !aiAvailable || ai !== null;
+  /** Мастер может ответить: модель выбрана (или мастера ведёт Claude). */
+  const masterReady =
+    !masterKnown || masterMode === "claude" || masterMode === "browser" || (masterMode === "provider" && Boolean(ai?.model));
   const [tab, setTab] = useState<Tab>("dialog");
   const [openWindow, setOpenWindow] = useState<Overlay>(null);
   const [diceOpen, setDiceOpen] = useState(false);
@@ -425,12 +440,43 @@ export default function App() {
     refresh().catch(() => undefined);
   }
 
+  // Мастер подключён, а вступление ещё не звучало — открыть сцену сейчас.
+  useEffect(() => {
+    if (!masterReady || !masterKnown || thinking) return;
+    if (!messages.some((m) => m.text === OPENING_PENDING)) return;
+    setMessages((prev) => prev.filter((m) => m.text !== OPENING_PENDING));
+    setOpening(true);
+  }, [masterReady, masterKnown, messages, thinking]);
+
+  // Первый запуск без выбранной модели — сразу настройки ИИ.
+  useEffect(() => {
+    if (!masterKnown || masterReady) return;
+    try {
+      if (window.localStorage.getItem("dnd.firstRunDone")) return;
+      window.localStorage.setItem("dnd.firstRunDone", "1");
+    } catch {
+      return;
+    }
+    setSettingsTab("ai");
+    setOpenWindow("settings");
+  }, [masterKnown, masterReady]);
+
+  // Окно закрыто — список сохранений мог измениться (удаление, ручное сохранение).
+  useEffect(() => {
+    if (openWindow === null) listAutosaves().then(setAutosaves).catch(() => undefined);
+  }, [openWindow]);
+
   // Вступление мастера: после отрисовки новой игры, когда чат и отряд уже новые.
   useEffect(() => {
     if (!opening) return;
     setOpening(false);
-    if (masterMode === "none" || (masterMode === "provider" && !ai?.model)) {
-      addMessage("system", "Выберите модель мастера (Меню → Настройки → ИИ-мастер) — и он опишет начало сцены.");
+    if (!masterReady || !masterKnown) {
+      // Вступление ждёт мастера: метка уходит в сохранение и срабатывает после подключения модели.
+      setMessages((prev) =>
+        prev.some((m) => m.text === OPENING_PENDING)
+          ? prev
+          : [...prev, { id: nextId.current++, author: "system", text: OPENING_PENDING, time: now(), hidden: true }],
+      );
       return;
     }
     const message: ChatMessage = { id: nextId.current++, author: "player", text: OPENING_REQUEST, time: now(), hidden: true };
@@ -742,6 +788,24 @@ export default function App() {
       .catch((e: unknown) => addMessage("system", errorText(e)));
   }
 
+  /** Удаляет свою кампанию: все её сохранения и запись в списке. */
+  async function deleteCampaign(id: string) {
+    try {
+      if (isTauriApp()) await invokeTauri("campaign_delete_saves", { campaign: id });
+      else {
+        setAutosaveCampaign(id);
+        await deleteAllSaves();
+        setAutosaveCampaign(campaignId);
+      }
+      await removeCampaign(id);
+      setCampaigns((prev) => prev.filter((c) => c.id !== id));
+      if (id === campaignId) switchCampaign(STRANGE_ID);
+    } catch (e) {
+      setAutosaveCampaign(campaignId);
+      addMessage("system", errorText(e));
+    }
+  }
+
   /** Новая кампания с созданным героем: движок проверяет лист и собирает мир. */
   async function startNewCampaign(draft: Draft, spec: HeroSpec) {
     const errors = await validateHero(spec);
@@ -867,6 +931,7 @@ export default function App() {
 
         <div className={`${shown("dialog")} min-h-0 flex-col lg:flex`}>
           <ChatPanel
+            masterReady={masterReady}
             messages={messages}
             draft={draft}
             thinking={thinking}
@@ -966,7 +1031,14 @@ export default function App() {
       {openWindow === "load" && (
         <LoadWindow onClose={() => setOpenWindow(null)} onSaveFirst={() => setOpenWindow("save")} onLoaded={loaded} />
       )}
-      {openWindow === "save" && <SaveWindow onClose={() => setOpenWindow(null)} messages={messages} rolls={rolls} />}
+      {openWindow === "save" && (
+        <SaveWindow
+          onClose={() => setOpenWindow(null)}
+          messages={messages}
+          rolls={rolls}
+          onSaved={() => void listAutosaves().then(setAutosaves)}
+        />
+      )}
       {openWindow === "treasury" && (
         <TreasuryWindow
           onClose={() => setOpenWindow(null)}
@@ -1029,6 +1101,12 @@ export default function App() {
           campaigns={campaigns}
           currentCampaign={campaignId}
           onOpenCampaign={(id) => switchCampaign(id)}
+          onDeleteCampaign={(id) => void deleteCampaign(id)}
+          masterReady={masterReady}
+          onConnectMaster={() => {
+            setSettingsTab("ai");
+            setOpenWindow("settings");
+          }}
         />
       )}
     </div>

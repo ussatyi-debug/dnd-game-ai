@@ -320,9 +320,18 @@ struct AutosaveMeta {
     saved_at: String,
     day: Option<u32>,
     location: String,
+    /// Название ручного сохранения (у автосохранений пусто).
+    #[serde(default)]
+    name: String,
 }
 
+/// Ячейки 0–2 — автосохранения по кругу, 10–19 — ручные сохранения игрока.
 const AUTOSAVE_SLOTS: u8 = 3;
+const MANUAL_SLOTS: std::ops::Range<u8> = 10..20;
+
+fn all_slots() -> impl Iterator<Item = u8> {
+    (0..AUTOSAVE_SLOTS).chain(MANUAL_SLOTS)
+}
 
 /// ID кампании для имени папки: «strange» — «Дом Стрэндж» (старая папка), иначе своя.
 fn check_campaign(campaign: &str) -> Result<(), String> {
@@ -351,7 +360,7 @@ fn autosave_dir(app: &tauri::AppHandle, campaign: &str) -> Result<std::path::Pat
 }
 
 fn check_slot(slot: u8) -> Result<(), String> {
-    if slot < AUTOSAVE_SLOTS {
+    if slot < AUTOSAVE_SLOTS || MANUAL_SLOTS.contains(&slot) {
         Ok(())
     } else {
         Err(format!("Нет ячейки автосохранения {slot}"))
@@ -361,7 +370,7 @@ fn check_slot(slot: u8) -> Result<(), String> {
 #[tauri::command]
 fn autosave_list(app: tauri::AppHandle, campaign: String) -> Result<Vec<AutosaveMeta>, String> {
     let dir = autosave_dir(&app, &campaign)?;
-    Ok((0..AUTOSAVE_SLOTS)
+    Ok(all_slots()
         .filter_map(|slot| {
             let text = std::fs::read_to_string(dir.join(format!("auto-{slot}.meta.json"))).ok()?;
             let meta: AutosaveMeta = serde_json::from_str(&text).ok()?;
@@ -379,6 +388,7 @@ fn autosave_write(
     saved_at: String,
     day: Option<u32>,
     location: String,
+    name: Option<String>,
 ) -> Result<bool, String> {
     check_slot(slot)?;
     let dir = autosave_dir(&app, &campaign)?;
@@ -386,7 +396,8 @@ fn autosave_write(
     std::fs::write(&tmp, json).map_err(|e| format!("Автосохранение не записано: {e}"))?;
     std::fs::rename(&tmp, dir.join(format!("auto-{slot}.json")))
         .map_err(|e| format!("Автосохранение не записано: {e}"))?;
-    let meta = AutosaveMeta { slot, saved_at, day, location };
+    let name: String = name.unwrap_or_default().chars().take(80).collect();
+    let meta = AutosaveMeta { slot, saved_at, day, location, name };
     let text = serde_json::to_string(&meta).map_err(|e| e.to_string())?;
     std::fs::write(dir.join(format!("auto-{slot}.meta.json")), text)
         .map_err(|e| format!("Автосохранение не записано: {e}"))?;
@@ -432,6 +443,36 @@ fn export_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
         .download_dir()
         .or_else(|_| app.path().document_dir())
         .map_err(|e| format!("Нет папки «Загрузки»: {e}"))
+}
+
+/// Удаление сохранения из ячейки (автосохранения или ручного).
+#[tauri::command]
+fn autosave_delete(app: tauri::AppHandle, campaign: String, slot: u8) -> Result<bool, String> {
+    check_slot(slot)?;
+    let dir = autosave_dir(&app, &campaign)?;
+    for file in [format!("auto-{slot}.json"), format!("auto-{slot}.meta.json")] {
+        match std::fs::remove_file(dir.join(file)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("Сохранение не удалено: {e}")),
+        }
+    }
+    Ok(true)
+}
+
+/// Удаляет папку сохранений своей кампании целиком.
+#[tauri::command]
+fn campaign_delete_saves(app: tauri::AppHandle, campaign: String) -> Result<bool, String> {
+    check_campaign(&campaign)?;
+    if campaign == "strange" {
+        return Err("Сохранения «Дома Стрэндж» удаляются по одному".into());
+    }
+    let dir = data_dir(&app)?.join("autosaves").join(&campaign);
+    match std::fs::remove_dir_all(dir) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(true),
+        Err(e) => Err(format!("Сохранения кампании не удалены: {e}")),
+    }
 }
 
 /// Список своих кампаний (`campaigns.json` в папке данных; ведёт интерфейс).
@@ -641,6 +682,8 @@ pub fn run() {
             autosave_list,
             autosave_write,
             autosave_read,
+            autosave_delete,
+            campaign_delete_saves,
             campaigns_read,
             campaigns_write,
             export_save,

@@ -16,13 +16,28 @@ import type { ChatMessage } from "../components/ChatPanel";
 export const AUTOSAVE_EVERY = 5;
 /** Сколько автосохранений хранится по кругу. */
 export const AUTOSAVE_SLOTS = 3;
+/** Ячейки ручных сохранений игрока: 10–19. */
+export const MANUAL_FIRST = 10;
+export const MANUAL_SLOTS = 10;
 
-/** Краткие сведения об автосохранении. */
+const ALL_SLOTS = [
+  ...Array.from({ length: AUTOSAVE_SLOTS }, (_, i) => i),
+  ...Array.from({ length: MANUAL_SLOTS }, (_, i) => MANUAL_FIRST + i),
+];
+
+/** Краткие сведения о сохранении (автосохранении или ручном). */
 export interface AutosaveInfo {
   slot: number;
   savedAt: string;
   day: number | null;
   location: string;
+  /** Название ручного сохранения; у автосохранений — пусто. */
+  name?: string;
+}
+
+/** Ручное сохранение (а не автосохранение по кругу). */
+export function isManual(info: AutosaveInfo): boolean {
+  return info.slot >= MANUAL_FIRST;
 }
 
 /** Файл сохранения (как при выгрузке). */
@@ -73,12 +88,13 @@ interface TauriAutosave {
   saved_at: string;
   day: number | null;
   location: string;
+  name?: string;
 }
 
 const tauriStore = {
   async list(): Promise<AutosaveInfo[]> {
     const list = await invoke<TauriAutosave[]>("autosave_list", { campaign: campaignId });
-    return list.map((a) => ({ slot: a.slot, savedAt: a.saved_at, day: a.day, location: a.location }));
+    return list.map((a) => ({ slot: a.slot, savedAt: a.saved_at, day: a.day, location: a.location, name: a.name ?? "" }));
   },
   async write(slot: number, json: string, info: Omit<AutosaveInfo, "slot">): Promise<void> {
     await invoke("autosave_write", {
@@ -88,10 +104,14 @@ const tauriStore = {
       savedAt: info.savedAt,
       day: info.day,
       location: info.location,
+      name: info.name ?? "",
     });
   },
   read(slot: number): Promise<string> {
     return invoke<string>("autosave_read", { campaign: campaignId, slot });
+  },
+  async remove(slot: number): Promise<void> {
+    await invoke("autosave_delete", { campaign: campaignId, slot });
   },
 };
 
@@ -159,7 +179,7 @@ const webStore = {
   async list(): Promise<AutosaveInfo[]> {
     const conn = await connectWebDb();
     const out: AutosaveInfo[] = [];
-    for (let slot = 0; slot < AUTOSAVE_SLOTS; slot++) {
+    for (const slot of ALL_SLOTS) {
       if (conn) {
         const snap = await conn.db.doc(`data/users/${conn.uid}/${webKey(slot)}`).get();
         const d = snap.exists ? snap.data() : undefined;
@@ -169,6 +189,7 @@ const webStore = {
             savedAt: d.savedAt,
             day: typeof d.day === "number" ? d.day : null,
             location: typeof d.location === "string" ? d.location : "",
+            name: typeof d.name === "string" ? d.name : "",
           });
         }
         continue;
@@ -219,6 +240,21 @@ const webStore = {
     if (!raw) throw new Error("Автосохранение не найдено.");
     return gunzipBase64((JSON.parse(raw) as { packed: string }).packed);
   },
+  async remove(slot: number): Promise<void> {
+    const conn = await connectWebDb();
+    if (conn) {
+      const meta = await conn.db.doc(`data/users/${conn.uid}/${webKey(slot)}`).get();
+      const parts = Number(meta.data()?.parts ?? 0);
+      await conn.db.doc(`data/users/${conn.uid}/${webKey(slot)}`).delete();
+      for (let i = 0; i < parts; i++) await conn.db.doc(`data/users/${conn.uid}/${webKey(slot)}_part${i}`).delete();
+      return;
+    }
+    try {
+      window.localStorage.removeItem(LOCAL_KEY(slot));
+    } catch {
+      // Памяти браузера нет — удалять нечего.
+    }
+  },
 };
 
 function store() {
@@ -240,9 +276,32 @@ export function readAutosave(slot: number): Promise<string> {
   return store().read(slot);
 }
 
+/** Удаляет сохранение (автосохранение или ручное) текущей кампании. */
+export function deleteSave(slot: number): Promise<void> {
+  return store().remove(slot);
+}
+
+/** Удаляет все сохранения текущей кампании. */
+export async function deleteAllSaves(): Promise<void> {
+  for (const s of await listAutosaves()) await store().remove(s.slot);
+}
+
+/** Ручное сохранение с названием в свободную ячейку 10–19. */
+export async function writeManualSave(messages: ChatMessage[], rolls: TrayRoll[], name: string): Promise<AutosaveInfo> {
+  const used = new Set((await listAutosaves()).map((a) => a.slot));
+  const slot = Array.from({ length: MANUAL_SLOTS }, (_, i) => MANUAL_FIRST + i).find((s) => !used.has(s));
+  if (slot === undefined) {
+    throw new Error(`Ручных сохранений уже ${MANUAL_SLOTS} — удалите лишнее в окне «Загрузить сохранение».`);
+  }
+  const { json, info } = await buildSave(messages, rolls);
+  const full = { ...info, name: name.trim().slice(0, 80) || `День ${info.day ?? "?"}` };
+  await store().write(slot, json, full);
+  return { slot, ...full };
+}
+
 /** Записывает автосохранение в самую старую (или пустую) ячейку. */
 export async function writeAutosave(messages: ChatMessage[], rolls: TrayRoll[]): Promise<AutosaveInfo> {
-  const existing = await listAutosaves();
+  const existing = (await listAutosaves()).filter((a) => !isManual(a));
   const used = new Set(existing.map((a) => a.slot));
   let slot = [...Array(AUTOSAVE_SLOTS).keys()].find((s) => !used.has(s));
   if (slot === undefined) slot = existing[existing.length - 1]?.slot ?? 0;

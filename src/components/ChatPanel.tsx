@@ -24,6 +24,8 @@ export interface ChatMessage {
 export type MasterMode = "provider" | "browser" | "claude" | "none";
 
 interface ChatPanelProps {
+  /** Мастер подключён (выбрана модель). Нет — вместо поля ввода кнопка «Подключить мастера». */
+  masterReady?: boolean;
   messages: ChatMessage[];
   draft: string;
   thinking: boolean;
@@ -111,6 +113,7 @@ export default function ChatPanel({
   onOpenLog,
   proposals,
   onResolveProposal,
+  masterReady = true,
 }: ChatPanelProps) {
   const listRef = useRef<HTMLOListElement>(null);
   const [showJump, setShowJump] = useState(false);
@@ -384,6 +387,18 @@ export default function ChatPanel({
         </div>
       )}
 
+      {!masterReady ? (
+        <div className="space-y-1 border-t border-edge p-2 text-center">
+          <button
+            type="button"
+            onClick={onOpenModels}
+            className="w-full rounded-md border border-gold px-4 py-2.5 text-gold hover:bg-gold/10"
+          >
+            🔌 Подключить мастера
+          </button>
+          <p className="text-xs text-muted">Мастер откроет сцену сразу после подключения модели.</p>
+        </div>
+      ) : (
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-edge p-2">
         {/* На телефоне кубы — в углу нижней панели вкладок; здесь кнопка только на широком экране. */}
         <button
@@ -420,6 +435,7 @@ export default function ChatPanel({
           Отправить
         </button>
       </form>
+      )}
     </section>
   );
 }

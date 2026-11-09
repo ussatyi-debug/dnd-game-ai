@@ -8,7 +8,7 @@ interface MainMenuProps {
 
 const ITEMS: { id: MenuAction; label: string; hint?: string }[] = [
   { id: "home", label: "Главный экран" },
-  { id: "save", label: "Выгрузить сохранение" },
+  { id: "save", label: "Сохранить" },
   { id: "load", label: "Загрузить сохранение" },
   { id: "knowledge", label: "База знаний" },
   { id: "reference", label: "Справочник", hint: "заклинания, правила" },

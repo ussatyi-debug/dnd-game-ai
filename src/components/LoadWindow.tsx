@@ -5,11 +5,12 @@
 // (это делает движок и сообщает, что дополнено).
 
 import { useEffect, useState } from "react";
-import { ago, listAutosaves, readAutosave, type AutosaveInfo } from "../lib/autosave";
+import { listAutosaves, readAutosave, type AutosaveInfo } from "../lib/autosave";
 import { errorText, loadState, type LoadReport } from "../lib/engine";
 import type { TrayRoll } from "../lib/rolls";
 import type { ChatMessage } from "./ChatPanel";
 import Modal from "./Modal";
+import SaveList from "./SaveList";
 
 /** Разобранный файл сохранения. */
 export interface ParsedSave {
@@ -138,26 +139,15 @@ export default function LoadWindow({ onClose, onSaveFirst, onLoaded }: LoadWindo
   return (
     <Modal title="Загрузить сохранение" onClose={onClose} size="md">
       <div className="space-y-3 p-4 text-sm">
-        {autosaves.length > 0 && (
-          <div>
-            <span className="mb-1 block text-muted">Автосохранения</span>
-            <ul className="space-y-1">
-              {autosaves.map((a) => (
-                <li key={a.slot}>
-                  <button
-                    type="button"
-                    onClick={() => pickAutosave(a.slot)}
-                    className="w-full rounded-md border border-edge px-3 py-2 text-left hover:border-gold"
-                  >
-                    День {a.day ?? "?"}
-                    {a.location ? `, ${a.location}` : ""}
-                    <span className="ml-2 text-xs text-muted">{ago(a.savedAt)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div>
+          <span className="mb-1 block text-muted">Сохранения этой кампании</span>
+          <SaveList
+            saves={autosaves}
+            busy={null}
+            onPick={pickAutosave}
+            onChanged={() => void listAutosaves().then(setAutosaves)}
+          />
+        </div>
         <label className="block">
           <span className="mb-1 block text-muted">Файл сохранения (.json)</span>
           <input
@@ -204,7 +194,7 @@ export default function LoadWindow({ onClose, onSaveFirst, onLoaded }: LoadWindo
                 onClick={onSaveFirst}
                 className="rounded-md border border-edge px-3 py-2 hover:border-gold"
               >
-                Сначала выгрузить текущую
+                Сначала сохранить текущую
               </button>
               <button
                 type="button"
