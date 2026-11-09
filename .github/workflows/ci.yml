@@ -233,12 +233,15 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
-      - name: Android NDK
+      - name: Android SDK и NDK (SDK уже есть в образе GitHub)
         shell: bash
         run: |
-          sdkmanager --install "ndk;${NDK_VERSION}" "build-tools;35.0.0" "platforms;android-35" > /dev/null
-          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          manager=$(ls -d "$sdk"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)
+          yes | "$manager" --licenses > /dev/null || true
+          "$manager" --install "ndk;${NDK_VERSION}" "build-tools;35.0.0" "platforms;android-35" > /dev/null
+          echo "NDK_HOME=$sdk/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi
