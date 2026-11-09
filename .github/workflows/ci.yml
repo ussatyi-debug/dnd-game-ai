@@ -162,6 +162,8 @@ jobs:
           key: music-${{ hashFiles('scripts/fetch-music.mjs') }}
       - name: Фоновая музыка
         run: node scripts/fetch-music.mjs
+      - name: Громкость треков
+        run: node scripts/measure-music.mjs
       - name: Сборка интерфейса
         run: npm run build
       - name: Браузер для проверки
