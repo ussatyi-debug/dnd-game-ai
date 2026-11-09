@@ -10,6 +10,7 @@ import {
   type ModelInfo,
   type Provider,
 } from "../lib/engine";
+import { insideClaude, webAiUseClaude } from "../lib/browserAi";
 import { CLAUDE_TIERS, type ClaudeTier } from "../lib/claude";
 import type { MasterMode } from "./ChatPanel";
 import Modal from "./Modal";
@@ -42,6 +43,13 @@ const PROVIDER_INFO: Record<Provider, { short: string; keyPlaceholder: string; k
       "Запросы расходуют кредиты аккаунта OpenAI. Для игры хватит быстрых моделей с «mini» в названии; крупные модели пишут лучше, но дороже.",
     filter: "Фильтр: mini, gpt-5…",
   },
+  yandex: {
+    short: "YandexGPT",
+    keyPlaceholder: "ID каталога и API-ключ через пробел: b1g… AQVN…",
+    keyNote:
+      "Ключ сервисного аккаунта Yandex Cloud с ролью ai.languageModels.user и ID каталога (консоль Yandex Cloud → каталог → «Обзор»). Запросы расходуют баланс Yandex Cloud.",
+    filter: "Фильтр: yandexgpt, lite…",
+  },
   local: {
     short: "Локальная",
     keyPlaceholder: "http://localhost:11434 или http://192.168.1.25:11434",
@@ -61,7 +69,8 @@ export default function AiSettingsWindow({
   onSettingsChange,
   embedded = false,
 }: AiSettingsWindowProps) {
-  const available = isAiAvailable();
+  /** Приложение (ключи на стороне Rust) или веб-версия (ключи в браузере). */
+  const app = isAiAvailable();
   const [settings, setSettings] = useState<AiSettingsView | null>(null);
   const [key, setKey] = useState("");
   const [filter, setFilter] = useState("");
@@ -73,14 +82,13 @@ export default function AiSettingsWindow({
   const [lists, setLists] = useState<Partial<Record<Provider, ModelInfo[]>>>({});
 
   useEffect(() => {
-    if (!available) return;
     aiSettings()
       .then((next) => {
         setSettings(next);
         setTab(next.provider);
       })
       .catch((e: unknown) => setError(errorText(e)));
-  }, [available]);
+  }, []);
 
   const providerView = settings?.providers.find((p) => p.provider === tab) ?? null;
   const info = PROVIDER_INFO[tab];
@@ -149,22 +157,25 @@ export default function AiSettingsWindow({
 
   const body = (
     <>
-      {!available && masterMode === "claude" ? (
-        <div className="space-y-4 p-4 text-sm">
+      {!app && insideClaude() && (
+        <div className="space-y-3 border-b border-edge p-4 text-sm">
           <p>
-            В этой версии мастера ведёт <span className="text-gold">Claude</span> — от аккаунта, в котором открыта
-            страница. Ключи не нужны; при первой заявке Claude попросит разрешение, а запросы расходуют лимиты
-            вашего аккаунта Claude.
+            Внутри Claude мастера может вести <span className="text-gold">Claude</span> — от аккаунта, в котором
+            открыта страница, без ключей. Модели со своим ключом (ниже) отсюда недоступны: страница внутри Claude не
+            может обращаться к другим сайтам. Они работают в веб-версии, открытой отдельной вкладкой, и в приложениях.
           </p>
           <ul className="space-y-1.5">
             {CLAUDE_TIERS.map((t) => (
               <li key={t.id}>
                 <button
                   type="button"
-                  onClick={() => onTierChange(t.id)}
-                  aria-pressed={tier === t.id}
+                  onClick={() => {
+                    apply(webAiUseClaude());
+                    onTierChange(t.id);
+                  }}
+                  aria-pressed={masterMode === "claude" && tier === t.id}
                   className={`w-full rounded-lg border px-3 py-2 text-left ${
-                    tier === t.id ? "border-gold bg-gold/10" : "border-edge hover:border-gold/50"
+                    masterMode === "claude" && tier === t.id ? "border-gold bg-gold/10" : "border-edge hover:border-gold/50"
                   }`}
                 >
                   <span className="block font-medium">{t.name}</span>
@@ -173,24 +184,12 @@ export default function AiSettingsWindow({
               </li>
             ))}
           </ul>
-          <p className="text-xs text-muted">
-            Модель можно сменить и прямо в шапке диалога — контекст сцены сохраняется. В приложении для ПК
-            доступны Gemini и ChatGPT со своим ключом и локальная модель через Ollama.
-          </p>
         </div>
-      ) : !available ? (
-        <div className="space-y-3 p-4 text-sm">
-          <p>Мастер недоступен в этом окне.</p>
-          <p className="text-muted">
-            Откройте страницу внутри Claude — тогда мастера поведёт Claude, — или запустите приложение для ПК с
-            Gemini или ChatGPT. Лоток, отряд, казна и база знаний работают и здесь.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-5 p-4">
+      )}
+      <div className="space-y-5 p-4">
           <section className="space-y-2">
             <h3 className="font-medium">Провайдер</h3>
-            <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Провайдер ИИ">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="Провайдер ИИ">
               {(settings?.providers ?? []).map((p) => (
                 <button
                   key={p.provider}
@@ -255,7 +254,9 @@ export default function AiSettingsWindow({
             <p className="text-xs text-muted">
               {tab === "local"
                 ? "Пустое поле — Ollama на этом ПК. "
-                : "Ключ хранится в папке настроек приложения на этом ПК и не передаётся на телефон. "}
+                : app
+                  ? "Ключ хранится в папке настроек приложения на этом устройстве. "
+                  : "Ключ хранится только в этом браузере и уходит только в API провайдера. "}
               {info.keyNote}
             </p>
           </form>
@@ -313,7 +314,6 @@ export default function AiSettingsWindow({
           {status && <p className="text-sm text-crit">{status}</p>}
           {error && <p className="text-sm text-fumble">{error}</p>}
         </div>
-      )}
     </>
   );
   return embedded ? (

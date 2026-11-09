@@ -450,9 +450,6 @@ fn ai_set_key(
     key: String,
     ai: State<'_, AiState>,
 ) -> Result<AiSettingsView, String> {
-    if !provider.allowed_here() {
-        return Err("На телефоне доступна только локальная модель на ПК в домашней сети".into());
-    }
     let mut settings = lock(&ai.settings)?;
     settings.set_key(provider, &key)?;
     ai.store.save(&settings)?;
@@ -465,9 +462,6 @@ fn ai_select_model(
     model: String,
     ai: State<'_, AiState>,
 ) -> Result<AiSettingsView, String> {
-    if !provider.allowed_here() {
-        return Err("На телефоне доступна только локальная модель на ПК в домашней сети".into());
-    }
     let mut settings = lock(&ai.settings)?;
     settings.provider = provider;
     settings.model = Some(model);
@@ -567,11 +561,7 @@ pub fn run() {
         .setup(|app| {
             let path = app.path().app_config_dir().ok().map(|dir| dir.join("ai-settings.json"));
             let store = SettingsStore::new(path);
-            let mut settings = store.load();
-            if !settings.provider.allowed_here() {
-                settings.provider = Provider::Local;
-                settings.model = None;
-            }
+            let settings = store.load();
             let client = reqwest::Client::builder()
                 .timeout(Duration::from_secs(120))
                 .build()

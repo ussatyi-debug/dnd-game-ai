@@ -7,6 +7,7 @@
 pub mod gemini;
 pub mod ollama;
 pub mod openai;
+pub mod yandex;
 
 use std::fs;
 use std::path::PathBuf;
@@ -23,22 +24,20 @@ pub enum Provider {
     OpenAi,
     /// Локальная модель через Ollama (на этом ПК или в локальной сети).
     Local,
+    /// YandexGPT и другие модели Yandex AI Studio.
+    Yandex,
 }
 
 impl Provider {
-    pub const ALL: [Provider; 3] = [Provider::Gemini, Provider::OpenAi, Provider::Local];
-
-    /// Доступен ли провайдер на этом устройстве. На телефоне — только локальная модель на ПК
-    /// в домашней сети: ключи облачных моделей хранятся только на ПК и на телефон не попадают.
-    pub fn allowed_here(self) -> bool {
-        !cfg!(mobile) || self == Provider::Local
-    }
+    pub const ALL: [Provider; 4] =
+        [Provider::Gemini, Provider::OpenAi, Provider::Yandex, Provider::Local];
 
     pub fn label(self) -> &'static str {
         match self {
             Provider::Gemini => "Google Gemini",
             Provider::OpenAi => "OpenAI (ChatGPT)",
             Provider::Local => "Локальная модель",
+            Provider::Yandex => "YandexGPT (Яндекс)",
         }
     }
 
@@ -98,6 +97,9 @@ pub struct AiSettings {
     /// Адрес сервера Ollama; по умолчанию — этот ПК.
     #[serde(default)]
     pub local_url: Option<String>,
+    /// ID каталога Yandex Cloud и API-ключ через пробел.
+    #[serde(default)]
+    pub yandex_key: Option<String>,
 }
 
 /// Состояние одного провайдера для интерфейса.
@@ -125,10 +127,14 @@ pub struct AiSettingsView {
 
 fn hint_for(provider: Provider, key: &str) -> String {
     // Адрес локального сервера не секрет — показывается целиком.
-    if provider == Provider::Local {
-        key.to_string()
-    } else {
-        hint(key)
+    match provider {
+        Provider::Local => key.to_string(),
+        // ID каталога не секрет, от ключа — последние символы.
+        Provider::Yandex => match yandex::YandexKey::parse(key) {
+            Ok(k) => format!("{} {}", k.folder, hint(&k.api_key)),
+            Err(_) => hint(key),
+        },
+        _ => hint(key),
     }
 }
 
@@ -148,7 +154,6 @@ impl AiSettings {
             key_hint: key.map(|k| hint_for(self.provider, k)),
             providers: Provider::ALL
                 .into_iter()
-                .filter(|p| p.allowed_here())
                 .map(|p| {
                     let key = self.key_for(p);
                     ProviderView {
@@ -169,6 +174,7 @@ impl AiSettings {
             Provider::Gemini => self.gemini_api_key.as_deref(),
             Provider::OpenAi => self.openai_api_key.as_deref(),
             Provider::Local => Some(self.local_url.as_deref().unwrap_or(ollama::DEFAULT_URL)),
+            Provider::Yandex => self.yandex_key.as_deref(),
         };
         key.filter(|k| !k.is_empty())
     }
@@ -185,6 +191,15 @@ impl AiSettings {
             Provider::Gemini => self.gemini_api_key = value,
             Provider::OpenAi => self.openai_api_key = value,
             Provider::Local => self.local_url = Some(ollama::normalize_url(key)?),
+            Provider::Yandex => {
+                self.yandex_key = match value {
+                    Some(v) => {
+                        let k = yandex::YandexKey::parse(&v)?;
+                        Some(format!("{} {}", k.folder, k.api_key))
+                    }
+                    None => None,
+                }
+            }
         }
         Ok(())
     }
@@ -233,6 +248,7 @@ pub async fn list_models(
         Provider::Gemini => gemini::list_models(client, key).await,
         Provider::OpenAi => openai::list_models(client, key).await,
         Provider::Local => ollama::list_models(client, key).await,
+        Provider::Yandex => yandex::list_models(client, key).await,
     }
 }
 
@@ -249,6 +265,7 @@ pub async fn chat(
         Provider::Gemini => gemini::generate(client, key, &model, system, history).await?,
         Provider::OpenAi => openai::generate(client, key, &model, system, history).await?,
         Provider::Local => ollama::generate(client, key, &model, system, history).await?,
+        Provider::Yandex => yandex::generate(client, key, &model, system, history).await?,
     };
     Ok(MasterReply {
         text,
@@ -288,11 +305,16 @@ mod tests {
         assert_eq!(s.key(), Some("sk-proj-Secret9876"));
         let view = s.view();
         assert_eq!(view.key_hint.as_deref(), Some("…9876"));
-        assert_eq!(view.providers.len(), 3);
-        assert!(view.providers[2].ready);
-        assert_eq!(view.providers[2].key_hint.as_deref(), Some(ollama::DEFAULT_URL));
+        assert_eq!(view.providers.len(), 4);
+        assert!(view.providers[3].ready);
+        assert_eq!(view.providers[3].key_hint.as_deref(), Some(ollama::DEFAULT_URL));
         assert!(view.providers[1].has_key);
         assert!(!serde_json::to_string(&view).unwrap().contains("Secret"));
+        s.set_key(Provider::Yandex, "b1gfolder42 AQVNyandexSecret7777").unwrap();
+        let view = s.view();
+        assert_eq!(view.providers[2].key_hint.as_deref(), Some("b1gfolder42 …7777"));
+        assert!(!serde_json::to_string(&view).unwrap().contains("yandexSecret"));
+        assert!(s.set_key(Provider::Yandex, "только-ключ").is_err());
         s.set_key(Provider::Local, "192.168.1.25:11434").unwrap();
         assert_eq!(s.key_for(Provider::Local), Some("http://192.168.1.25:11434"));
         assert!(s.set_key(Provider::Local, "http://a b").is_err());

@@ -4,6 +4,7 @@
 // - в приложении — через команды Tauri;
 // - в веб-версии — в браузере, через модуль, скомпилированный из Rust в JavaScript.
 
+import { webAiListModels, webAiSelectModel, webAiSetKey, webAiSettings } from "./browserAi";
 import type { CampaignSpec, HeroSpec } from "./heroSpec";
 import { invoke } from "@tauri-apps/api/core";
 import * as webModule from "engine-web-module";
@@ -841,9 +842,10 @@ export function signed(value: number): string {
   return value >= 0 ? `+${value}` : `−${Math.abs(value)}`;
 }
 
-// ИИ-мастер работает только в приложении: запросы к провайдерам и ключи — на стороне Rust.
+// ИИ-мастер: в приложениях запросы к провайдерам и ключи — на стороне Rust, в веб-версии —
+// в браузере (lib/browserAi.ts).
 
-export type Provider = "gemini" | "openai" | "local";
+export type Provider = "gemini" | "openai" | "yandex" | "local";
 export type ChatRole = "player" | "master";
 
 export interface AiSettingsView {
@@ -853,6 +855,8 @@ export interface AiSettingsView {
   has_key: boolean;
   key_hint: string | null;
   providers: ProviderView[];
+  /** Веб-версия: мастера ведёт Claude (а не модель со своим ключом). */
+  claude?: boolean;
 }
 
 export interface ProviderView {
@@ -888,19 +892,23 @@ export function isAiAvailable(): boolean {
   return isTauri();
 }
 
-export function aiSettings(): Promise<AiSettingsView> {
+export async function aiSettings(): Promise<AiSettingsView> {
+  if (!isTauri()) return webAiSettings();
   return invoke<AiSettingsView>("ai_settings");
 }
 
-export function aiSetKey(provider: Provider, key: string): Promise<AiSettingsView> {
+export async function aiSetKey(provider: Provider, key: string): Promise<AiSettingsView> {
+  if (!isTauri()) return webAiSetKey(provider, key);
   return invoke<AiSettingsView>("ai_set_key", { provider, key });
 }
 
-export function aiSelectModel(provider: Provider, model: string): Promise<AiSettingsView> {
+export async function aiSelectModel(provider: Provider, model: string): Promise<AiSettingsView> {
+  if (!isTauri()) return webAiSelectModel(provider, model);
   return invoke<AiSettingsView>("ai_select_model", { provider, model });
 }
 
 export function aiListModels(provider: Provider): Promise<ModelInfo[]> {
+  if (!isTauri()) return webAiListModels(provider);
   return invoke<ModelInfo[]>("ai_list_models", { provider });
 }
 

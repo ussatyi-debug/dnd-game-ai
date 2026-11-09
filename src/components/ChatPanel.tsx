@@ -18,7 +18,8 @@ export interface ChatMessage {
   engine?: { ok: number; failed: number };
 }
 
-export type MasterMode = "provider" | "claude" | "none";
+/** Кто ведёт мастера: приложение (Rust), модель со своим ключом в браузере, Claude, никто. */
+export type MasterMode = "provider" | "browser" | "claude" | "none";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -241,7 +242,7 @@ export default function ChatPanel({
               onClick={onOpenModels}
               className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-gold"
             >
-              {masterMode === "provider" ? "Выбрать модель" : "Мастер недоступен"}
+              {masterMode === "provider" || masterMode === "browser" ? "Выбрать модель" : "Мастер недоступен"}
             </button>
           )}
         </div>

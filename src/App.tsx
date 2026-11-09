@@ -89,6 +89,7 @@ import {
 import { CURRENT_DAY, equipment, heroSummary, TIERS, type Draft } from "./lib/creation.ts";
 import type { HeroSpec } from "./lib/heroSpec";
 import CreationWizard from "./components/creation/CreationWizard.tsx";
+import { webAiGenerate } from "./lib/browserAi";
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
 import type { RollResult, TrayRoll } from "./lib/rolls";
@@ -97,6 +98,14 @@ const MAX_ROLLS = 200;
 /** Раундов запросов бросков мастера за ход (как в движке). */
 const MAX_ROLL_ROUNDS = 3;
 const STRANGE_PLAYER = "pc.nikis";
+
+/** Ответ модели на странице: системный текст, история, показ потока, отмена. */
+type PageGenerator = (
+  system: string,
+  history: { role: "player" | "master"; text: string }[],
+  show: (text: string) => void,
+  signal: AbortSignal,
+) => Promise<string>;
 const HERO_PLAYER = "pc.hero";
 
 /** Включает кампанию до первого обращения к сохранениям и базе знаний. */
@@ -131,7 +140,7 @@ const WELCOME_APP = `Мастер готов. Выберите модель в �
 const WELCOME_CLAUDE =
   `Мастера ведёт Claude от вашего аккаунта — при первой заявке Claude попросит разрешение. ${ROLL_HINT}`;
 const WELCOME_NONE =
-  "Мастер недоступен в этом окне: откройте страницу внутри Claude или запустите приложение для ПК. " +
+  "Мастер ещё не выбран: Меню → Настройки → ИИ-мастер — Gemini, ChatGPT или YandexGPT со своим ключом. " +
   "Отряд, казна, кубы и база знаний работают.";
 
 const TIER_STORAGE_KEY = "dnd.claudeTier";
@@ -160,7 +169,10 @@ export default function App() {
   const [sample, setSample] = useState<Awaited<ReturnType<typeof getSample>>>(null);
   const [tier, setTier] = useState<ClaudeTier>(loadTier);
   const abortRef = useRef<AbortController | null>(null);
-  const masterMode: MasterMode = aiAvailable ? "provider" : sample ? "claude" : "none";
+  const [ai, setAi] = useState<AiSettingsView | null>(null);
+  /** Веб-версия: мастера ведёт модель со своим ключом (Gemini, ChatGPT, YandexGPT). */
+  const browserModel = !aiAvailable && ai !== null && ai.claude === false && Boolean(ai.model);
+  const masterMode: MasterMode = aiAvailable ? "provider" : browserModel ? "browser" : sample ? "claude" : "none";
   const [tab, setTab] = useState<Tab>("dialog");
   const [openWindow, setOpenWindow] = useState<Overlay>(null);
   const [diceOpen, setDiceOpen] = useState(false);
@@ -200,7 +212,6 @@ export default function App() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [thinking, setThinking] = useState(false);
-  const [ai, setAi] = useState<AiSettingsView | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const nextId = useRef(1);
 
@@ -380,11 +391,10 @@ export default function App() {
   }, [aiAvailable]);
 
   useEffect(() => {
-    if (!aiAvailable) return;
     aiSettings()
       .then((settings) => {
         setAi(settings);
-        if (settings.has_key) return aiListModels(settings.provider).then(setModels);
+        if (settings.has_key && settings.claude !== true) return aiListModels(settings.provider).then(setModels);
         return undefined;
       })
       .catch((e: unknown) => addMessage("system", `ИИ: ${errorText(e)}`));
@@ -429,7 +439,20 @@ export default function App() {
 
   function request(playerMessage: ChatMessage) {
     if (masterMode === "claude" && sample) {
-      sendToClaude(sample, playerMessage);
+      const tierName = CLAUDE_TIERS.find((t) => t.id === tier)?.name ?? "Claude";
+      sendInPage(
+        (system, history, show, signal) => claudeMasterReply(sample, system, history, tier, show, signal),
+        tierName,
+        playerMessage,
+      );
+      return;
+    }
+    if (masterMode === "browser") {
+      sendInPage(
+        (system, history, _show, signal) => webAiGenerate(system, history, signal),
+        ai?.model ?? "Мастер",
+        playerMessage,
+      );
       return;
     }
     if (masterMode !== "provider") return;
@@ -471,10 +494,13 @@ export default function App() {
     request(playerMessage);
   }
 
-  function sendToClaude(fn: NonNullable<typeof sample>, playerMessage: ChatMessage) {
+  /**
+   * Ход мастера на стороне страницы (Claude внутри Claude или модель со своим ключом в веб-версии):
+   * броски движка, команды и повтор отклонённых команд — как в приложении.
+   */
+  function sendInPage(gen: PageGenerator, tierName: string, playerMessage: ChatMessage) {
     const controller = new AbortController();
     abortRef.current = controller;
-    const tierName = CLAUDE_TIERS.find((t) => t.id === tier)?.name ?? "Claude";
     const reply: ChatMessage = { id: nextId.current++, author: "master", text: "", time: now(), model: tierName };
     // Ответ приходит потоком: первая часть добавляет сообщение, следующие обновляют его.
     const show = (text: string) => {
@@ -493,7 +519,7 @@ export default function App() {
     const withRolls = async (ctx: string) => {
       system = ctx;
       for (let round = 0; ; round++) {
-        const text = await claudeMasterReply(fn, system, history, tier, show, controller.signal);
+        const text = await gen(system, history, show, controller.signal);
         raw.push(text);
         const r = round < MAX_ROLL_ROUNDS ? await masterRolls(text) : null;
         if (!r) return text;
@@ -516,7 +542,7 @@ export default function App() {
         if (request) {
           history.push({ role: "master", text }, { role: "player", text: request });
           try {
-            const fix = await claudeMasterReply(fn, system, history, tier, () => undefined, controller.signal);
+            const fix = await gen(system, history, () => undefined, controller.signal);
             raw.push(fix);
             const fixed = await masterRepair(fix);
             turn.actions.push(...fixed.map((a) => ({ ...a, summary: `исправлено: ${a.summary}` })));
