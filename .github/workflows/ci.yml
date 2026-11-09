@@ -163,7 +163,9 @@ jobs:
       - name: Фоновая музыка
         run: node scripts/fetch-music.mjs
       - name: Громкость треков
-        run: node scripts/measure-music.mjs
+        run: |
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          node scripts/measure-music.mjs
       - name: Сборка интерфейса
         run: npm run build
       - name: Браузер для проверки
