@@ -385,10 +385,11 @@ export default function ChatPanel({
       )}
 
       <form onSubmit={submit} className="flex items-end gap-2 border-t border-edge p-2">
+        {/* На телефоне кубы — в углу нижней панели вкладок; здесь кнопка только на широком экране. */}
         <button
           type="button"
           onClick={onOpenDice}
-          className="rounded-md border border-gold/60 px-3 py-2.5 text-gold hover:bg-gold/10"
+          className="hidden rounded-md border border-gold/60 px-3 py-2.5 text-gold hover:bg-gold/10 lg:block"
           aria-label="Открыть кубы"
           title="Кубы"
         >
