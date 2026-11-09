@@ -16,6 +16,8 @@ export interface ChatMessage {
   fabricated?: string[];
   /** Сводка команд движка за ход мастера (подробности — в журнале). */
   engine?: { ok: number; failed: number };
+  /** Служебная заявка (вступление мастера в новой игре): уходит мастеру, в чате не видна. */
+  hidden?: boolean;
 }
 
 /** Кто ведёт мастера: приложение (Rust), модель со своим ключом в браузере, Claude, никто. */
@@ -250,7 +252,7 @@ export default function ChatPanel({
 
       <div className="relative flex min-h-0 flex-1 flex-col">
       <ol ref={listRef} onScroll={updateJump} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.map((m) => (
+        {messages.filter((m) => !m.hidden).map((m) => (
           <li
             key={m.id}
             data-message-id={m.id}

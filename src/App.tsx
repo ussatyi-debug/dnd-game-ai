@@ -99,6 +99,13 @@ const MAX_ROLLS = 200;
 const MAX_ROLL_ROUNDS = 3;
 const STRANGE_PLAYER = "pc.nikis";
 
+/** Служебная заявка в начале новой игры: мастер встречает игрока и описывает сцену. */
+const OPENING_REQUEST =
+  "[Начало игры] Поприветствуй игрока как Мастер этой кампании. Коротко напомни, что происходило до этого " +
+  "момента (по «сцена», обстановке и записям базы знаний), затем опиши текущую ситуацию: день, время, место, " +
+  "погоду, людей и обстановку вокруг героя и кто из спутников рядом. Закончи вопросом, что делает герой. " +
+  "Бросков не запрашивай и не решай за героя.";
+
 /** Ответ модели на странице: системный текст, история, показ потока, отмена. */
 type PageGenerator = (
   system: string,
@@ -181,6 +188,8 @@ export default function App() {
   const [campaignId, setCampaignId] = useState<string>(initialCampaign);
   const [campaigns, setCampaigns] = useState<CampaignInfo[]>([]);
   const [creating, setCreating] = useState(false);
+  /** Новая игра началась — мастер должен открыть её вступлением. */
+  const [opening, setOpening] = useState(false);
   const PLAYER_ID = campaignId === STRANGE_ID ? STRANGE_PLAYER : HERO_PLAYER;
   const [activeId, setActiveId] = useState(PLAYER_ID);
   const [sheet, setSheet] = useState<CharacterSheet | null>(null);
@@ -415,6 +424,20 @@ export default function App() {
     setSheet(patch);
     refresh().catch(() => undefined);
   }
+
+  // Вступление мастера: после отрисовки новой игры, когда чат и отряд уже новые.
+  useEffect(() => {
+    if (!opening) return;
+    setOpening(false);
+    if (masterMode === "none" || (masterMode === "provider" && !ai?.model)) {
+      addMessage("system", "Выберите модель мастера (Меню → Настройки → ИИ-мастер) — и он опишет начало сцены.");
+      return;
+    }
+    const message: ChatMessage = { id: nextId.current++, author: "player", text: OPENING_REQUEST, time: now(), hidden: true };
+    setMessages((prev) => [...prev, message]);
+    request(message);
+    // request берёт данные этой отрисовки; эффект срабатывает раз на новую игру.
+  }, [opening]);
 
   function sendToChat(text: string) {
     setDraft((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text));
@@ -661,6 +684,8 @@ export default function App() {
       case "continue": {
         const last = autosaves[0];
         if (played || !last) {
+          // Без сохранений «Продолжить» начинает игру с начала — мастер её открывает.
+          if (!played) setOpening(true);
           setHome(false);
           setPlayed(true);
           return;
@@ -775,6 +800,7 @@ export default function App() {
     setPlayed(true);
     setFailed(null);
     await refresh();
+    setOpening(true);
     autosave();
   }
 
@@ -984,6 +1010,7 @@ export default function App() {
                 setHome(false);
                 setPlayed(true);
                 await refresh();
+                setOpening(true);
               })
               .catch((e: unknown) => addMessage("system", errorText(e)));
           }}
