@@ -32,9 +32,14 @@ export function PickCard({
 }) {
   return (
     <div
-      className={`rounded-lg border bg-ink/60 transition-colors ${selected ? "border-gold" : "border-edge hover:border-gold/60"}`}
+      className={`flex flex-col rounded-lg border bg-ink/60 transition-colors ${selected ? "border-gold" : "border-edge hover:border-gold/60"}`}
     >
-      <button type="button" onClick={onClick} className="block w-full px-3 py-2 text-left">
+      {/* Кнопка тянется на всю карточку: в сетке соседняя раскрытая карточка делает строку выше. */}
+      <button
+        type="button"
+        onClick={onClick}
+        className={`block w-full px-3 py-2 text-left ${selected && children ? "" : "flex-1"}`}
+      >
         <span className="flex items-baseline justify-between gap-2">
           <span className={`font-medium ${selected ? "text-gold" : ""}`}>{title}</span>
           {badge && <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted">{badge}</span>}
