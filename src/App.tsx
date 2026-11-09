@@ -642,12 +642,27 @@ export default function App() {
   }
 
   function changeModel(model: string) {
-    if (masterMode === "claude") {
-      const next = CLAUDE_TIERS.find((t) => t.id === model);
-      if (!next) return;
+    const next = CLAUDE_TIERS.find((t) => t.id === model);
+    if (next && !aiAvailable) {
       setTier(next.id);
       saveTier(next.id);
-      addMessage("system", `Мастера ведёт ${next.name}. Контекст сцены сохранён.`);
+      if (sample) {
+        addMessage("system", `Мастера ведёт ${next.name}. Контекст сцены сохранён.`);
+        return;
+      }
+      // Доступ к Claude мог появиться после загрузки страницы (разрешение, медленный ответ
+      // платформы) — спрашиваем ещё раз, а не молчим.
+      void getSample().then((fn) => {
+        if (fn) {
+          setSample(() => fn);
+          addMessage("system", `Мастера ведёт ${next.name}. Контекст сцены сохранён.`);
+        } else {
+          addMessage(
+            "system",
+            "Claude недоступен на этой странице: платформа не дала доступ к модели. Обновите страницу; если не поможет — откройте артефакт заново из списка артефактов.",
+          );
+        }
+      });
       return;
     }
     if (!ai || !model) return;
