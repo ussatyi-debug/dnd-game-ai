@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { getDownloads } from "../lib/claude";
 import { errorText, saveState } from "../lib/engine";
@@ -10,6 +11,10 @@ interface SaveWindowProps {
   onClose: () => void;
   messages: ChatMessage[];
   rolls: TrayRoll[];
+}
+
+function isTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
 function fileName(day: unknown): string {
@@ -49,6 +54,16 @@ export default function SaveWindow({ onClose, messages, rolls }: SaveWindowProps
   async function download() {
     if (!json) return;
     setNote(null);
+    // Приложение (ПК и Android): файл пишет движок приложения в папку загрузок.
+    if (isTauri()) {
+      try {
+        const path = await invoke<string>("export_save", { name, json });
+        setNote(`Файл сохранён: ${path}`);
+      } catch (e) {
+        setNote(`Файл не сохранён: ${errorText(e)}. Можно скопировать сохранение кнопкой «Копировать».`);
+      }
+      return;
+    }
     // Внутри Claude файл сохраняется через платформу (с подтверждением); иначе — обычной ссылкой.
     const downloads = await getDownloads();
     if (downloads) {

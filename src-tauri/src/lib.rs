@@ -400,6 +400,40 @@ fn autosave_read(app: tauri::AppHandle, campaign: String, slot: u8) -> Result<St
         .map_err(|e| format!("Автосохранение не прочитано: {e}"))
 }
 
+/// Сохранение в файл: в приложениях ссылка «скачать» не работает, файл пишет Rust.
+/// ПК — папка «Загрузки», Android — общая папка Download (Android 11+ разрешает приложению
+/// создавать в ней свои файлы без разрешений). Возвращает полный путь к файлу.
+#[tauri::command]
+fn export_save(app: tauri::AppHandle, name: String, json: String) -> Result<String, String> {
+    let safe: String = name
+        .chars()
+        .map(
+            |c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' },
+        )
+        .collect();
+    let safe = if safe.ends_with(".json") { safe } else { format!("{safe}.json") };
+    let dir = export_dir(&app)?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Нет папки для сохранения ({}): {e}", dir.display()))?;
+    let path = dir.join(&safe);
+    std::fs::write(&path, json)
+        .map_err(|e| format!("Файл не записан ({}): {e}", path.display()))?;
+    Ok(path.display().to_string())
+}
+
+#[cfg(target_os = "android")]
+fn export_dir(_app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    Ok(std::path::PathBuf::from("/storage/emulated/0/Download/DnD Game AI"))
+}
+
+#[cfg(not(target_os = "android"))]
+fn export_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path()
+        .download_dir()
+        .or_else(|_| app.path().document_dir())
+        .map_err(|e| format!("Нет папки «Загрузки»: {e}"))
+}
+
 /// Список своих кампаний (`campaigns.json` в папке данных; ведёт интерфейс).
 #[tauri::command]
 fn campaigns_read(app: tauri::AppHandle) -> Result<String, String> {
@@ -609,6 +643,7 @@ pub fn run() {
             autosave_read,
             campaigns_read,
             campaigns_write,
+            export_save,
             validate_hero,
             start_campaign,
             restart_demo,
