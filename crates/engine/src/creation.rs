@@ -12,7 +12,9 @@ use crate::character::{
 };
 use crate::error::EngineError;
 use crate::inventory::{Container, Inventory, NewItem, ON_PERSON};
-use crate::profile::{Attack, Bonus, Feature, HitDice, ProficiencyLine, Profile, SkillEntry};
+use crate::profile::{
+    Attack, Attunement, Bonus, Feature, HitDice, ProficiencyLine, Profile, SkillEntry,
+};
 use crate::resource::{Recovery, ResourcePool};
 use crate::spellcasting::{Caster, GrantedSpell, Preparation, Progression, Spellcasting};
 use crate::spells;
@@ -121,6 +123,12 @@ pub struct HeroSpec {
     pub granted: Vec<GrantedSpell>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub items: Vec<SpecItem>,
+    /// Прибавки ко всем спасброскам (например, Плащ защиты).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub save_bonuses: Vec<Bonus>,
+    /// Предметы, требующие настройки (не больше трёх).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub attunement: Vec<Attunement>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub notes: Vec<String>,
 }
@@ -150,6 +158,9 @@ pub fn validate_hero(spec: &HeroSpec) -> Vec<String> {
 
     if spec.id.trim().is_empty() {
         err("у героя нет ID".into());
+    }
+    if spec.attunement.len() > 3 {
+        err(format!("настроено предметов: {} (максимум 3)", spec.attunement.len()));
     }
     let name = spec.name.trim();
     if name.is_empty() {
@@ -407,6 +418,13 @@ pub fn build_hero(spec: &HeroSpec, location: &str) -> Result<Character, EngineEr
         skills_listed: true,
         skills: spec.skills.clone(),
         initiative_bonuses: spec.initiative_bonuses.clone(),
+        save_bonuses: spec.save_bonuses.clone(),
+        attunement: spec.attunement.clone(),
+        attunement_note: if spec.attunement.is_empty() {
+            String::new()
+        } else {
+            format!("{} / 3 слота.", spec.attunement.len())
+        },
         armor_class_breakdown: spec.armor_class_breakdown.clone(),
         hit_dice,
         attacks: spec.attacks.clone(),
@@ -631,6 +649,8 @@ pub(crate) mod tests {
                 category: "Снаряжение".into(),
                 notes: String::new(),
             }],
+            save_bonuses: Vec::new(),
+            attunement: Vec::new(),
             notes: Vec::new(),
         }
     }

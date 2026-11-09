@@ -108,6 +108,10 @@ export interface HeroSpec {
   casters: SpecCaster[];
   granted: SpecGranted[];
   items: { name: string; quantity: number; category: string; notes: string }[];
+  /** Прибавки ко всем спасброскам (Плащ защиты). */
+  save_bonuses: SpecBonus[];
+  /** Предметы, требующие настройки. */
+  attunement: { name: string; effect: string }[];
   notes: string[];
 }
 

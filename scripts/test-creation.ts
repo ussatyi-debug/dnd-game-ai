@@ -56,7 +56,9 @@ function autofill(d: Draft, seed: number): void {
       }
       if (feat.id === "magic_initiate") d.picks[`${slot.key}:mi.ability`] = ["intelligence"];
     }
-    for (const c of choiceSlots(d)) {
+    // Дважды: выбор предмета набора открывает выбор оружия для него.
+    for (const c of [...choiceSlots(d), ...choiceSlots(d)]) {
+      if (d.picks[c.key]?.length === c.count) continue;
       const taken = new Set(Object.entries(d.picks).filter(([k]) => k !== c.key).flatMap(([, v]) => v));
       const open = c.options.filter((o) => !o.disabled);
       const fresh = open.filter((o) => !taken.has(o.id));
@@ -110,6 +112,10 @@ CLASSES.forEach((cls, ci) => {
     const spec = buildSpec(d);
     assert.ok(maxHp(d) >= level, `${label}: хиты`);
     assert.equal(spec.classes[0]?.level, level);
+    if (d.tier === 3) {
+      assert.ok(spec.items.some((i) => i.name === "Большое зелье лечения"), `${label}: набор ступени 3`);
+      assert.ok(spec.items.filter((i) => i.category === "Магические предметы").length >= 1, `${label}: магический предмет`);
+    }
     if (engine) {
       const errors = engine.call<string[]>({ cmd: "validate_hero", spec });
       if (errors.length) failures.push(`${label} / движок: ${errors.join("; ")}`);

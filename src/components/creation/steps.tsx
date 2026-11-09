@@ -27,7 +27,10 @@ import {
   abilityBonuses,
   averageHitDie,
   choiceSlots,
+  classItems,
   equipment,
+  tierKit,
+  tierOf,
   featOptions,
   featSlots,
   finalAbilities,
@@ -778,12 +781,14 @@ function EquipmentBreakdown({ draft }: { draft: Draft }) {
   const rows: { label: string; items: string[]; gold: number }[] = [];
   if (r.cls) {
     const gold = pick(draft, "equip.class")[0] === "gold";
-    rows.push({ label: `Класс (${r.cls.name})`, items: gold ? [] : r.cls.equipment.items, gold: gold ? r.cls.equipment.altGold : r.cls.equipment.gold });
+    rows.push({ label: `Класс (${r.cls.name})`, items: gold ? [] : classItems(draft), gold: gold ? r.cls.equipment.altGold : r.cls.equipment.gold });
   }
   if (bg) {
     const gold = pick(draft, "equip.bg")[0] === "gold";
     rows.push({ label: `Предыстория (${bg.name})`, items: gold ? [] : bg.equipment.items, gold: gold ? bg.equipment.altGold : bg.equipment.gold });
   }
+  const kit = tierKit(draft);
+  if (kit.items.length || kit.gold) rows.push({ label: `Набор ступени ${tierOf(draft.level)} (ур. ${draft.level})`, items: kit.items, gold: kit.gold });
   return (
     <ul className="space-y-1 text-sm">
       {rows.map((row) => (

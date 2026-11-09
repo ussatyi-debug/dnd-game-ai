@@ -27,6 +27,14 @@ import {
   XP_THRESHOLDS,
 } from "../data/rules/common.ts";
 import { FEAT_BY_ID, FEATS } from "../data/rules/feats.ts";
+import {
+  ARMOR_BEST,
+  ARMOR_UPGRADE_T2,
+  COMMON_BY_CLASS,
+  KIT_ITEM_BY_ID,
+  UNCOMMON_BY_CLASS,
+  type KitItem,
+} from "../data/rules/kits.ts";
 import { SPECIES_BY_ID } from "../data/rules/species.ts";
 import type {
   AbilityId,
@@ -398,6 +406,7 @@ export function choiceSlots(d: Draft): ChoiceSlot[] {
       }
     }
   }
+  if (r.cls) out.push(...kitSlots(d, r.cls));
   for (const slot of featSlots(d)) {
     const feat = slotFeat(d, slot);
     if (!feat) continue;
@@ -423,6 +432,49 @@ export function choiceSlots(d: Draft): ChoiceSlot[] {
     if (slot.key.includes("expertise") || slot.key === "wizard.scholar") {
       slot.options = slot.options.filter((o) => proficient.has(o.id as SkillId));
     }
+  }
+  return out;
+}
+
+/** Выбор магических предметов стартового набора (ступени 4–6 и 7–9). */
+function kitSlots(d: Draft, cls: ClassData): ChoiceSlot[] {
+  const tier = tierOf(d.level);
+  if (tier === 1) return [];
+  const items = classItems(d);
+  const hasArmor = items.some((i) => {
+    const a = ARMOR_BY_NAME.get(i);
+    return a !== undefined && a.type !== "shield";
+  });
+  const hasShield = items.includes("Щит");
+  const weapons = kitWeapons(d);
+  const fits = (item: KitItem) =>
+    (item.needs !== "armor" || hasArmor) && (item.needs !== "shield" || hasShield) && (!item.needsWeapon || weapons.length > 0);
+  const toOption = (item: KitItem): ChoiceOption => ({
+    id: item.id,
+    name: item.name,
+    text: `${item.text}${item.attunement ? " Требует настройки." : ""}`,
+  });
+  const out: ChoiceSlot[] = [];
+  const common = (COMMON_BY_CLASS[cls.id] ?? [])
+    .map((id) => KIT_ITEM_BY_ID.get(id))
+    .filter((x): x is KitItem => Boolean(x) && fits(x as KitItem));
+  out.push({ key: "kit.common", label: "Простой магический предмет", source: "Стартовый набор", count: 1, options: common.map(toOption), step: "class" });
+  if (tier === 3) {
+    const uncommon = [...(UNCOMMON_BY_CLASS[cls.id] ?? []), "bag_of_holding"]
+      .map((id) => KIT_ITEM_BY_ID.get(id))
+      .filter((x): x is KitItem => Boolean(x) && fits(x as KitItem));
+    out.push({ key: "kit.uncommon", label: "Необычный магический предмет", source: "Стартовый набор", count: 1, options: uncommon.map(toOption), step: "class" });
+  }
+  for (const item of kitMagicItems(d)) {
+    if (!item.needsWeapon) continue;
+    out.push({
+      key: `kit.weapon.${item.id}`,
+      label: `${item.name}: какое оружие`,
+      source: "Стартовый набор",
+      count: 1,
+      options: weapons.map((w) => ({ id: w.id, name: w.name })),
+      step: "class",
+    });
   }
   return out;
 }
@@ -664,18 +716,74 @@ export function parseItem(text: string): { name: string; quantity: number; weapo
   return { name, quantity, weapon };
 }
 
+/** Ступень начала по уровню: 1 (1–3), 2 (4–6), 3 (7–9 и выше). */
+export function tierOf(level: number): 1 | 2 | 3 {
+  return level <= 3 ? 1 : level <= 6 ? 2 : 3;
+}
+
+/** Снаряжение класса (с улучшенной по ступени бронёй). */
+export function classItems(d: Draft): string[] {
+  const r = resolve(d);
+  if (!r.cls || one(d, "equip.class") === "gold") return [];
+  const tier = tierOf(d.level);
+  return r.cls.equipment.items.map((i) => {
+    const a = ARMOR_BY_NAME.get(i);
+    if (!a || a.type === "shield" || tier === 1) return i;
+    return tier === 2 ? (ARMOR_UPGRADE_T2[i] ?? i) : ARMOR_BEST[a.type];
+  });
+}
+
+/** Оружие из набора класса (для «Оружие +1» и подобных предметов). */
+export function kitWeapons(d: Draft): WeaponData[] {
+  const out: WeaponData[] = [];
+  for (const text of classItems(d)) {
+    const w = parseItem(text).weapon;
+    if (w && !out.some((x) => x.id === w.id)) out.push(w);
+  }
+  return out;
+}
+
+/** Выбранные магические предметы стартового набора. */
+export function kitMagicItems(d: Draft): KitItem[] {
+  const tier = tierOf(d.level);
+  const ids = [...(tier >= 2 ? pick(d, "kit.common") : []), ...(tier >= 3 ? pick(d, "kit.uncommon") : [])];
+  return ids.map((id) => KIT_ITEM_BY_ID.get(id)).filter((x): x is KitItem => Boolean(x));
+}
+
+/** Оружие, к которому привязан предмет набора (оружие +1, тронутое луной, рубин). */
+export function kitWeaponFor(d: Draft, item: KitItem): WeaponData | undefined {
+  const id = one(d, `kit.weapon.${item.id}`);
+  return kitWeapons(d).find((w) => w.id === id);
+}
+
+/** Добавка ступени: зелья, предметы, золото. */
+export function tierKit(d: Draft): { items: string[]; gold: number } {
+  const tier = tierOf(d.level);
+  const items: string[] = [];
+  let gold = 0;
+  if (tier === 1) {
+    if (d.level >= 2) items.push("Зелье лечения");
+    gold += 20 * (d.level - 1);
+  } else if (tier === 2) {
+    items.push("2 Зелье лечения");
+    gold += 100 + 25 * d.level;
+  } else {
+    items.push("3 Зелье лечения", "Большое зелье лечения");
+    gold += 300 + 50 * d.level;
+  }
+  for (const item of kitMagicItems(d)) {
+    const weapon = item.needsWeapon ? kitWeaponFor(d, item) : undefined;
+    items.push(weapon ? `${item.name} (${weapon.name})` : item.name);
+  }
+  return { items, gold };
+}
+
 export function equipment(d: Draft): { items: string[]; gold: number } {
   const r = resolve(d);
   const bg = d.backgroundId ? BACKGROUND_BY_ID.get(d.backgroundId) : undefined;
-  const items: string[] = [];
+  const items: string[] = [...classItems(d)];
   let gold = 0;
-  if (r.cls) {
-    if (one(d, "equip.class") === "gold") gold += r.cls.equipment.altGold;
-    else {
-      items.push(...r.cls.equipment.items);
-      gold += r.cls.equipment.gold;
-    }
-  }
+  if (r.cls) gold += one(d, "equip.class") === "gold" ? r.cls.equipment.altGold : r.cls.equipment.gold;
   if (bg) {
     if (one(d, "equip.bg") === "gold") gold += bg.equipment.altGold;
     else {
@@ -683,7 +791,8 @@ export function equipment(d: Draft): { items: string[]; gold: number } {
       gold += bg.equipment.gold;
     }
   }
-  return { items, gold };
+  const kit = tierKit(d);
+  return { items: [...items, ...kit.items], gold: gold + kit.gold };
 }
 
 // ───────────────────────────── итоговые числа ─────────────────────────────
@@ -742,6 +851,10 @@ export function armorClass(d: Draft): { total: number; parts: { label: string; v
     if (r.subclass?.id === "draconic") parts.push({ label: "ХАР", value: modifier(ab.charisma) });
   }
   if (shield) parts.push({ label: "Щит", value: 2 });
+  const magic = kitMagicItems(d);
+  if (armor && trained(armor.type) && magic.some((m) => m.effect === "armor_plus1")) parts.push({ label: "Доспех +1", value: 1 });
+  if (shield && magic.some((m) => m.effect === "shield_plus1")) parts.push({ label: "Щит +1", value: 1 });
+  if (magic.some((m) => m.effect === "cloak_protection")) parts.push({ label: "Плащ защиты", value: 1 });
   parts = parts.filter((p) => p.value !== 0 || p.label === "Без доспеха");
   return { total: parts.reduce((s, p) => s + p.value, 0), parts };
 }
@@ -1184,10 +1297,26 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
   const mastered = new Set(pick(d, "weapon_mastery"));
   const attacks: HeroSpec["attacks"] = [];
   const seenWeapons = new Set<string>();
+  const magic = kitMagicItems(d);
+  const has = (effect: string) => magic.some((m) => m.effect === effect || m.id === effect);
+  const boundTo = (weaponId: string) => magic.filter((m) => m.needsWeapon && kitWeaponFor(d, m)?.id === weaponId);
+  const boundLabels = new Set(
+    magic.filter((m) => m.needsWeapon).map((m) => `${m.name} (${kitWeaponFor(d, m)?.name ?? ""})`),
+  );
+  // Предметы, надетые на доспех или щит из набора, пишутся в заметках к нему.
+  const wornKinds = new Set(
+    items.map((t) => ARMOR_BY_NAME.get(parseItem(t).name)).filter(Boolean).map((a) => (a!.type === "shield" ? "shield" : "armor")),
+  );
+  const wornBy = (kind: "armor" | "shield") => magic.filter((m) => m.needs === kind && wornKinds.has(kind));
+  const wornLabels = new Set([...wornBy("armor"), ...wornBy("shield")].map((m) => m.name));
   for (const text of items) {
+    if (boundLabels.has(text) || wornLabels.has(text)) continue;
     const { weapon } = parseItem(text);
     if (!weapon || seenWeapons.has(weapon.id)) continue;
     seenWeapons.add(weapon.id);
+    const bound = boundTo(weapon.id);
+    const plus = bound.some((m) => m.effect === "weapon_plus1") ? 1 : 0;
+    const bracers = has("bracers_archery") && (weapon.id === "longbow" || weapon.id === "shortbow");
     const finesse = weapon.properties.includes("фехтовальное") || (cls?.id === "monk" && canUseWeapon(cls, weapon));
     const ability: AbilityId = weapon.ranged
       ? "dexterity"
@@ -1196,21 +1325,59 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
         : "strength";
     const notes = [weapon.properties.join(", ")];
     if (mastered.has(weapon.id)) notes.push(`Мастерство: ${MASTERY[weapon.mastery]?.name ?? weapon.mastery}`);
+    for (const m of bound) if (m.effect === "none") notes.push(m.name);
+    if (bracers) notes.push("Наручи стрелка: +2 к урону");
     attacks.push({
-      name: weapon.name,
+      name: plus ? `${weapon.name} +1` : weapon.name,
       ability,
       caster_id: null,
-      proficient: cls ? canUseWeapon(cls, weapon) : false,
-      magic: 0,
+      proficient: bracers || (cls ? canUseWeapon(cls, weapon) : false),
+      magic: plus,
       damage_dice: weapon.damage,
       damage_type: weapon.damageType,
       add_ability_to_damage: true,
-      damage_bonus: 0,
+      damage_bonus: bracers ? 2 : 0,
       extra: "",
       range: weapon.range ?? (weapon.properties.includes("досягаемость") ? "10 фт" : "5 фт"),
       notes: notes.filter(Boolean).join(". "),
       save: null,
     });
+  }
+  if (has("moon_sickle")) {
+    const sickle = WEAPONS.find((w) => w.id === "sickle");
+    const existing = attacks.find((a) => a.name === "Серп");
+    if (existing) {
+      existing.name = "Лунный серп +1";
+      existing.magic = 1;
+    } else if (sickle) {
+      attacks.push({
+        name: "Лунный серп +1",
+        ability: ab.dexterity > ab.strength ? "dexterity" : "strength",
+        caster_id: null,
+        proficient: true,
+        magic: 1,
+        damage_dice: sickle.damage,
+        damage_type: sickle.damageType,
+        add_ability_to_damage: true,
+        damage_bonus: 0,
+        extra: "",
+        range: "5 фт",
+        notes: "Фокусировка друида и следопыта",
+        save: null,
+      });
+    }
+  }
+  // Предметы, усиливающие заклинания.
+  const classCaster = casters.find((c) => c.id === cls?.id);
+  if (classCaster) {
+    const boost = (item: string, field: "item_bonus" | "attack_item_bonus") => {
+      classCaster[field] = 1;
+      classCaster[field === "item_bonus" ? "item_bonus_source" : "attack_item_bonus_source"] = item;
+    };
+    if (has("wand_war_mage")) boost("Палочка боевого мага +1", "attack_item_bonus");
+    if (has("rod_pact_keeper") && cls?.id === "warlock") boost("Жезл хранителя договора +1", "item_bonus");
+    if (has("amulet_devout") && (cls?.id === "cleric" || cls?.id === "paladin")) boost("Амулет набожного +1", "item_bonus");
+    if (has("moon_sickle") && (cls?.id === "druid" || cls?.id === "ranger")) boost("Лунный серп +1", "item_bonus");
   }
   if (cls?.id === "monk") {
     attacks.push({
@@ -1269,7 +1436,7 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
     speed_ft: speed(d),
     xp: XP_THRESHOLDS[d.level - 1] ?? 0,
     save_proficiencies: cls?.saves ?? [],
-    skills: skillProficiencies(d),
+    skills: kitSkills(skillProficiencies(d), magic),
     initiative_bonuses: initiative,
     attacks,
     features,
@@ -1277,18 +1444,61 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
     resources,
     casters,
     granted,
-    items: items.map((text) => {
-      const p = parseItem(text);
+    items: items.filter((text) => !boundLabels.has(text) && !wornLabels.has(text)).map((text) => {
+      const parsed = parseItem(text);
+      const p = { ...parsed, name: parsed.weapon?.name ?? parsed.name.charAt(0).toUpperCase() + parsed.name.slice(1) };
+      const bound = p.weapon ? boundTo(p.weapon.id) : [];
+      if (bound.length) {
+        const plus = bound.some((m) => m.effect === "weapon_plus1");
+        return {
+          name: plus ? `${p.name} +1` : p.name,
+          quantity: p.quantity,
+          category: "Магические предметы",
+          notes: bound.map((m) => `${m.name}: ${m.text}`).join(" "),
+        };
+      }
       const armor = ARMOR_BY_NAME.get(p.name);
+      if (armor) {
+        const kind = armor.type === "shield" ? "shield" : "armor";
+        const on = wornBy(kind);
+        const plus = on.some((m) => m.effect === `${kind}_plus1`);
+        return {
+          name: plus ? `${p.name} +1` : p.name,
+          quantity: p.quantity,
+          category: on.length ? "Магические предметы" : "Доспехи",
+          notes: on.map((m) => `${m.name}: ${m.text}`).join(" "),
+        };
+      }
+      const kitItem = magic.find((m) => text === m.name);
       return {
         name: p.name,
         quantity: p.quantity,
-        category: p.weapon ? "Оружие" : armor ? "Доспехи" : "Снаряжение",
-        notes: "",
+        category: kitItem ? "Магические предметы" : p.weapon ? "Оружие" : "Снаряжение",
+        notes: kitItem ? kitItem.text : "",
       };
     }),
+    save_bonuses: has("cloak_protection") ? [{ label: "Плащ защиты", value: 1 }] : [],
+    attunement: magic
+      .filter((m) => m.attunement)
+      .map((m) => ({ name: m.name, effect: m.text })),
     notes: [],
   };
+}
+
+/** Сапоги эльфов и перчатки вора в навыках листа. */
+function kitSkills(skills: SpecSkill[], magic: KitItem[]): SpecSkill[] {
+  const out = skills.map((s) => ({ ...s, bonuses: [...s.bonuses], advantage: [...s.advantage] }));
+  const entry = (id: SkillId) => {
+    let e = out.find((s) => s.skill === id);
+    if (!e) {
+      e = { skill: id, proficiency: "none", source: "", bonuses: [], advantage: [] };
+      out.push(e);
+    }
+    return e;
+  };
+  if (magic.some((m) => m.effect === "boots_elvenkind")) entry("stealth").advantage.push("Сапоги эльфов (бесшумное передвижение)");
+  if (magic.some((m) => m.effect === "gloves_thievery")) entry("sleight_of_hand").bonuses.push({ label: "Перчатки вора", value: 5 });
+  return out;
 }
 
 function slotFeatIds(d: Draft): string[] {
