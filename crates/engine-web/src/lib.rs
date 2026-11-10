@@ -586,7 +586,7 @@ mod tests {
         assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
         assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
         let save = call(&mut s, json!({ "cmd": "save_state" }));
-        assert_eq!(save["ok"]["format_version"], 8);
+        assert_eq!(save["ok"]["format_version"], 9);
         assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
         let added = call(
             &mut s,
@@ -604,13 +604,16 @@ mod tests {
     }
 
     #[test]
-    fn master_context_is_text_with_codex_and_state() {
+    fn master_context_is_scene_system_and_turn() {
         let mut s = session();
-        let r = call(&mut s, json!({ "cmd": "master_context" }));
-        let text = r["ok"].as_str().unwrap();
-        assert!(text.starts_with("Ты — Мастер"));
-        assert!(text.contains("Сэр Никис Стрэндж"));
-        assert!(text.contains("\"cmd\":\"roll\""));
+        let r = call(&mut s, json!({ "cmd": "master_context", "query": "Иду в порт" }));
+        let system = r["ok"]["system"].as_str().unwrap();
+        assert!(system.starts_with("Ты — Мастер"));
+        assert!(system.contains("Сэр Никис Стрэндж"));
+        assert!(system.contains("\"cmd\":\"roll\""));
+        let turn = r["ok"]["turn"].as_str().unwrap();
+        assert!(turn.contains("[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]"));
+        assert!(turn.ends_with("Иду в порт"));
     }
 
     #[test]
