@@ -370,6 +370,7 @@ pub fn turn_context(session: &mut Session, query: &str, kb_extra: &str) -> Value
             "id": m.id,
             "имя": m.name,
             "кто": m.summary,
+            "вид": m.race,
             "хиты": format!("{}/{}", m.hit_points.current, m.hit_points.max),
             "кд": m.armor_class,
             "где": m.location,

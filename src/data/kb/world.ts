@@ -99,6 +99,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   loc({
     id: "loc.willows",
     group: "Побережье",
+    parent: "loc.weidenburg",
     title: "Улица Зелёных Ив, 7",
     subtitle: "Конспиративный особняк Дома Стрэндж в Вейденбурге",
     summary: "Особняк с экстерриториальным иммунитетом, экранированным сейфом и тайным водным выходом.",

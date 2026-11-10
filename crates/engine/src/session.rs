@@ -125,6 +125,8 @@ pub struct PartyMember {
     pub name: String,
     /// «Плут 3 / Колдун 7» или вид для фамильяра.
     pub summary: String,
+    /// Вид (раса): строка между именем и классом на карточке.
+    pub race: String,
     pub level: u32,
     pub hit_points: HitPoints,
     pub armor_class: i32,
@@ -424,6 +426,7 @@ impl Session {
                         .collect::<Vec<_>>()
                         .join(" / ")
                 },
+                race: c.race.clone(),
                 level: c.level(),
                 hit_points: c.hit_points,
                 armor_class: c.armor_class,

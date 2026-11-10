@@ -103,6 +103,8 @@ export interface PartyMember {
   kind: CharacterKind;
   name: string;
   summary: string;
+  /** Вид (раса). У фамильяра совпадает с summary. */
+  race: string;
   level: number;
   hit_points: HitPoints;
   armor_class: number;

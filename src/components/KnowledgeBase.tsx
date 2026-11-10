@@ -639,22 +639,49 @@ export default function KnowledgeBase({
                         + Новая карточка
                       </button>
                     )}
-                    {sectionEntries.map(([group, groupEntries]) => (
-                      <section key={group}>
-                        <h3 className="mb-2 font-serif text-gold">{group}</h3>
-                        <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                          {groupEntries.map((e) => (
-                            <EntryCard
-                              key={e.id}
-                              entry={e}
-                              onOpen={open}
-                              override={overrideOf(e.id)}
-                              noteCount={notesOf(e.id).length}
-                            />
-                          ))}
-                        </ul>
-                      </section>
-                    ))}
+                    {sectionEntries.map(([group, groupEntries]) => {
+                      const card = (e: KbEntry) => (
+                        <EntryCard
+                          key={e.id}
+                          entry={e}
+                          onOpen={open}
+                          override={overrideOf(e.id)}
+                          noteCount={notesOf(e.id).length}
+                        />
+                      );
+                      const ids = new Set(groupEntries.map((e) => e.id));
+                      // Места внутри локации — под её спойлером; родитель из другой группы не прячет их.
+                      const children = (id: string) => groupEntries.filter((e) => e.parent === id);
+                      const top = groupEntries.filter((e) => !e.parent || !ids.has(e.parent));
+                      return (
+                        <details key={group} open={sectionEntries.length === 1} className="group/kb">
+                          <summary className="mb-2 flex cursor-pointer list-none items-center gap-2 font-serif text-gold">
+                            <span className="text-xs transition-transform group-open/kb:rotate-90">▶</span>
+                            {group}
+                            <span className="font-sans text-xs text-muted">{groupEntries.length}</span>
+                          </summary>
+                          <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                            {top.map((e) => {
+                              const inside = children(e.id);
+                              if (!inside.length) return card(e);
+                              return (
+                                <li key={e.id} className="list-none lg:col-span-2">
+                                  <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">{card(e)}</ul>
+                                  <details className="group/place mt-2 ml-4 border-l border-edge pl-3">
+                                    <summary className="mb-2 flex cursor-pointer list-none items-center gap-2 text-sm text-gold/80">
+                                      <span className="text-xs transition-transform group-open/place:rotate-90">▶</span>
+                                      Известные места: {e.title}
+                                      <span className="text-xs text-muted">{inside.length}</span>
+                                    </summary>
+                                    <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2">{inside.map(card)}</ul>
+                                  </details>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </details>
+                      );
+                    })}
                     {journalSection && (
                       <section>
                         <h3 className="mb-2 font-serif text-gold">Записи по ходу игры</h3>
