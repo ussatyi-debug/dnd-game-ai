@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::{ChatMessage, ModelInfo, Role};
+use super::{prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
 
 /// Адрес Ollama по умолчанию.
 pub const DEFAULT_URL: &str = "http://localhost:11434";
@@ -178,17 +178,27 @@ pub async fn generate(
     model: &str,
     system: &str,
     history: &[ChatMessage],
-) -> Result<String, String> {
-    let (status, body) = post(client, base, &request_body(model, system, history, false)).await?;
+    json_mode: bool,
+) -> Result<Generated, String> {
+    let body_for = |no_think: bool| {
+        let mut body = request_body(model, system, history, no_think);
+        if json_mode {
+            body["format"] = "json".into();
+        }
+        body
+    };
+    let done = |body: &Value| -> Result<Generated, String> {
+        Ok(Generated { text: parse_reply(body)?, prompt_tokens: prompt_tokens(body) })
+    };
+    let (status, body) = post(client, base, &body_for(false)).await?;
     if (200..300).contains(&status) {
-        return parse_reply(&body);
+        return done(&body);
     }
     // Модели без режима размышлений отклоняют параметр think — повтор без него.
     if body["error"].as_str().is_some_and(|e| e.contains("think")) {
-        let (status, body) =
-            post(client, base, &request_body(model, system, history, true)).await?;
+        let (status, body) = post(client, base, &body_for(true)).await?;
         if (200..300).contains(&status) {
-            return parse_reply(&body);
+            return done(&body);
         }
         return Err(api_error(status, &body));
     }

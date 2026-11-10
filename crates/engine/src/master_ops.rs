@@ -5,7 +5,7 @@
 use crate::character::{Character, HitPoints};
 use crate::error::EngineError;
 use crate::inventory::{InventoryView, NewItem};
-use crate::knowledge::{CustomCard, KbOverride, MasterNote};
+use crate::knowledge::{CustomCard, KbOverride, MasterNote, NoteKind};
 use crate::profile::SheetDetails;
 use crate::resource::{ResourcePool, RestKind};
 use crate::session::{Mood, Scene, Session};
@@ -134,6 +134,18 @@ impl Session {
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
         let after = self.checkpoint();
+        let today = self.scene.day;
+        let day_note = |c: &Checkpoint| {
+            c.notes
+                .iter()
+                .find(|n| n.kind == NoteKind::Day && n.day == today)
+                .map(|n| n.text.clone())
+        };
+        if day_note(&after).is_some() && day_note(&after) != day_note(&before) {
+            self.turns_since_chronicle = 0;
+        } else {
+            self.turns_since_chronicle += 1;
+        }
         if after.notes != before.notes || after.custom_cards != before.custom_cards {
             self.turns_without_notes = 0;
         } else {

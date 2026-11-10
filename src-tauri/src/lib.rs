@@ -557,38 +557,51 @@ async fn ai_list_models(
 
 /// Ответ мастера. Провайдер и модель берутся из настроек в момент вызова — так работает
 /// горячее переключение моделей.
+///
+/// Мастер получает системный текст сцены (кодекс, снимок, хроника — неизменный до смены
+/// сцены) и последнюю реплику с изменениями за ход и заявкой. Запросы бросков и запросы к
+/// движку обслуживаются по ходу; рассказ до них не теряется. При `two_step` команды движка
+/// не выполняются: рассказ уходит игроку сразу, данные обновляет [`ai_update`].
 #[tauri::command]
 async fn ai_chat(
     history: Vec<ChatMessage>,
     kb_extra: Option<String>,
+    two_step: Option<bool>,
     ai: State<'_, AiState>,
     session: State<'_, SessionState>,
 ) -> Result<MasterReply, String> {
     let settings = lock(&ai.settings)?.clone();
-    let system = {
-        let mut session = lock(&session)?;
-        let query = history
-            .iter()
-            .rev()
-            .find(|m| m.role == ai::Role::Player)
-            .map_or("", |m| m.text.as_str());
-        let kb_extra = kb_extra.as_deref().unwrap_or("");
-        dnd_master::system_text(&dnd_master::turn_context(&mut session, query, kb_extra))
-    };
+    let two_step = two_step.unwrap_or(false);
     let player_text = history
         .iter()
         .rev()
         .find(|m| m.role == ai::Role::Player)
         .map(|m| m.text.clone())
         .unwrap_or_default();
+    let request = dnd_master::master_request(
+        &mut *lock(&session)?,
+        &player_text,
+        kb_extra.as_deref().unwrap_or(""),
+        two_step,
+    );
+    let system = request.system;
     let mut history = history;
+    if let Some(last) = history.iter_mut().rev().find(|m| m.role == ai::Role::Player) {
+        last.text = request.turn;
+    }
     let mut rolls = Vec::new();
     let mut raw = Vec::new();
+    let mut prose: Vec<String> = Vec::new();
+    let mut carried = String::new();
+    let mut prompt_tokens = None;
+    let mut prompt_chars = 0;
     let mut round = 0;
     let mut reply = loop {
-        let reply = ai::chat(&ai.client, &settings, &system, &history).await?;
+        let reply = ai::chat(&ai.client, &settings, &system, &history, false).await?;
+        prompt_tokens = prompt_tokens.max(reply.prompt_tokens);
+        prompt_chars = prompt_chars.max(reply.prompt_chars);
         raw.push(reply.text.clone());
-        // Запросы бросков: движок бросает, мастер получает результаты и продолжает ход.
+        // Запросы бросков и сведений: движок отвечает, мастер продолжает ход с места остановки.
         if round < dnd_master::MAX_ROLL_ROUNDS {
             let rolled = dnd_master::run_rolls(&mut *lock(&session)?, &reply.text);
             if let Some(r) = rolled {
@@ -596,18 +609,48 @@ async fn ai_chat(
                 history.push(ai::ChatMessage { role: ai::Role::Master, text: reply.text });
                 history.push(ai::ChatMessage { role: ai::Role::Player, text: r.feedback });
                 rolls.extend(r.rolls);
+                if !r.prose.is_empty() {
+                    prose.push(r.prose);
+                }
+                if !r.carried.is_empty() {
+                    carried.push_str(&r.carried);
+                    carried.push('\n');
+                }
                 continue;
             }
         }
         break reply;
     };
-    let mut turn = dnd_master::apply_directives(&mut *lock(&session)?, &reply.text);
+    let mut full = prose.join("\n\n");
+    if !full.is_empty() {
+        full.push_str("\n\n");
+    }
+    full.push_str(&reply.text);
+    reply.prompt_tokens = prompt_tokens;
+    reply.prompt_chars = prompt_chars;
+    reply.rolls = rolls;
+    reply.raw = raw;
+    if two_step {
+        let (text, written) = dnd_master::narration_parts(&full);
+        reply.fabricated = dnd_master::fabricated_rolls(
+            &text,
+            &dnd_master::rolled_faces(&reply.rolls),
+            &player_text,
+        );
+        reply.text = text;
+        reply.written_commands = format!("{carried}{written}").trim().to_string();
+        reply.pending_update = true;
+        return Ok(reply);
+    }
+    full.push('\n');
+    full.push_str(&carried);
+    let mut turn = dnd_master::apply_directives(&mut *lock(&session)?, &full);
     // Отказы движка: один повтор — мастер присылает исправленные команды, они входят в тот же ход.
     if let Some(request) = dnd_master::repair_request(&turn.actions) {
         history.push(ai::ChatMessage { role: ai::Role::Master, text: reply.text.clone() });
         history.push(ai::ChatMessage { role: ai::Role::Player, text: request });
-        if let Ok(fix) = ai::chat(&ai.client, &settings, &system, &history).await {
-            raw.push(fix.text.clone());
+        if let Ok(fix) = ai::chat(&ai.client, &settings, &system, &history, false).await {
+            reply.raw.push(fix.text.clone());
             let fixed = dnd_master::apply_repair(&mut *lock(&session)?, &fix.text);
             turn.actions.extend(fixed.into_iter().map(|mut a| {
                 a.summary = format!("исправлено: {}", a.summary);
@@ -615,12 +658,61 @@ async fn ai_chat(
             }));
         }
     }
-    reply.fabricated =
-        dnd_master::fabricated_rolls(&turn.text, &dnd_master::rolled_faces(&rolls), &player_text);
+    reply.fabricated = dnd_master::fabricated_rolls(
+        &turn.text,
+        &dnd_master::rolled_faces(&reply.rolls),
+        &player_text,
+    );
     reply.text = turn.text;
     reply.actions = turn.actions;
-    reply.rolls = rolls;
-    reply.raw = raw;
+    Ok(reply)
+}
+
+/// Второй шаг двухшагового хода: модель переводит рассказ мастера в команды движка
+/// (ответ JSON, где провайдер это умеет), движок их выполняет. Один повтор при отказах.
+#[tauri::command]
+async fn ai_update(
+    player_text: String,
+    narration: String,
+    written: Option<String>,
+    ai: State<'_, AiState>,
+    session: State<'_, SessionState>,
+) -> Result<MasterReply, String> {
+    let settings = lock(&ai.settings)?.clone();
+    let request = dnd_master::update_request(
+        &lock(&session)?,
+        &player_text,
+        &narration,
+        written.as_deref().unwrap_or(""),
+    );
+    let mut history = vec![ai::ChatMessage { role: ai::Role::Player, text: request.turn }];
+    let mut reply = ai::chat(&ai.client, &settings, &request.system, &history, true).await?;
+    let first = reply.text.clone();
+    let mut turn =
+        dnd_master::apply_directives(&mut *lock(&session)?, &dnd_master::update_commands(&first));
+    reply.raw = vec![first.clone()];
+    if let Some(repair) = dnd_master::repair_request(&turn.actions) {
+        history.push(ai::ChatMessage { role: ai::Role::Master, text: first });
+        history.push(ai::ChatMessage {
+            role: ai::Role::Player,
+            text: format!(
+                "{repair}\nОтветь JSON {{\"commands\":[...]}} только с исправленными командами."
+            ),
+        });
+        if let Ok(fix) = ai::chat(&ai.client, &settings, &request.system, &history, true).await {
+            reply.raw.push(fix.text.clone());
+            let fixed = dnd_master::apply_repair(
+                &mut *lock(&session)?,
+                &dnd_master::update_commands(&fix.text),
+            );
+            turn.actions.extend(fixed.into_iter().map(|mut a| {
+                a.summary = format!("исправлено: {}", a.summary);
+                a
+            }));
+        }
+    }
+    reply.text = String::new();
+    reply.actions = turn.actions;
     Ok(reply)
 }
 
@@ -698,7 +790,8 @@ pub fn run() {
             ai_set_key,
             ai_select_model,
             ai_list_models,
-            ai_chat
+            ai_chat,
+            ai_update
         ])
         .run(tauri::generate_context!())
         .expect("не удалось запустить приложение");

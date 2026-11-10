@@ -84,6 +84,31 @@ pub struct MasterReply {
     pub fabricated: Vec<String>,
     /// Все ответы модели за ход как есть (для журнала разбора ошибок).
     pub raw: Vec<String>,
+    /// Размер самого большого запроса хода в токенах — как посчитал провайдер.
+    pub prompt_tokens: Option<u64>,
+    /// Размер того же запроса в символах (если провайдер токены не вернул).
+    pub prompt_chars: usize,
+    /// Двухшаговый ход: рассказ готов, данные ещё обновляются (`ai_update`).
+    pub pending_update: bool,
+    /// Команды движка, которые мастер написал в рассказе (двухшаговый ход): подсказка второму шагу.
+    pub written_commands: String,
+}
+
+/// Ответ модели: текст и размер запроса в токенах, если провайдер его вернул.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Generated {
+    pub text: String,
+    pub prompt_tokens: Option<u64>,
+}
+
+/// Размер запроса в токенах из ответа провайдера: OpenAI (Responses и Chat Completions),
+/// Gemini, Ollama.
+pub(crate) fn prompt_tokens(body: &serde_json::Value) -> Option<u64> {
+    body["usage"]["input_tokens"]
+        .as_u64()
+        .or_else(|| body["usage"]["prompt_tokens"].as_u64())
+        .or_else(|| body["usageMetadata"]["promptTokenCount"].as_u64())
+        .or_else(|| body["prompt_eval_count"].as_u64())
 }
 
 /// Настройки ИИ. Хранятся в папке настроек приложения на ПК.
@@ -258,23 +283,38 @@ pub async fn chat(
     settings: &AiSettings,
     system: &str,
     history: &[ChatMessage],
+    json_mode: bool,
 ) -> Result<MasterReply, String> {
     let model = settings.model.clone().ok_or("Выберите модель в меню «Модели ИИ»")?;
     let key = settings.key().ok_or("Введите API-ключ в меню «Модели ИИ»")?;
-    let text = match settings.provider {
-        Provider::Gemini => gemini::generate(client, key, &model, system, history).await?,
-        Provider::OpenAi => openai::generate(client, key, &model, system, history).await?,
-        Provider::Local => ollama::generate(client, key, &model, system, history).await?,
-        Provider::Yandex => yandex::generate(client, key, &model, system, history).await?,
+    let out = match settings.provider {
+        Provider::Gemini => {
+            gemini::generate(client, key, &model, system, history, json_mode).await?
+        }
+        Provider::OpenAi => {
+            openai::generate(client, key, &model, system, history, json_mode).await?
+        }
+        Provider::Local => {
+            ollama::generate(client, key, &model, system, history, json_mode).await?
+        }
+        Provider::Yandex => {
+            yandex::generate(client, key, &model, system, history, json_mode).await?
+        }
     };
+    let prompt_chars =
+        system.chars().count() + history.iter().map(|m| m.text.chars().count()).sum::<usize>();
     Ok(MasterReply {
-        text,
+        text: out.text,
         provider: settings.provider,
         model,
         actions: Vec::new(),
         rolls: Vec::new(),
         fabricated: Vec::new(),
         raw: Vec::new(),
+        prompt_tokens: out.prompt_tokens,
+        prompt_chars,
+        pending_update: false,
+        written_commands: String::new(),
     })
 }
 

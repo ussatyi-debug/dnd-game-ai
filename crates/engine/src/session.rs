@@ -29,7 +29,7 @@ use crate::treasury::{EntrySource, NewEntry, Treasury, TreasuryView};
 pub const LUCKY_ID: &str = "feat.lucky";
 
 /// Версия формата сохранения.
-pub const SAVE_FORMAT_VERSION: u32 = 8;
+pub const SAVE_FORMAT_VERSION: u32 = 9;
 
 /// Самый старый формат, который загружается (сохранения 0.5.0).
 pub const MIN_SAVE_FORMAT: u32 = 3;
@@ -192,10 +192,33 @@ pub struct Session {
     pub(crate) undo: Option<Box<UndoPoint>>,
     /// Своя кампания; `None` — «Дом Стрэндж».
     pub(crate) campaign: Option<Campaign>,
+    /// Снимок сцены для мастера (в сохранение не попадает, после загрузки собирается заново).
+    pub(crate) master_memo: Option<MasterMemo>,
+    /// Отдыхов за игру: отдых начинает новую сцену для снимка.
+    pub(crate) rests: u64,
+    /// С какого дня в этой игре ведётся хроника по дням (новая игра или загрузка).
+    pub(crate) chronicle_from: u32,
+    /// Ходов мастера подряд без обновления пересказа текущего дня.
+    pub(crate) turns_since_chronicle: u32,
+}
+
+/// Снимок сцены, который мастер получает неизменным до смены сцены, и состояние на момент
+/// снимка — для списка изменений за ход. Формат содержимого задаёт крейт мастера.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MasterMemo {
+    /// Ключ сцены: день, место, кто в сцене, отдыхи.
+    pub key: String,
+    /// Системный текст мастера на эту сцену.
+    pub system: String,
+    /// Состояние на момент снимка: «поле» → «значение».
+    pub baseline: Vec<(String, String)>,
+    /// Последний номер записи базы знаний на момент снимка.
+    pub last_note_id: u64,
 }
 
 impl Session {
     pub fn new(rng: Xoshiro256, scene: Scene, party: Vec<Character>, treasury: Treasury) -> Self {
+        let day = scene.day;
         Self {
             rng,
             scene,
@@ -212,7 +235,26 @@ impl Session {
             next_proposal_id: 1,
             undo: None,
             campaign: None,
+            master_memo: None,
+            rests: 0,
+            chronicle_from: day,
+            turns_since_chronicle: 0,
         }
+    }
+
+    /// Снимок сцены мастера (если уже собран).
+    pub fn master_memo(&self) -> Option<&MasterMemo> {
+        self.master_memo.as_ref()
+    }
+
+    /// Запомнить снимок сцены мастера.
+    pub fn set_master_memo(&mut self, memo: MasterMemo) {
+        self.master_memo = Some(memo);
+    }
+
+    /// Сколько раз отряд отдыхал за игру.
+    pub fn rest_count(&self) -> u64 {
+        self.rests
     }
 
     /// Новая кампания с созданными героями: отряд собирается из листов, казна — из стартового
@@ -519,6 +561,7 @@ impl Session {
 
     /// Отдых всего отряда: каждый персонаж восстанавливает ресурсы по их правилам.
     pub fn take_rest(&mut self, kind: RestKind) -> RestResult {
+        self.rests += 1;
         let characters = self
             .party
             .iter_mut()

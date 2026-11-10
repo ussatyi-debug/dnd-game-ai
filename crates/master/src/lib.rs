@@ -8,13 +8,19 @@
 
 mod directives;
 mod rolls;
+mod scene;
 
 pub use directives::{
-    apply_directives, apply_repair, repair_request, strip_directives, MasterAction, MasterTurn,
+    apply_directives, apply_repair, narration_parts, repair_request, strip_directives,
+    MasterAction, MasterTurn,
 };
 pub use rolls::{
     fabricated_rolls, has_roll_requests, rolled_faces, run_rolls, MasterRoll, RollRound,
     MAX_ROLL_ROUNDS,
+};
+pub use scene::{
+    answer_query, master_request, turn_hint, update_commands, update_request, MasterRequest,
+    CHRONICLE_REMINDER_TURNS, HISTORY_TURNS_DEFAULT, HISTORY_TURNS_MAX, HISTORY_TURNS_MIN,
 };
 
 use dnd_engine::{
@@ -41,11 +47,11 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
 
 КУБЫ МАСТЕРА
 - Кубы за противников, NPC и спутников бросает движок. Ты НИКОГДА не придумываешь числа на кубах.
-- Нужен бросок — ответь ТОЛЬКО блоком ```engine с запросами, без рассказа: {"cmd":"roll","who":"Стражник","what":"атака по Никису","dice":"1d20+5","vs":"ac:18"}. "vs": "ac:N" — против КД, "dc:N" — против КС; "adv":true — преимущество, "dis":true — помеха; "hidden":true — тайный бросок (Скрытность врага, проверки, о которых герой не знает). Запрашивай сразу все броски, которые нужны (все атаки противников за раунд, урон — после попадания).
+- Нужен бросок — допиши в конце рассказа (или вместо него) блок ```engine с запросами и остановись: {"cmd":"roll","who":"Стражник","what":"атака по Никису","dice":"1d20+5","vs":"ac:18"}. "vs": "ac:N" — против КД, "dc:N" — против КС; "adv":true — преимущество, "dis":true — помеха; "hidden":true — тайный бросок (Скрытность врага, проверки, о которых герой не знает). Запрашивай сразу все броски, которые нужны (все атаки противников за раунд, урон — после попадания).
 - Броски спутников (и героя, если игрок попросил бросить за него) — через лист, модификатор подставит движок: {"cmd":"roll","character":"npc.valeria","check":"initiative"}; "check": навык ("perception", "stealth" или «Внимательность»), спасбросок ("save:dex"), атака ("attack:Кадило"). Урон спутника — "dice" с его бонусом из «листы».
 - Команды всегда внутри блока ```engine — не пиши голый JSON в тексте.
 - Движок пришлёт сообщение «[ДВИЖОК] Результаты бросков». Продолжай ход строго по ним и называй результат: «Атака стражника: d20 14 + 5 = 19 — попадание». Тайные броски не раскрывай игроку числами.
-- Не больше трёх запросов бросков за ход. Другие команды (hp, condition…) пиши уже в итоговом ответе.
+- Не больше трёх запросов за ход (броски и query вместе). Другие команды из сообщения с запросом движок выполнит вместе с итогом хода — не повторяй их.
 - Броски героя присылает игрок — их числа берёшь из его заявки.
 - Если броска нет — запроси его. Никогда не пиши «допустим, выпало…» и не оценивай урон «примерно»: числа только от движка или игрока.
 
@@ -549,6 +555,8 @@ mod tests {
             title: "Астролябия".into(),
             layer: "player".into(),
             status: Some("progress".into()),
+            summary: String::new(),
+            text: String::new(),
         }]);
         session.set_card_status("goal.astrolabe", Some("done"), "").unwrap();
         let context = turn_context(&mut session, "", "");

@@ -43,6 +43,10 @@ pub struct RollRound {
     pub rolls: Vec<MasterRoll>,
     /// Сообщение мастеру с результатами.
     pub feedback: String,
+    /// Рассказ из ответа с запросами — игрок видит его, итог дописывается следом.
+    pub prose: String,
+    /// Другие команды из того же ответа блоком ```engine — выполняются вместе с итогом хода.
+    pub carried: String,
 }
 
 fn text(cmd: &Value, key: &str) -> Option<String> {
@@ -52,10 +56,9 @@ fn text(cmd: &Value, key: &str) -> Option<String> {
 /// Есть ли в ответе мастера запросы бросков.
 pub fn has_roll_requests(reply: &str) -> bool {
     let (_, blocks) = split(reply);
-    blocks
-        .iter()
-        .flat_map(|b| commands(b))
-        .any(|c| c.is_ok_and(|v| v.get("cmd").and_then(Value::as_str) == Some("roll")))
+    blocks.iter().flat_map(|b| commands(b)).any(|c| {
+        c.is_ok_and(|v| matches!(v.get("cmd").and_then(Value::as_str), Some("roll" | "query")))
+    })
 }
 
 fn target(cmd: &Value) -> Result<Option<(&'static str, i64)>, String> {
@@ -241,16 +244,19 @@ fn finish(
     }
 }
 
-/// Выполняет запросы бросков из ответа мастера. `None` — запросов нет.
-/// Другие команды из такого ответа не выполняются: мастер повторит их в итоговом ответе.
+/// Выполняет запросы бросков и запросы к движку (`query`) из ответа мастера. `None` — запросов нет.
+///
+/// Рассказ из такого ответа игрок видит ([`RollRound::prose`]), а остальные команды
+/// ([`RollRound::carried`]) выполняются вместе с итогом хода — мастер их не повторяет.
 pub fn run_rolls(session: &mut Session, reply: &str) -> Option<RollRound> {
     if !has_roll_requests(reply) {
         return None;
     }
-    let (_, blocks) = split(reply);
+    let (prose, blocks) = split(reply);
     let mut rolls = Vec::new();
+    let mut answers = Vec::new();
     let mut errors = Vec::new();
-    let mut skipped = false;
+    let mut carried = Vec::new();
     for cmd in blocks.iter().flat_map(|b| commands(b)) {
         match cmd {
             Ok(v) if v.get("cmd").and_then(Value::as_str) == Some("roll") => {
@@ -259,26 +265,53 @@ pub fn run_rolls(session: &mut Session, reply: &str) -> Option<RollRound> {
                     Err(e) => errors.push(e),
                 }
             }
-            _ => skipped = true,
+            Ok(v) if v.get("cmd").and_then(Value::as_str) == Some("query") => {
+                match crate::scene::answer_query(session, &v) {
+                    Ok(a) => answers.push(a),
+                    Err(e) => errors.push(format!("запрос не выполнен: {e}")),
+                }
+            }
+            Ok(v) => carried.push(v.to_string()),
+            Err(e) => errors.push(format!("команда не разобрана: {e}")),
         }
     }
     for r in &rolls {
         session.log(format!("Бросок мастера: {}", r.line));
     }
-    let mut feedback = String::from("[ДВИЖОК] Результаты бросков — используй только эти числа:\n");
-    for r in &rolls {
-        feedback.push_str(&format!("- {}\n", r.line));
+    let mut feedback = String::from("[ДВИЖОК]\n");
+    if !rolls.is_empty() {
+        feedback.push_str("Результаты бросков — используй только эти числа:\n");
+        for r in &rolls {
+            feedback.push_str(&format!("- {}\n", r.line));
+        }
+    }
+    if !answers.is_empty() {
+        feedback.push_str("Ответы на запросы:\n");
+        for a in &answers {
+            feedback.push_str(&format!("- {a}\n"));
+        }
     }
     for e in &errors {
-        feedback.push_str(&format!("- Бросок не выполнен: {e}\n"));
+        feedback.push_str(&format!("- Не выполнено: {e}\n"));
     }
-    if skipped {
+    if !carried.is_empty() {
         feedback.push_str(
-            "Другие команды из сообщения с запросом бросков не выполнены — включи их в итоговый ответ.\n",
+            "Остальные команды из твоего сообщения движок выполнит вместе с итогом хода — не повторяй их.\n",
         );
     }
-    feedback.push_str("Продолжай ход с этими результатами. Не запрашивай эти же броски повторно.");
-    Some(RollRound { rolls, feedback })
+    let prose = crate::directives::clean_reply(&prose);
+    if !prose.is_empty() {
+        feedback.push_str(
+            "Твой рассказ до запроса игрок уже видит. Продолжай с места остановки: не пересказывай его и не разыгрывай заявку игрока заново.\n",
+        );
+    }
+    feedback.push_str("Не запрашивай эти же броски и сведения повторно.");
+    let carried = if carried.is_empty() {
+        String::new()
+    } else {
+        format!("```engine\n{}\n```", carried.join("\n"))
+    };
+    Some(RollRound { rolls, feedback, prose, carried })
 }
 
 /// Броски d20 в тексте мастера, которых движок не делал в этом ходу и которых нет в заявке
@@ -356,7 +389,9 @@ mod tests {
         assert_eq!(attack.total, i64::from(attack.d20.unwrap()) + 5);
         assert!(round.rolls[1].hidden);
         assert!(round.feedback.contains("Стражник — атака по Никису: 1d20+5 → ["));
-        assert!(round.feedback.contains("не выполнены"));
+        // Команда hp из того же ответа не выполнена сразу — она уйдёт с итогом хода.
+        assert!(round.feedback.contains("выполнит вместе с итогом хода"));
+        assert!(round.carried.contains("\"cmd\":\"hp\""));
         // Урон из этого сообщения не применён.
         let nikis = s.character("pc.nikis").unwrap();
         assert_eq!(nikis.hit_points.current, nikis.hit_points.max);

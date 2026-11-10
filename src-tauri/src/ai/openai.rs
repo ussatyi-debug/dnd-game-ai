@@ -2,7 +2,7 @@
 
 use serde_json::{json, Value};
 
-use super::{ChatMessage, ModelInfo, Role};
+use super::{prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
 
 const BASE_URL: &str = "https://api.openai.com/v1";
 
@@ -29,11 +29,18 @@ pub async fn generate(
     model: &str,
     system: &str,
     history: &[ChatMessage],
-) -> Result<String, String> {
+    json_mode: bool,
+) -> Result<Generated, String> {
     let response = client
         .post(format!("{BASE_URL}/responses"))
         .bearer_auth(key)
-        .json(&request_body(model, system, history))
+        .json(&{
+            let mut body = request_body(model, system, history);
+            if json_mode {
+                body["text"] = json!({ "format": { "type": "json_object" } });
+            }
+            body
+        })
         .send()
         .await
         .map_err(network_error)?;
@@ -42,7 +49,7 @@ pub async fn generate(
     if !status.is_success() {
         return Err(api_error(status.as_u16(), &body));
     }
-    parse_reply(&body)
+    Ok(Generated { text: parse_reply(&body)?, prompt_tokens: prompt_tokens(&body) })
 }
 
 /// Не текстовые модели (звук, картинки, эмбеддинги и т. п.) в выбор не попадают.

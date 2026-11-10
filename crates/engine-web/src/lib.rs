@@ -34,13 +34,33 @@ pub enum Request {
     Party,
     Treasury,
     SaveState,
-    /// Системный текст мастера на этот ход: кодекс и состояние игры. `query` — заявка
-    /// игрока, `kb_extra` — подходящие к ней карточки базы знаний.
+    /// Запрос мастеру на этот ход: системный текст сцены и последняя реплика игрока.
+    /// `query` — заявка игрока, `kb_extra` — подходящие к ней карточки базы знаний.
     MasterContext {
         #[serde(default)]
         query: String,
         #[serde(default)]
         kb_extra: String,
+        #[serde(default)]
+        two_step: bool,
+    },
+    /// Двухшаговый ход: рассказ для игрока и команды, которые мастер написал в нём.
+    MasterNarration {
+        text: String,
+    },
+    /// Двухшаговый ход, второй шаг: запрос модели «рассказ → команды движка».
+    MasterUpdateRequest {
+        player: String,
+        narration: String,
+        #[serde(default)]
+        written: String,
+    },
+    /// Двухшаговый ход: выполняет команды из ответа второго шага.
+    MasterUpdateApply {
+        text: String,
+        /// Повтор после отказов: дописывается к ходу.
+        #[serde(default)]
+        repair: bool,
     },
     TreasuryAddManual {
         asset_id: String,
@@ -239,8 +259,23 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::Party => to_value(session.party_view()),
         Request::Treasury => to_value(session.treasury_view()),
         Request::SaveState => to_value(session.save_state()),
-        Request::MasterContext { query, kb_extra } => {
-            to_value(dnd_master::system_text(&dnd_master::turn_context(session, &query, &kb_extra)))
+        Request::MasterContext { query, kb_extra, two_step } => {
+            to_value(dnd_master::master_request(session, &query, &kb_extra, two_step))
+        }
+        Request::MasterNarration { text } => {
+            let (text, written) = dnd_master::narration_parts(&text);
+            Ok(json!({ "text": text, "written": written }))
+        }
+        Request::MasterUpdateRequest { player, narration, written } => {
+            to_value(dnd_master::update_request(session, &player, &narration, &written))
+        }
+        Request::MasterUpdateApply { text, repair } => {
+            let commands = dnd_master::update_commands(&text);
+            if repair {
+                to_value(dnd_master::apply_repair(session, &commands))
+            } else {
+                to_value(dnd_master::apply_directives(session, &commands))
+            }
         }
         Request::TreasuryAddManual { asset_id, location_id, quantity, reason } => to_value(
             session

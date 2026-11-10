@@ -359,6 +359,9 @@ impl Session {
         self.proposals = save.proposals;
         self.undo = None;
         self.campaign = save.campaign;
+        self.master_memo = None;
+        self.chronicle_from = self.scene.day;
+        self.turns_since_chronicle = 0;
         self.log(format!("Загружено сохранение: День {}", self.scene.day));
 
         Ok(LoadReport {

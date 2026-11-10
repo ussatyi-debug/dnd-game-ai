@@ -2,7 +2,7 @@
 
 use serde_json::{json, Value};
 
-use super::{ChatMessage, ModelInfo, Role};
+use super::{prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
 
 const BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -30,11 +30,18 @@ pub async fn generate(
     model: &str,
     system: &str,
     history: &[ChatMessage],
-) -> Result<String, String> {
+    json_mode: bool,
+) -> Result<Generated, String> {
     let response = client
         .post(format!("{BASE_URL}/models/{model}:generateContent"))
         .header("x-goog-api-key", key)
-        .json(&request_body(system, history))
+        .json(&{
+            let mut body = request_body(system, history);
+            if json_mode {
+                body["generationConfig"]["responseMimeType"] = "application/json".into();
+            }
+            body
+        })
         .send()
         .await
         .map_err(network_error)?;
@@ -43,7 +50,7 @@ pub async fn generate(
     if !status.is_success() {
         return Err(api_error(status.as_u16(), &body));
     }
-    parse_reply(&body)
+    Ok(Generated { text: parse_reply(&body)?, prompt_tokens: prompt_tokens(&body) })
 }
 
 pub(crate) fn parse_models(body: &Value) -> Vec<ModelInfo> {

@@ -55,6 +55,8 @@ pub enum EngineError {
     DayInPast { current: u32, requested: u32 },
     /// Пустая запись в базу знаний.
     EmptyNote,
+    /// Пересказ дня, которого ещё не было (или нулевого).
+    ChronicleDay { day: u32, today: u32 },
     /// Нет записи базы знаний с таким номером.
     UnknownNote(u64),
     /// Нет карточки базы знаний.
@@ -214,6 +216,9 @@ impl fmt::Display for EngineError {
                 "Сейчас День {current} — вернуться в День {requested} нельзя"
             ),
             Self::EmptyNote => write!(f, "Пустая запись: нужен заголовок или текст"),
+            Self::ChronicleDay { day, today } => {
+                write!(f, "Пересказ Дня {day} нельзя записать: сейчас День {today}")
+            }
             Self::UnknownNote(id) => write!(f, "Нет записи базы знаний № {id}"),
             Self::UnknownCard(card) => write!(f, "В базе знаний нет карточки «{card}»"),
             Self::UnknownStatus(s) => write!(

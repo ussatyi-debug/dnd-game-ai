@@ -188,6 +188,25 @@ pub fn strip_directives(text: &str) -> String {
     split(text).0
 }
 
+/// Двухшаговый ход: рассказ для игрока и команды, которые мастер всё же написал в нём,
+/// одним блоком ```engine (подсказка второму шагу; броски и запросы отброшены).
+pub fn narration_parts(text: &str) -> (String, String) {
+    let (prose, blocks) = split(text);
+    let lines: Vec<String> = blocks
+        .iter()
+        .flat_map(|b| commands(b))
+        .filter_map(Result::ok)
+        .filter(|v| !matches!(v.get("cmd").and_then(Value::as_str), Some("roll" | "query")))
+        .map(|v| v.to_string())
+        .collect();
+    let written = if lines.is_empty() {
+        String::new()
+    } else {
+        format!("```engine\n{}\n```", lines.join("\n"))
+    };
+    (clean_reply(&prose), written)
+}
+
 /// Команды блока: JSON-объект на строку или JSON-массив целиком.
 pub(crate) fn commands(block: &str) -> Vec<Result<Value, String>> {
     let trimmed = block.trim();
@@ -355,10 +374,16 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             engine(session.change_scene(change))?;
             Ok(last_log(session))
         })(),
-        "roll" => {
-            Err("лимит бросков за ход исчерпан — броски запрашивай отдельным ответом до рассказа"
+        "roll" | "query" => {
+            Err("лимит запросов за ход исчерпан (3) — броски и запросы делай раньше, до итога хода"
                 .into())
         }
+        "chronicle" => (|| -> Result<String, String> {
+            let day = int_field(cmd, "day").unwrap_or_else(|| i64::from(session.scene().day));
+            let day = u32::try_from(day).map_err(|_| format!("неверный день {day}"))?;
+            engine(session.write_chronicle(day, opt_text(cmd, "text").unwrap_or("")))?;
+            Ok(last_log(session))
+        })(),
         "rest" => (|| -> Result<String, String> {
             let kind = match opt_text(cmd, "kind").unwrap_or("long") {
                 "short" => RestKind::Short,
@@ -813,6 +838,8 @@ mod tests {
             title: "Получить Княжескую Астролябию".into(),
             layer: "player".into(),
             status: Some("progress".into()),
+            summary: String::new(),
+            text: String::new(),
         }]);
         let turn = apply_directives(
             &mut s,

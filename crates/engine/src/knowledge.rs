@@ -43,6 +43,8 @@ pub enum NoteKind {
     Plan,
     /// Событие, назначенное на день (`due_day`).
     Timer,
+    /// Пересказ дня для хроники: описываемый день — в поле `day`.
+    Day,
 }
 
 impl NoteKind {
@@ -52,6 +54,7 @@ impl NoteKind {
             NoteKind::Secret => "тайна",
             NoteKind::Plan => "план NPC",
             NoteKind::Timer => "таймер",
+            NoteKind::Day => "день",
         }
     }
 
@@ -61,6 +64,7 @@ impl NoteKind {
             "secret" | "тайна" => Some(NoteKind::Secret),
             "plan" | "план" | "план npc" => Some(NoteKind::Plan),
             "timer" | "таймер" => Some(NoteKind::Timer),
+            "day" | "день" => Some(NoteKind::Day),
             _ => None,
         }
     }
@@ -196,6 +200,12 @@ pub struct KbCard {
     /// Статус из файла базы.
     #[cfg_attr(feature = "serde", serde(default))]
     pub status: Option<String>,
+    /// Одно-два предложения для оглавления и хроники.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub summary: String,
+    /// Полный текст карточки — ответ движка на запрос мастера `query card`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub text: String,
 }
 
 /// Статус карточки, изменённый по ходу игры.
@@ -681,6 +691,76 @@ impl Session {
             .collect()
     }
 
+    /// Хроника по дням: пересказы дней по порядку.
+    pub fn chronicle(&self) -> Vec<&MasterNote> {
+        let mut days: Vec<&MasterNote> =
+            self.notes.iter().filter(|n| n.kind == NoteKind::Day).collect();
+        days.sort_by_key(|n| n.day);
+        days
+    }
+
+    /// Записать или обновить пересказ дня в хронике (слой игрока: его видно и можно править).
+    pub fn write_chronicle(&mut self, day: u32, text: &str) -> Result<u64, EngineError> {
+        let result = (|| {
+            let text = text.trim();
+            if text.is_empty() {
+                return Err(EngineError::EmptyNote);
+            }
+            if day == 0 || day > self.scene.day {
+                return Err(EngineError::ChronicleDay { day, today: self.scene.day });
+            }
+            if day == self.scene.day {
+                self.turns_since_chronicle = 0;
+            }
+            if let Some(note) =
+                self.notes.iter_mut().find(|n| n.kind == NoteKind::Day && n.day == day)
+            {
+                note.text = text.to_string();
+                return Ok((note.id, false));
+            }
+            let id = self.next_note_id;
+            self.next_note_id += 1;
+            self.notes.push(MasterNote {
+                id,
+                layer: NoteLayer::Player,
+                day,
+                time: None,
+                title: format!("День {day}"),
+                text: text.to_string(),
+                card: None,
+                by_player: false,
+                kind: NoteKind::Day,
+                due_day: None,
+                done: false,
+            });
+            Ok((id, true))
+        })();
+        self.logged(
+            result,
+            |(id, new)| {
+                let what = if *new { "записан" } else { "обновлён" };
+                format!("Хроника: пересказ Дня {day} {what} [запись {id}]")
+            },
+            || "хроника".into(),
+        )
+        .map(|(id, _)| id)
+    }
+
+    /// Прошедшие дни этой игры без пересказа в хронике (не больше трёх последних).
+    pub fn chronicle_missing(&self) -> Vec<u32> {
+        let mut missing: Vec<u32> = (self.chronicle_from..self.scene.day)
+            .filter(|d| !self.notes.iter().any(|n| n.kind == NoteKind::Day && n.day == *d))
+            .collect();
+        let excess = missing.len().saturating_sub(3);
+        missing.drain(..excess);
+        missing
+    }
+
+    /// Ходов мастера подряд без обновления пересказа текущего дня.
+    pub fn turns_since_chronicle(&self) -> u32 {
+        self.turns_since_chronicle
+    }
+
     /// Сколько ходов мастера подряд прошло без записей и карточек.
     pub fn turns_without_notes(&self) -> u32 {
         self.turns_without_notes
@@ -755,12 +835,16 @@ mod tests {
                 title: "Получить Княжескую Астролябию".into(),
                 layer: "player".into(),
                 status: Some("progress".into()),
+                summary: String::new(),
+                text: String::new(),
             },
             KbCard {
                 id: "npc.orelie".into(),
                 title: "Мадам Орели".into(),
                 layer: "world".into(),
                 status: Some("watch".into()),
+                summary: String::new(),
+                text: String::new(),
             },
         ]);
         s
