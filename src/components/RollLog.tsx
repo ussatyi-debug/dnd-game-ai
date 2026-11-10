@@ -37,7 +37,13 @@ export default function RollLog({ rolls, onClear, onSendToChat }: RollLogProps) 
                 <span className="font-medium">{rollTitle(roll)}</span>
                 <time className="shrink-0 text-xs text-muted">{roll.time}</time>
               </div>
-              {roll.master ? (
+              {roll.master?.hidden ? (
+                // Тайный бросок свёрнут: кто, что и число — только по нажатию.
+                <details className="mt-0.5 text-sm">
+                  <summary className="cursor-pointer text-xs text-muted">показать</summary>
+                  <p className="mt-1 font-mono break-words">{roll.master.line}</p>
+                </details>
+              ) : roll.master ? (
                 <p className="mt-0.5 font-mono text-sm break-words">
                   {roll.master.line.slice(roll.master.line.indexOf(": ") + 2)}
                 </p>

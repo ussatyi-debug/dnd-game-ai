@@ -244,8 +244,29 @@ export function saveState(): Promise<unknown> {
 }
 
 /** Кодекс мастера и состояние игры на этот ход (с новыми кубами мастера). */
-export function masterContext(query: string, kbExtra: string): Promise<string> {
-  return call<string>("master_context", { query, kbExtra });
+/** Запрос мастеру на ход: системный текст сцены (неизменный до смены сцены) и последняя реплика. */
+export interface MasterRequest {
+  system: string;
+  turn: string;
+}
+
+export function masterContext(query: string, kbExtra: string, twoStep = false): Promise<MasterRequest> {
+  return call<MasterRequest>("master_context", { query, kbExtra, twoStep });
+}
+
+/** Двухшаговый ход: рассказ для игрока и команды, которые мастер всё же написал в нём. */
+export function masterNarration(text: string): Promise<{ text: string; written: string }> {
+  return call<{ text: string; written: string }>("master_narration", { text });
+}
+
+/** Двухшаговый ход, второй шаг: запрос «рассказ → команды движка». */
+export function masterUpdateRequest(player: string, narration: string, written: string): Promise<MasterRequest> {
+  return call<MasterRequest>("master_update_request", { player, narration, written });
+}
+
+/** Двухшаговый ход: выполнить команды из ответа второго шага (`repair` — повтор после отказов). */
+export function masterUpdateApply(text: string, repair = false): Promise<MasterTurn | MasterAction[]> {
+  return call<MasterTurn | MasterAction[]>("master_update_apply", { text, repair });
 }
 
 export function takeRest(kind: RestKind): Promise<RestResult> {
@@ -390,6 +411,10 @@ export interface RollRound {
   rolls: MasterRoll[];
   /** Сообщение мастеру с результатами. */
   feedback: string;
+  /** Рассказ из ответа с запросами — игрок видит его, итог дописывается следом. */
+  prose: string;
+  /** Остальные команды того же ответа — выполняются вместе с итогом хода. */
+  carried: string;
 }
 
 /** Исправленные мастером команды после отказов движка (веб-версия). */
@@ -654,13 +679,14 @@ export interface MasterNote {
   done: boolean;
 }
 
-export type NoteKind = "event" | "secret" | "plan" | "timer";
+export type NoteKind = "event" | "secret" | "plan" | "timer" | "day";
 
 export const NOTE_KIND_LABEL: Record<NoteKind, string> = {
   event: "событие",
   secret: "тайна",
   plan: "план NPC",
   timer: "таймер",
+  day: "день (хроника)",
 };
 
 export interface CardFactInput {
@@ -729,6 +755,10 @@ export interface KbCardIndex {
   title: string;
   layer: string;
   status: string | null;
+  /** Кратко — для оглавления и хроники мастера. */
+  summary?: string;
+  /** Полный текст карточки — ответ на запрос мастера «query card». */
+  text?: string;
 }
 
 export interface LoadReport {
@@ -887,6 +917,14 @@ export interface MasterReply {
   fabricated: string[];
   /** Все ответы модели за ход как есть (для журнала). */
   raw: string[];
+  /** Размер самого большого запроса хода в токенах (если провайдер вернул). */
+  prompt_tokens: number | null;
+  /** Размер того же запроса в символах. */
+  prompt_chars: number;
+  /** Двухшаговый ход: рассказ готов, данные обновит aiUpdate. */
+  pending_update: boolean;
+  /** Команды, которые мастер написал в рассказе (подсказка второму шагу). */
+  written_commands: string;
 }
 
 /** Доступен ли ИИ-мастер (только в приложении). */
@@ -914,8 +952,17 @@ export function aiListModels(provider: Provider): Promise<ModelInfo[]> {
   return invoke<ModelInfo[]>("ai_list_models", { provider });
 }
 
-export function aiChat(history: { role: ChatRole; text: string }[], kbExtra: string): Promise<MasterReply> {
-  return invoke<MasterReply>("ai_chat", { history, kbExtra });
+export function aiChat(
+  history: { role: ChatRole; text: string }[],
+  kbExtra: string,
+  twoStep = false,
+): Promise<MasterReply> {
+  return invoke<MasterReply>("ai_chat", { history, kbExtra, twoStep });
+}
+
+/** Второй шаг двухшагового хода: команды движка по рассказу мастера. */
+export function aiUpdate(playerText: string, narration: string, written: string): Promise<MasterReply> {
+  return invoke<MasterReply>("ai_update", { playerText, narration, written });
 }
 
 /** Сообщение об ошибке из ответа движка. */

@@ -76,8 +76,16 @@ export function matchesQuery(entry: KbEntry, query: string): boolean {
 }
 
 /** Указатель карточек для движка: мастер видит оглавление базы и ссылается на карточки. */
-export function kbIndex(): { id: string; title: string; layer: string; status: string | null }[] {
-  return kbEntries().map((e) => ({ id: e.id, title: e.title, layer: e.layer, status: e.status ?? null }));
+export function kbIndex(): { id: string; title: string; layer: string; status: string | null; summary: string; text: string }[] {
+  // Полный текст — для ответа движка на запрос мастера «query card».
+  return kbEntries().map((e) => ({
+    id: e.id,
+    title: e.title,
+    layer: e.layer,
+    status: e.status ?? null,
+    summary: e.summary,
+    text: entryText(e),
+  }));
 }
 
 function stems(text: string): string[] {

@@ -17,6 +17,12 @@ import SaveWindow from "./components/SaveWindow";
 import TreasuryWindow from "./components/TreasuryWindow";
 import {
   aiChat,
+  aiUpdate,
+  masterNarration,
+  masterUpdateApply,
+  masterUpdateRequest,
+  type MasterRequest,
+  type MasterTurn,
   canExitApp,
   exitApp,
   aiListModels,
@@ -93,6 +99,7 @@ import type { HeroSpec } from "./lib/heroSpec";
 import CreationWizard from "./components/creation/CreationWizard.tsx";
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { webAiGenerate } from "./lib/browserAi";
+import { promptSize, recentTurns, twoStepFor, UPDATE_TIMEOUT_MS } from "./lib/masterPrefs";
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
 import type { RollResult, TrayRoll } from "./lib/rolls";
@@ -138,7 +145,6 @@ function initialCampaign(): string {
   return id;
 }
 /** Сколько последних сообщений чата получает мастер; остальное — в базе знаний. */
-const MASTER_HISTORY = 40;
 
 type Tab = "party" | "dialog" | "character";
 type Overlay = "knowledge" | "save" | "load" | "settings" | "treasury" | "continue" | "reference" | "log" | null;
@@ -242,6 +248,10 @@ export default function App() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [thinking, setThinking] = useState(false);
+  /** Второй шаг двухшагового хода идёт: «Отправить» закрыта; `stalled` — ждём дольше минуты. */
+  const [updating, setUpdating] = useState<{ stalled: boolean; failed: boolean } | null>(null);
+  const updateToken = useRef(0);
+  const updateActions = useRef<{ retry: () => void; skip: () => void } | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const nextId = useRef(1);
 
@@ -366,15 +376,15 @@ export default function App() {
 
   /** Открытые броски мастера — в лог кубов; тайные игрок не видит. */
   const logMasterRolls = useCallback((list: MasterRoll[]) => {
-    const shown = list.filter((r) => !r.hidden);
-    if (shown.length === 0) return;
-    const entries: TrayRoll[] = shown.map((r) => ({
+    if (list.length === 0) return;
+    // Тайные броски тоже в лотке, но свёрнутыми: «🔒 Тайный бросок мастера», числа — по нажатию.
+    const entries: TrayRoll[] = list.map((r) => ({
       id: nextId.current++,
       time: now(),
       die: r.d20 !== null ? "d20" : "d6",
       values: r.d20 !== null ? [r.d20] : r.dice,
       total: r.total,
-      master: { who: r.who, what: r.what, line: r.line, outcome: r.outcome },
+      master: { who: r.who, what: r.what, line: r.line, outcome: r.outcome, hidden: r.hidden },
     }));
     setRolls((prev) => [...entries.reverse(), ...prev].slice(0, MAX_ROLLS));
   }, []);
@@ -387,7 +397,11 @@ export default function App() {
         `${turn.model ?? "Мастер"}: ответ${turn.raw.length > 1 ? ` (${turn.raw.length} запроса к модели)` : ""}`,
         turn.raw.join("\n\n──────── следующий запрос к модели ────────\n\n"),
       );
-      for (const r of turn.rolls) devLog.add("roll", r.hidden ? `${r.line}` : r.line);
+      // Тайный бросок в журнале свёрнут: подробности — по нажатию на запись.
+      for (const r of turn.rolls) {
+        if (r.hidden) devLog.add("roll", "🔒 Тайный бросок мастера", r.line);
+        else devLog.add("roll", r.line);
+      }
       for (const a of turn.actions) devLog.add(a.ok ? "engine" : "refusal", a.summary);
       if (turn.fabricated.length > 0) devLog.add("warning", `Бросок не из движка: ${turn.fabricated.join(", ")}`);
       const ok = turn.actions.filter((a) => a.ok).length;
@@ -499,10 +513,25 @@ export default function App() {
 
   function historyWith(playerMessage: ChatMessage) {
     // Только сообщения до заявки: оборванный ответ после неё при повторе не уходит мастеру.
-    return [...messages.filter((m) => m.id < playerMessage.id), playerMessage]
-      .filter((m) => m.author === "player" || m.author === "master")
-      .slice(-MASTER_HISTORY)
-      .map((m) => ({ role: m.author === "player" ? ("player" as const) : ("master" as const), text: m.text }));
+    // Последние заявки с ответами — раннюю часть диалога мастеру заменяет хроника.
+    const prior = messages.filter((m) => m.id < playerMessage.id && (m.author === "player" || m.author === "master"));
+    return recentTurns(prior, playerMessage).map((m) => ({
+      role: m.author === "player" ? ("player" as const) : ("master" as const),
+      text: m.text,
+    }));
+  }
+
+  /** Двухшаговый ход для того, кто сейчас ведёт мастера. */
+  function twoStepNow(): boolean {
+    return twoStepFor(masterMode === "claude" ? "claude" : (ai?.provider ?? "gemini"));
+  }
+
+  /** Размер запроса мастеру — в «Логирование»; переполнение окна — предупреждением. */
+  function logPromptSize(tokens: number | null, chars: number) {
+    const limit = models.find((m) => m.id === ai?.model)?.input_token_limit ?? null;
+    const size = promptSize(tokens, chars, limit);
+    if (size.overflow) devLog.add("warning", `Запрос мастеру почти заполнил окно модели: ${size.text}`);
+    return size.text;
   }
 
   function send(text: string) {
@@ -539,16 +568,27 @@ export default function App() {
     const controller = new AbortController();
     abortRef.current = controller;
     setThinking(true);
-    aiChat(historyWith(playerMessage), kbExtraFor(playerMessage.text))
+    const twoStep = twoStepNow();
+    aiChat(historyWith(playerMessage), kbExtraFor(playerMessage.text), twoStep)
       .then((reply) => {
         if (controller.signal.aborted) {
           setFailed({ playerId: playerMessage.id, partialId: null });
           return;
         }
+        const size = logPromptSize(reply.prompt_tokens, reply.prompt_chars);
         const message = addMessage("master", reply.text, reply.model);
         logMasterRolls(reply.rolls);
-        recordTurn(message.id, { ...reply, model: reply.model });
-        afterMasterTurn();
+        recordTurn(message.id, { ...reply, model: `${reply.model} · ${size}` });
+        if (!reply.pending_update) {
+          afterMasterTurn();
+          return;
+        }
+        runUpdate(
+          message.id,
+          () => aiUpdate(playerMessage.text, reply.text, reply.written_commands),
+          reply.model,
+          reply.fabricated,
+        );
       })
       .catch((e: unknown) => {
         setFailed({ playerId: playerMessage.id, partialId: null });
@@ -556,6 +596,46 @@ export default function App() {
         if (!controller.signal.aborted) addMessage("system", errorText(e));
       })
       .finally(() => setThinking(false));
+  }
+
+  /**
+   * Второй шаг двухшагового хода: команды движка по рассказу мастера. Пока он идёт, кнопка
+   * «Отправить» закрыта (поле ввода — нет). Через минуту ожидание можно пропустить: шаг
+   * доработает сам; при сбое — повторить или пропустить.
+   */
+  function runUpdate(
+    messageId: number,
+    job: () => Promise<{ actions: MasterAction[]; raw: string[] }>,
+    model: string,
+    fabricated: string[],
+  ) {
+    const token = ++updateToken.current;
+    setUpdating({ stalled: false, failed: false });
+    updateActions.current = {
+      retry: () => runUpdate(messageId, job, model, fabricated),
+      skip: () => {
+        updateToken.current++;
+        setUpdating(null);
+        afterMasterTurn();
+      },
+    };
+    const timer = window.setTimeout(() => {
+      if (updateToken.current === token) setUpdating({ stalled: true, failed: false });
+    }, UPDATE_TIMEOUT_MS);
+    job()
+      .then((result) => {
+        // Ход записывается, даже если игрок перестал ждать: движок уже выполнил команды.
+        recordTurn(messageId, { actions: result.actions, rolls: [], fabricated, raw: result.raw, model: `${model} · обновление данных` });
+        if (updateToken.current === token) {
+          setUpdating(null);
+          afterMasterTurn();
+        }
+      })
+      .catch((e: unknown) => {
+        devLog.add("error", "Обновление данных по рассказу не удалось", typeof e === "string" ? e : errorText(e));
+        if (updateToken.current === token) setUpdating({ stalled: true, failed: true });
+      })
+      .finally(() => window.clearTimeout(timer));
   }
 
   /** Повтор заявки после сбоя: оборванный ответ убирается, заявка уходит заново. */
@@ -571,7 +651,7 @@ export default function App() {
 
   /**
    * Ход мастера на стороне страницы (Claude внутри Claude или модель со своим ключом в веб-версии):
-   * броски движка, команды и повтор отклонённых команд — как в приложении.
+   * броски и запросы движка, команды и повтор отклонённых команд — как в приложении.
    */
   function sendInPage(gen: PageGenerator, tierName: string, playerMessage: ChatMessage) {
     const controller = new AbortController();
@@ -586,32 +666,37 @@ export default function App() {
       );
     };
     setThinking(true);
+    const twoStep = twoStepNow();
     const rolled: MasterRoll[] = [];
     const raw: string[] = [];
+    // Рассказ из ответов с запросами бросков — игрок его видит, продолжение дописывается следом.
+    const prose: string[] = [];
+    let carried = "";
+    const showWith = (text: string) => show([...prose, text].filter(Boolean).join("\n\n"));
     const history = historyWith(playerMessage);
     let system = "";
-    // Запросы бросков: движок бросает, мастер получает результаты и дописывает ход.
-    const withRolls = async (ctx: string) => {
-      system = ctx;
+    const withRolls = async (req: MasterRequest) => {
+      system = req.system;
+      history[history.length - 1] = { role: "player", text: req.turn };
       for (let round = 0; ; round++) {
-        const text = await gen(system, history, show, controller.signal);
+        const text = await gen(system, history, showWith, controller.signal);
         raw.push(text);
         const r = round < MAX_ROLL_ROUNDS ? await masterRolls(text) : null;
         if (!r) return text;
-        show("");
         rolled.push(...r.rolls);
+        if (r.prose) prose.push(r.prose);
+        if (r.carried) carried += `${r.carried}\n`;
+        showWith("");
         history.push({ role: "master", text }, { role: "player", text: r.feedback });
       }
     };
-    masterContext(playerMessage.text, kbExtraFor(playerMessage.text))
+    masterContext(playerMessage.text, kbExtraFor(playerMessage.text), twoStep)
       .then(withRolls)
-      // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
       .then(async (text) => {
-        const turn = await masterApply(
-          text,
-          rolled.flatMap((r) => r.dice),
-          playerMessage.text,
-        );
+        const full = [...prose, text].filter(Boolean).join("\n\n");
+        if (twoStep) return { narration: await masterNarration(full), turn: null };
+        // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
+        const turn = await masterApply(`${full}\n${carried}`, rolled.flatMap((r) => r.dice), playerMessage.text);
         // Отказы движка: один повтор — мастер присылает исправленные команды.
         const request = repairRequest(turn.actions);
         if (request) {
@@ -625,13 +710,57 @@ export default function App() {
             devLog.add("error", "Повтор команд не удался", errorText(e));
           }
         }
-        return turn;
+        return { narration: null, turn };
       })
-      .then((turn) => {
-        show(turn.text);
+      .then(({ narration, turn }) => {
+        const size = logPromptSize(null, system.length + history.reduce((n, m) => n + m.text.length, 0));
+        if (turn) {
+          show(turn.text);
+          logMasterRolls(rolled);
+          recordTurn(reply.id, { ...turn, rolls: rolled, raw, model: `${tierName} · ${size}` });
+          afterMasterTurn();
+          return;
+        }
+        if (!narration) return;
+        show(narration.text);
         logMasterRolls(rolled);
-        recordTurn(reply.id, { ...turn, rolls: rolled, raw, model: tierName });
-        afterMasterTurn();
+        recordTurn(reply.id, { actions: [], fabricated: [], rolls: rolled, raw, model: `${tierName} · ${size}` });
+        const written = `${carried}${narration.written}`.trim();
+        runUpdate(
+          reply.id,
+          async () => {
+            const req = await masterUpdateRequest(playerMessage.text, narration.text, written);
+            const ask = [{ role: "player" as const, text: req.turn }];
+            const quiet = new AbortController().signal;
+            const out = await gen(req.system, ask, () => undefined, quiet);
+            const turnOut = (await masterUpdateApply(out)) as MasterTurn;
+            const actions = [...turnOut.actions];
+            const rawOut = [out];
+            const repair = repairRequest(actions);
+            if (repair) {
+              try {
+                const fix = await gen(
+                  req.system,
+                  [
+                    ...ask,
+                    { role: "master", text: out },
+                    { role: "player", text: `${repair}\nОтветь JSON {"commands":[...]} только с исправленными командами.` },
+                  ],
+                  () => undefined,
+                  quiet,
+                );
+                rawOut.push(fix);
+                const fixed = (await masterUpdateApply(fix, true)) as MasterAction[];
+                actions.push(...fixed.map((a) => ({ ...a, summary: `исправлено: ${a.summary}` })));
+              } catch (e) {
+                devLog.add("error", "Повтор команд не удался", errorText(e));
+              }
+            }
+            return { actions, raw: rawOut };
+          },
+          tierName,
+          [],
+        );
       })
       .catch((e: unknown) => {
         const partial = typeof e === "object" && e !== null && "text" in e ? (e as { text?: string }).text : undefined;
@@ -956,6 +1085,9 @@ export default function App() {
             messages={messages}
             draft={draft}
             thinking={thinking}
+            updating={updating}
+            onUpdateRetry={() => updateActions.current?.retry()}
+            onUpdateSkip={() => updateActions.current?.skip()}
             masterMode={masterMode}
             model={masterMode === "claude" ? tier : (ai?.model ?? null)}
             modelOptions={masterMode === "claude" ? CLAUDE_TIERS : models}

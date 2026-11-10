@@ -59,9 +59,19 @@ const applied = engine.call<{ text: string; actions: { ok: boolean }[] }>({
 assert.equal(applied.text, "Вспышка.");
 assert.equal(applied.actions[0]?.ok, true);
 
-const context = engine.call<string>({ cmd: "master_context" });
-assert.ok(context.includes("журнал_движка") && context.includes("misty-step"));
-assert.ok(context.startsWith("Ты — Мастер") && context.includes('"cmd":"roll"'));
+const context = engine.call<{ system: string; turn: string }>({ cmd: "master_context", query: "Атакую стражника" });
+assert.ok(context.system.startsWith("Ты — Мастер") && context.system.includes('"cmd":"roll"'));
+assert.ok(context.system.includes("СНИМОК СЦЕНЫ") && context.system.includes("ХРОНИКА"));
+assert.ok(context.turn.includes("[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]") && context.turn.endsWith("Атакую стражника"));
+assert.ok(context.turn.includes("[ПОДСКАЗКА ДВИЖКА]"));
+// Снимок не меняется до смены сцены.
+const again = engine.call<{ system: string }>({ cmd: "master_context", query: "x" });
+assert.equal(again.system, context.system);
+const query = engine.call<{ feedback: string }>({
+  cmd: "master_rolls",
+  text: 'Начинаю рассказ.\n```engine\n{"cmd":"query","what":"spells","id":"pc.nikis"}\n```',
+});
+assert.ok(query.feedback.includes("Ответы на запросы") && query.feedback.includes("misty-step"));
 const rolls = engine.call<{ rolls: { total: number; d20: number }[]; feedback: string }>({
   cmd: "master_rolls",
   text: '```engine\n{"cmd":"roll","who":"Стражник","what":"атака","dice":"1d20+5","vs":"ac:18"}\n```',

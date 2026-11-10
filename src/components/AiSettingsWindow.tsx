@@ -13,6 +13,16 @@ import {
 import { insideClaude, webAiUseClaude } from "../lib/browserAi";
 import { CLAUDE_TIERS, type ClaudeTier } from "../lib/claude";
 import type { MasterMode } from "./ChatPanel";
+import {
+  HISTORY_TURNS_MAX,
+  HISTORY_TURNS_MIN,
+  historyTurns,
+  MASTER_ENGINE_LABEL,
+  setHistoryTurns,
+  setTwoStep,
+  twoStepFor,
+  type MasterEngine,
+} from "../lib/masterPrefs";
 import Modal from "./Modal";
 
 export interface AiSettingsWindowProps {
@@ -311,6 +321,8 @@ export default function AiSettingsWindow({
             )}
           </section>
 
+          <TurnSettings engine={masterMode === "claude" ? "claude" : (settings?.provider ?? null)} />
+
           {status && <p className="text-sm text-crit">{status}</p>}
           {error && <p className="text-sm text-fumble">{error}</p>}
         </div>
@@ -322,5 +334,55 @@ export default function AiSettingsWindow({
     <Modal title="Модели ИИ" onClose={onClose} size="lg">
       {body}
     </Modal>
+  );
+}
+
+/** Ход мастера: двухшаговый ход для текущего мастера и длина истории диалога. */
+function TurnSettings({ engine }: { engine: MasterEngine | null }) {
+  const [, rerender] = useState(0);
+  const [turns, setTurns] = useState(historyTurns);
+  return (
+    <section className="space-y-3 border-t border-edge pt-4">
+      <h3 className="font-medium">Ход мастера</h3>
+      {engine && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={twoStepFor(engine)}
+            onChange={(e) => {
+              setTwoStep(engine, e.target.checked);
+              rerender((n) => n + 1);
+            }}
+          />
+          <span>
+            Двухшаговый ход ({MASTER_ENGINE_LABEL[engine]})
+            <span className="block text-xs text-muted">
+              Сначала мастер рассказывает сцену — вы видите её сразу, — затем отдельным запросом движок обновляет хиты,
+              предметы и записи по рассказу. Слабым и локальным моделям так проще; ход идёт немного дольше.
+            </span>
+          </span>
+        </label>
+      )}
+      <label className="block text-sm">
+        История для мастера: последние {turns} заявок
+        <input
+          type="range"
+          min={HISTORY_TURNS_MIN}
+          max={HISTORY_TURNS_MAX}
+          value={turns}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            setTurns(n);
+            setHistoryTurns(n);
+          }}
+          className="mt-1 block w-full accent-gold"
+        />
+        <span className="block text-xs text-muted">
+          Раньше идущий диалог мастеру заменяет хроника по дням. Меньше — быстрее и надёжнее для моделей с маленьким
+          окном; в чате ничего не пропадает.
+        </span>
+      </label>
+    </section>
   );
 }

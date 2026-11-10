@@ -406,7 +406,9 @@ export default function KnowledgeBase({
   const hidden = !revealed.has(layerId);
   const searching = query.trim().length > 0 && !hidden;
   const opened = openId ? byId.get(openId) : undefined;
-  const layerNotes = (l: KbLayer) => notes.filter((n) => n.layer === l);
+  // Пересказы дней — в разделе «Хроника», а не среди записей.
+  const layerNotes = (l: KbLayer) => notes.filter((n) => n.layer === l && n.kind !== "day");
+  const chronicleDays = notes.filter((n) => n.kind === "day").sort((a, b) => a.day - b.day);
 
   function switchLayer(id: KbLayer) {
     setLayerId(id);
@@ -465,12 +467,14 @@ export default function KnowledgeBase({
     return [...groups.entries()];
   }, [entries, layerId, sectionId]);
   const journalSection = layerId === "master" && sectionId === "journal";
+  const chronicleSection = layerId === "player" && sectionId === "chronicle";
 
   const counts = (id: string) => {
     if (id === PARTY_SECTION.id) return party?.members.length ?? 0;
     if (id === ARTIFACTS_SECTION.id) return entries.filter((e) => e.layer === "world" && e.section === "artifacts").length;
     if (id === NOTES_SECTION.player.id) return layerNotes("player").length;
     const cards = entries.filter((e) => e.layer === layerId && e.section === id).length;
+    if (layerId === "player" && id === "chronicle") return cards + chronicleDays.length;
     return layerId === "master" && id === "journal" ? cards + layerNotes("master").length : cards;
   };
   const section = layer?.sections.find((s) => s.id === sectionId);
@@ -682,6 +686,43 @@ export default function KnowledgeBase({
                         </details>
                       );
                     })}
+                    {chronicleSection && (
+                      <details open className="group/kb">
+                        <summary className="mb-2 flex cursor-pointer list-none items-center gap-2 font-serif text-gold">
+                          <span className="text-xs transition-transform group-open/kb:rotate-90">▶</span>
+                          Дни этой игры
+                          <span className="font-sans text-xs text-muted">{chronicleDays.length}</span>
+                        </summary>
+                        {chronicleDays.length === 0 ? (
+                          <p className="text-sm text-muted">
+                            Мастер пишет сюда пересказ каждого прошедшего дня — по нему он помнит раннюю часть игры. Пересказ
+                            можно поправить.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {chronicleDays.map((n) => (
+                              <details key={n.id} className="group/day rounded-lg border border-edge px-3 py-2">
+                                <summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-gold/90">
+                                  <span className="text-xs transition-transform group-open/day:rotate-90">▶</span>
+                                  День {n.day}
+                                </summary>
+                                <div className="mt-2">
+                                  <NoteList
+                                    notes={[n]}
+                                    layer="player"
+                                    onChanged={notesChanged}
+                                    onOpenCard={open}
+                                    cardTitle={cardTitle}
+                                    customs={cardOptions}
+                                    today={today}
+                                  />
+                                </div>
+                              </details>
+                            ))}
+                          </div>
+                        )}
+                      </details>
+                    )}
                     {journalSection && (
                       <section>
                         <h3 className="mb-2 font-serif text-gold">Записи по ходу игры</h3>

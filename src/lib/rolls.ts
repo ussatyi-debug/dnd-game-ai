@@ -29,13 +29,14 @@ export interface TrayRoll extends RollResult {
   id: number;
   time: string;
   /** Бросок движка за мастера: кто и что бросал, строка с итогом. */
-  master?: { who: string; what: string; line: string; outcome: string | null };
+  master?: { who: string; what: string; line: string; outcome: string | null; hidden?: boolean };
 }
 
 export type RollTone = "normal" | "crit" | "fumble";
 
 /** Название броска: «d20», «3d6», «d20 — Везунчик». */
 export function rollTitle(roll: RollResult & { master?: TrayRoll["master"] }): string {
+  if (roll.master?.hidden) return "🔒 Тайный бросок мастера";
   if (roll.master) return `Мастер · ${roll.master.who}${roll.master.what ? ` — ${roll.master.what}` : ""}`;
   const base = roll.values.length === 1 ? roll.die : `${roll.values.length}${roll.die}`;
   return roll.luckyFrom !== undefined ? `${base} — Везунчик` : base;
@@ -65,6 +66,8 @@ export function rollCopyText(roll: RollResult): string {
 
 /** Натуральные 20 и 1 на одиночном d20 выделяются цветом. */
 export function rollTone(roll: RollResult & { master?: TrayRoll["master"] }): RollTone {
+  // Тайный бросок не подсвечивается: цвет выдал бы результат.
+  if (roll.master?.hidden) return "normal";
   if (roll.die !== "d20" || roll.values.length !== 1) return "normal";
   const face = roll.master ? roll.values[0] : roll.total;
   if (face === 20) return "crit";

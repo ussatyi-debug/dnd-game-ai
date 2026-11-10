@@ -29,6 +29,13 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   draft: string;
   thinking: boolean;
+  /**
+   * Двухшаговый ход: движок обновляет данные по рассказу мастера. Поле ввода открыто,
+   * закрыта только кнопка «Отправить». `stalled` — ждём дольше минуты, `failed` — шаг не удался.
+   */
+  updating?: { stalled: boolean; failed: boolean } | null;
+  onUpdateRetry?: () => void;
+  onUpdateSkip?: () => void;
   masterMode: MasterMode;
   model: string | null;
   modelOptions: { id: string; name: string }[];
@@ -96,6 +103,9 @@ export default function ChatPanel({
   messages,
   draft,
   thinking,
+  updating = null,
+  onUpdateRetry,
+  onUpdateSkip,
   masterMode,
   model,
   modelOptions,
@@ -213,7 +223,7 @@ export default function ChatPanel({
   function submit(event: FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (text && !thinking) onSend(text);
+    if (text && !thinking && !updating) onSend(text);
   }
 
   // Быстрое переключение модели прямо в диалоге — без перезапуска и потери контекста.
@@ -372,7 +382,44 @@ export default function ChatPanel({
         </div>
       ))}
 
-      {undo?.available && !thinking && (
+      {updating && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-arcane/40 bg-arcane/5 px-3 py-1.5 text-xs">
+          <span className="flex min-w-0 items-center gap-1.5 text-arcane" role="status">
+            {updating.failed ? (
+              "⚠ Данные по рассказу не обновились"
+            ) : (
+              <>
+                <span className="inline-block animate-spin" aria-hidden>
+                  ⟳
+                </span>
+                Движок обновляет данные…{updating.stalled ? " (дольше минуты)" : ""}
+              </>
+            )}
+          </span>
+          {updating.stalled && (
+            <span className="flex shrink-0 gap-1.5">
+              {updating.failed && (
+                <button
+                  type="button"
+                  onClick={onUpdateRetry}
+                  className="rounded-md border border-arcane/60 px-2 py-1 text-arcane hover:bg-arcane/10"
+                >
+                  Повторить
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onUpdateSkip}
+                className="rounded-md border border-edge px-2 py-1 text-muted hover:text-parchment"
+              >
+                {updating.failed ? "Пропустить" : "Не ждать"}
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {undo?.available && !thinking && !updating && (
         <div className="flex items-center justify-between gap-2 border-t border-arcane/40 bg-arcane/5 px-3 py-1.5 text-xs">
           <span className="min-w-0 truncate text-arcane" title={undo.actions.join("\n")}>
             ⚙ Мастер изменил состояние: действий — {undo.actions.length}
@@ -418,7 +465,7 @@ export default function ChatPanel({
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               const text = draft.trim();
-              if (text && !thinking) onSend(text);
+              if (text && !thinking && !updating) onSend(text);
             }
           }}
           rows={2}
@@ -429,7 +476,8 @@ export default function ChatPanel({
         />
         <button
           type="submit"
-          disabled={draft.trim() === "" || thinking}
+          disabled={draft.trim() === "" || thinking || Boolean(updating)}
+          title={updating ? "Движок обновляет данные по рассказу мастера" : undefined}
           className="rounded-md bg-blood px-4 py-2.5 font-medium text-parchment hover:bg-blood/80 disabled:opacity-40"
         >
           Отправить
