@@ -180,6 +180,12 @@ function saveTier(tier: ClaudeTier) {
   }
 }
 
+/** Убрать экранную клавиатуру: снять фокус с поля ввода (при смене вкладки и открытии кубов). */
+function hideKeyboard() {
+  const el = document.activeElement;
+  if (el instanceof HTMLElement) el.blur();
+}
+
 export default function App() {
   const engineAvailable = isEngineAvailable();
   const aiAvailable = isAiAvailable();
@@ -961,7 +967,10 @@ export default function App() {
               setSettingsTab("ai");
               setOpenWindow("settings");
             }}
-            onOpenDice={() => setDiceOpen(true)}
+            onOpenDice={() => {
+              hideKeyboard();
+              setDiceOpen(true);
+            }}
             undo={undo}
             onUndo={undoMaster}
             onSpeak={speak}
@@ -1003,7 +1012,10 @@ export default function App() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              hideKeyboard();
+              setTab(t.id);
+            }}
             aria-current={tab === t.id ? "page" : undefined}
             className={`py-3 text-sm ${tab === t.id ? "text-gold" : "text-muted"}`}
           >
@@ -1012,7 +1024,10 @@ export default function App() {
         ))}
         <button
           type="button"
-          onClick={() => setDiceOpen(true)}
+          onClick={() => {
+            hideKeyboard();
+            setDiceOpen(true);
+          }}
           className="border-l border-edge px-4 text-lg text-gold"
           aria-label="Открыть кубы"
         >
