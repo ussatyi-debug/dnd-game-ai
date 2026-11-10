@@ -371,8 +371,11 @@ impl Session {
             if title.is_empty() && text.is_empty() {
                 return Err(EngineError::EmptyNote);
             }
+            // Запись важнее привязки: с несуществующей карточкой она сохраняется без неё,
+            // иначе мастер теряет память о событии.
+            let mut unlinked = None;
             let card = match new.card.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
-                Some(c) => Some(self.resolve_card(c)?),
+                Some(c) => self.resolve_card(c).map_err(|_| unlinked = Some(c.to_string())).ok(),
                 None => None,
             };
             if new.kind == NoteKind::Timer && new.due_day.is_none() {
@@ -395,17 +398,21 @@ impl Session {
                 due_day: new.due_day,
                 done: false,
             });
-            Ok((id, title, new.kind, new.due_day))
+            Ok((id, title, new.kind, new.due_day, unlinked))
         })();
         self.logged(
             result,
-            |(id, title, kind, due)| {
+            |(id, title, kind, due, unlinked)| {
                 let extra = match (kind, due) {
                     (NoteKind::Event, _) => String::new(),
                     (k, Some(d)) => format!(", {} на День {d}", k.label()),
                     (k, None) => format!(", {}", k.label()),
                 };
-                format!("База знаний ({}): «{title}» [запись {id}{extra}]", layer.section())
+                format!(
+                    "База знаний ({}): «{title}» [запись {id}{extra}]{}",
+                    layer.section(),
+                    unlinked_note(unlinked.as_deref())
+                )
             },
             || "запись в базу знаний".into(),
         )
@@ -415,9 +422,17 @@ impl Session {
     /// Правка записи.
     pub fn update_note(&mut self, id: u64, edit: NoteEdit) -> Result<MasterNote, EngineError> {
         let result = (|| {
+            // Неизвестная карточка не отменяет правку записи: привязка просто не меняется.
+            let mut unlinked = None;
             let card = match edit.card.as_deref().map(str::trim) {
                 Some("") => Some(None),
-                Some(c) => Some(Some(self.resolve_card(c)?)),
+                Some(c) => match self.resolve_card(c) {
+                    Ok(id) => Some(Some(id)),
+                    Err(_) => {
+                        unlinked = Some(c.to_string());
+                        None
+                    }
+                },
                 None => None,
             };
             let note =
@@ -454,13 +469,21 @@ impl Session {
                 next.title = "Без названия".into();
             }
             *note = next.clone();
-            Ok(next)
+            Ok((next, unlinked))
         })();
         self.logged(
             result,
-            |n| format!("База знаний: исправлена запись {} «{}»", n.id, n.title),
+            |(n, unlinked)| {
+                format!(
+                    "База знаний: исправлена запись {} «{}»{}",
+                    n.id,
+                    n.title,
+                    unlinked_note(unlinked.as_deref())
+                )
+            },
             || format!("запись {id}"),
         )
+        .map(|(n, _)| n)
     }
 
     /// Удаление записи.
@@ -684,10 +707,45 @@ impl Session {
     }
 }
 
+/// Пометка в журнале движка: запись сохранена без привязки к несуществующей карточке.
+fn unlinked_note(card: Option<&str>) -> String {
+    card.map_or_else(String::new, |c| {
+        format!(
+            " — без привязки: карточки «{c}» нет (бери id из «карточки_базы» или создай карточку new_card)"
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::rng::Xoshiro256;
+
+    #[test]
+    fn note_with_unknown_card_is_saved_without_link() {
+        let mut s = session();
+        let id = s
+            .create_note(NewNote {
+                card: Some("event.payroll_lead".into()),
+                ..NewNote::new(NoteLayer::Master, "След жалованья", "Казначей платит наёмникам")
+            })
+            .expect("запись сохраняется");
+        let note = s.notes().iter().find(|n| n.id == id).expect("запись есть");
+        assert_eq!(note.card, None);
+        assert!(s.engine_log().last().is_some_and(|l| l.contains("без привязки")));
+        let edited = s
+            .update_note(
+                id,
+                NoteEdit {
+                    card: Some("нет.такой".into()),
+                    text: Some("Новый текст".into()),
+                    ..NoteEdit::default()
+                },
+            )
+            .expect("правка проходит");
+        assert_eq!(edited.text, "Новый текст");
+        assert_eq!(edited.card, None);
+    }
 
     fn session() -> Session {
         let mut s = Session::demo(Xoshiro256::from_seed(1));
@@ -721,7 +779,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(s.notes()[0].card.as_deref(), Some("npc.orelie"));
-        assert!(s.add_note_full(NoteLayer::Player, "x", "", Some("npc.nobody"), false).is_err());
+        // Неизвестная карточка не отменяет запись — она сохраняется без привязки.
+        let loose = s.add_note_full(NoteLayer::Player, "x", "", Some("npc.nobody"), false).unwrap();
+        assert_eq!(s.notes().iter().find(|n| n.id == loose).and_then(|n| n.card.as_deref()), None);
+        s.delete_note(loose).unwrap();
         let edited = s
             .update_note(
                 id,
