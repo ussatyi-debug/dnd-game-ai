@@ -159,6 +159,9 @@ pub async fn generate(
     Ok(Generated { text: parse_reply(&body)?, prompt_tokens: prompt_tokens(&body) })
 }
 
+/// Лимит длины ответа: с запасом на размышления модели и длинную сцену.
+const MAX_TOKENS: u32 = 8000;
+
 pub(crate) fn request_body(model: &str, system: &str, history: &[ChatMessage]) -> Value {
     let mut messages = vec![json!({ "role": "system", "content": system })];
     messages.extend(
@@ -173,7 +176,9 @@ pub(crate) fn request_body(model: &str, system: &str, history: &[ChatMessage]) -
                 })
             }),
     );
-    json!({ "model": model, "messages": messages, "temperature": 0.6 })
+    // Без явного лимита модели с размышлениями (Qwen 3.6 и др.) тратят весь лимит каталога
+    // на размышления, и ответ приходит пустым «по лимиту длины».
+    json!({ "model": model, "messages": messages, "temperature": 0.6, "max_tokens": MAX_TOKENS })
 }
 
 pub(crate) fn parse_reply(body: &Value) -> Result<String, String> {
@@ -183,6 +188,9 @@ pub(crate) fn parse_reply(body: &Value) -> Result<String, String> {
         return Ok(text.to_string());
     }
     match choice["finish_reason"].as_str() {
+        Some("length") if choice["message"]["reasoning_content"].as_str().is_some_and(|r| !r.is_empty()) => Err(
+            "Модель Яндекса потратила весь лимит длины на размышления и не успела ответить. Выберите модель без размышлений — qwen3-235b-a22b-fp8 (Instruct)".into(),
+        ),
         Some("length") => Err("Ответ Яндекса оборвался по лимиту длины".into()),
         Some("content_filter") => Err("Яндекс остановил ответ фильтром содержания".into()),
         _ => Err("Яндекс вернул пустой ответ".into()),
