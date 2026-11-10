@@ -680,7 +680,7 @@ async fn ai_update(
 ) -> Result<MasterReply, String> {
     let settings = lock(&ai.settings)?.clone();
     let request = dnd_master::update_request(
-        &lock(&session)?,
+        &*lock(&session)?,
         &player_text,
         &narration,
         written.as_deref().unwrap_or(""),

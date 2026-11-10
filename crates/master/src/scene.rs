@@ -705,11 +705,17 @@ mod tests {
     #[test]
     fn rest_starts_a_new_scene() {
         let mut s = session();
-        let first = master_request(&mut s, "x", "", false);
+        master_request(&mut s, "x", "", false);
+        let id = s.party()[0].id.clone();
+        crate::apply_directives(
+            &mut s,
+            &format!("```engine\n{{\"cmd\":\"hp\",\"character\":\"{id}\",\"damage\":2}}\n```"),
+        );
+        assert!(!master_request(&mut s, "x", "", false).turn.contains("- нет\n"));
+        // Отдых — новая сцена: снимок собирается заново, изменений с её начала нет.
         crate::apply_directives(&mut s, "```engine\n{\"cmd\":\"rest\",\"kind\":\"short\"}\n```");
-        let second = master_request(&mut s, "x", "", false);
-        assert_ne!(first.system, second.system);
-        assert!(second.turn.contains("[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]\n- нет"));
+        let after = master_request(&mut s, "x", "", false);
+        assert!(after.turn.contains("[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]\n- нет"), "{}", after.turn);
     }
 
     #[test]
