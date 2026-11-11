@@ -3,7 +3,8 @@ use tch::{CModule, IValue, Kind, Tensor};
 
 fn main() {
     let dir = std::env::args().nth(1).unwrap_or_else(|| "out".into());
-    tch::set_num_threads(2);
+    tch::set_num_threads(4);
+    tch::jit::set_profiling_mode(false);
     let stress = CModule::load(format!("{dir}/silero_stress.jit")).expect("stress");
     let words = IValue::String("грегори замок елка".into());
     let out = stress.method_is("forward", &[words]).expect("stress forward");
@@ -16,23 +17,28 @@ fn main() {
     let seq = Tensor::from_slice(&ids).view([1, n]);
     let spk = Tensor::from_slice(&[0i64]);
     let ones = Tensor::ones([1, n], (Kind::Float, tch::Device::Cpu));
-    let t = std::time::Instant::now();
-    let res = tts
-        .method_is(
-            "forward",
-            &[
-                IValue::Tensor(seq),
-                IValue::Tensor(spk),
-                IValue::Int(24000),
-                IValue::None,
-                IValue::Tensor(ones.shallow_clone()),
-                IValue::Tensor(ones),
-            ],
-        )
-        .expect("tts forward");
-    if let IValue::Tuple(v) = res {
-        if let IValue::Tensor(a) = &v[0] {
-            println!("AUDIO {:?} in {:?}", a.size(), t.elapsed());
+    for round in 0..3 {
+        let ones = Tensor::ones([1, n], (Kind::Float, tch::Device::Cpu));
+        let seq = Tensor::from_slice(&ids).view([1, n]);
+        let spk = Tensor::from_slice(&[0i64]);
+        let t = std::time::Instant::now();
+        let res = tts
+            .method_is(
+                "forward",
+                &[
+                    IValue::Tensor(seq),
+                    IValue::Tensor(spk),
+                    IValue::Int(24000),
+                    IValue::None,
+                    IValue::Tensor(ones.shallow_clone()),
+                    IValue::Tensor(ones),
+                ],
+            )
+            .expect("tts forward");
+        if let IValue::Tuple(v) = res {
+            if let IValue::Tensor(a) = &v[0] {
+                println!("AUDIO round {round} {:?} in {:?}", a.size(), t.elapsed());
+            }
         }
     }
 }
