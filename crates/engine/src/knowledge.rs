@@ -488,7 +488,7 @@ impl Session {
                         && n.day == today
                         && n.kind == new.kind
                         && ((!t.is_empty() && fold(&n.title) == t)
-                            || (!x.is_empty() && fold(&n.text) == x))
+                            || (x.chars().count() >= 20 && fold(&n.text) == x))
                 }) {
                     if !text.is_empty() && fold(&old.text) != x {
                         old.text = text.into();
