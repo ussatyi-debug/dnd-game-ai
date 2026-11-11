@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 tch = { version = "0.20", features = ["download-libtorch"] }
+
+[workspace]
