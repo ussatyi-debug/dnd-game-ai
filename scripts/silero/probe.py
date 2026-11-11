@@ -1,27 +1,25 @@
-"""Silero Stress изнутри: что за данные и модели у AccentorNgram и HomoSolver."""
-import inspect, sys, torch
+"""Silero Stress: исходник AccentorNgram и выход jit-модели."""
+import os, glob, torch
+import silero_stress
 from silero_stress import load_accentor
+d = os.path.dirname(silero_stress.__file__)
+print("FILES", glob.glob(d + "/data/**", recursive=True)[:20])
+print("@@INIT"); print(open(d + "/__init__.py").read()[:3000])
+print("@@ACCPY"); print(open(d + "/accentor.py").read()[:4000])
+for p in glob.glob(d + "/data/**/*.pt", recursive=True):
+    try:
+        imp = torch.package.PackageImporter(p)
+        names = [n for n in imp.file_structure().get_dir("models").children] if True else []
+        print("PKG", p, names)
+        for mod in ("models/accentor.py", "models/model.py"):
+            try:
+                print("@@SRC", mod); print(imp.load_text(*mod.rsplit("/", 1))[:9000])
+            except Exception as e:
+                print("ERR", mod, e)
+    except Exception as e:
+        print("PKGERR", p, e)
 acc = load_accentor()
-def show(obj, name, depth=0):
-    print("=" * 10, name, type(obj))
-    for k, v in vars(obj).items():
-        extra = ""
-        if isinstance(v, dict): extra = f"len={len(v)} sample={list(v.items())[:3]}"
-        elif isinstance(v, (list, tuple, set)): extra = f"len={len(v)} sample={list(v)[:5]}"
-        elif isinstance(v, torch.Tensor): extra = f"tensor {tuple(v.shape)} {v.dtype}"
-        elif isinstance(v, (int, float, str, bool)): extra = repr(v)[:200]
-        print("  ATTR", k, type(v).__name__, str(extra)[:400])
-        if depth < 1 and hasattr(v, "__dict__") and not isinstance(v, (type, torch.jit.ScriptModule)) and not isinstance(v, (str, int)):
-            show(v, f"{name}.{k}", depth + 1)
-        if isinstance(v, torch.jit.ScriptModule):
-            try: print("  JIT", k, v.forward.schema)
-            except Exception as e: print("  JIT", k, e)
-    for m in ("__call__", "forward", "put_accent", "predict"):
-        f = getattr(type(obj), m, None)
-        if f:
-            try: print(f"  SRC {m}:\n" + inspect.getsource(f)[:3500])
-            except Exception as e: print("  NOSRC", m, e)
-show(acc, "acc")
-show(acc.accentor, "accentor")
-show(acc.homosolver, "homosolver")
-print("CALLSIG", inspect.signature(acc.__call__) if hasattr(acc, "__call__") else None)
+words = ["грегори", "добил", "стражника", "у", "замка", "и", "забрал", "замок", "его", "ёлка"]
+out = acc.accentor.model(words)
+print("JITOUT", [ (t.shape, t.dtype, t.tolist()) for t in out])
+print("FULL", acc(" ".join(words)))
