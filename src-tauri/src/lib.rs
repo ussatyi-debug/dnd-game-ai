@@ -4,6 +4,7 @@
 //! команды-обёртки.
 
 mod ai;
+mod tts;
 
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -516,6 +517,198 @@ fn undo_master_turn(state: State<'_, SessionState>) -> Result<Vec<String>, Strin
     lock(&state)?.undo_master_turn().map_err(|e| e.to_string())
 }
 
+// ───────────────────────────── озвучка ─────────────────────────────
+
+/// Встроенный Silero (Windows): модель грузится при первой фразе; раздача в сеть — по кнопке.
+#[derive(Default)]
+struct TtsState {
+    #[cfg(windows)]
+    silero: Mutex<Option<std::sync::Arc<Mutex<tts::silero::Silero>>>>,
+    #[cfg(windows)]
+    share: Mutex<Option<tts::share::Share>>,
+}
+
+#[cfg(windows)]
+fn silero_engine(
+    app: &tauri::AppHandle,
+    state: &TtsState,
+) -> Result<std::sync::Arc<Mutex<tts::silero::Silero>>, String> {
+    let mut slot = lock(&state.silero)?;
+    if let Some(engine) = slot.as_ref() {
+        return Ok(engine.clone());
+    }
+    let dir = app.path().resource_dir().map_err(|e| format!("Нет папки приложения: {e}"))?;
+    let engine = std::sync::Arc::new(Mutex::new(tts::silero::Silero::load(&dir)?));
+    *slot = Some(engine.clone());
+    Ok(engine)
+}
+
+#[tauri::command]
+fn tts_silero_available(app: tauri::AppHandle) -> bool {
+    #[cfg(windows)]
+    {
+        app.path().resource_dir().map(|d| tts::silero::installed(&d)).unwrap_or(false)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        false
+    }
+}
+
+#[tauri::command]
+async fn tts_silero_voices(
+    app: tauri::AppHandle,
+    state: State<'_, TtsState>,
+) -> Result<Vec<tts::VoiceInfo>, String> {
+    #[cfg(windows)]
+    {
+        let engine = silero_engine(&app, &state)?;
+        let voices = lock(&*engine)?.voices();
+        Ok(voices)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, state);
+        Err("Встроенный Silero есть только в версии для Windows".into())
+    }
+}
+
+#[tauri::command]
+async fn tts_silero_synth(
+    app: tauri::AppHandle,
+    state: State<'_, TtsState>,
+    voice: String,
+    text: String,
+    rate: f32,
+) -> Result<tauri::ipc::Response, String> {
+    #[cfg(windows)]
+    {
+        let engine = silero_engine(&app, &state)?;
+        let wav = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<u8>, String> {
+            let pcm = lock(&*engine)?.synth(&text, &voice, rate)?;
+            Ok(tts::wav_from_f32(&pcm, tts::silero::SAMPLE_RATE))
+        })
+        .await
+        .map_err(|e| format!("Silero: {e}"))??;
+        Ok(tauri::ipc::Response::new(wav))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, state, voice, text, rate);
+        Err("Встроенный Silero есть только в версии для Windows".into())
+    }
+}
+
+/// Состояние раздачи озвучки в сеть (`running: false` — выключена или недоступна).
+#[tauri::command]
+fn tts_share_status(state: State<'_, TtsState>) -> Result<serde_json::Value, String> {
+    #[cfg(windows)]
+    {
+        let share = lock(&state.share)?;
+        Ok(match share.as_ref() {
+            Some(s) => serde_json::to_value(s.status()).map_err(|e| e.to_string())?,
+            None => {
+                serde_json::json!({ "running": false, "port": tts::share::DEFAULT_PORT, "address": null })
+            }
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = state;
+        Ok(serde_json::json!({ "running": false, "port": 5150, "address": null }))
+    }
+}
+
+#[tauri::command]
+fn tts_share_start(
+    app: tauri::AppHandle,
+    state: State<'_, TtsState>,
+    port: u16,
+) -> Result<serde_json::Value, String> {
+    #[cfg(windows)]
+    {
+        let engine = silero_engine(&app, &state)?;
+        let for_voices = engine.clone();
+        let voices: tts::share::VoicesFn = std::sync::Arc::new(move || {
+            let list = lock(&*for_voices)?.voices();
+            serde_json::to_string(&tts::ServerVoices { engine: "silero".into(), voices: list })
+                .map_err(|e| e.to_string())
+        });
+        let synth: tts::share::SynthFn = std::sync::Arc::new(move |voice, text, rate| {
+            let pcm = lock(&*engine)?.synth(text, voice, rate)?;
+            Ok(tts::wav_from_f32(&pcm, tts::silero::SAMPLE_RATE))
+        });
+        let mut share = lock(&state.share)?;
+        *share = None;
+        let started = tts::share::Share::start(port, voices, synth)?;
+        let status = started.status();
+        *share = Some(started);
+        serde_json::to_value(status).map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, state, port);
+        Err("Раздача озвучки в сеть есть только в версии для Windows".into())
+    }
+}
+
+#[tauri::command]
+fn tts_share_stop(state: State<'_, TtsState>) -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        Ok(lock(&state.share)?.take().is_some())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = state;
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+async fn tts_cloud_models(
+    provider: Provider,
+    ai: State<'_, AiState>,
+) -> Result<Vec<String>, String> {
+    let settings = lock(&ai.settings)?.clone();
+    tts::cloud_models(&ai.client, &settings, provider).await
+}
+
+#[tauri::command]
+async fn tts_cloud_synth(
+    provider: Provider,
+    model: String,
+    voice: String,
+    text: String,
+    rate: f32,
+    ai: State<'_, AiState>,
+) -> Result<tauri::ipc::Response, String> {
+    let settings = lock(&ai.settings)?.clone();
+    let bytes =
+        tts::cloud_synth(&ai.client, &settings, provider, &model, &voice, &text, rate).await?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+async fn tts_server_voices(
+    url: String,
+    ai: State<'_, AiState>,
+) -> Result<tts::ServerVoices, String> {
+    tts::server_voices(&ai.client, &url).await
+}
+
+#[tauri::command]
+async fn tts_server_synth(
+    url: String,
+    voice: String,
+    text: String,
+    rate: f32,
+    ai: State<'_, AiState>,
+) -> Result<tauri::ipc::Response, String> {
+    Ok(tauri::ipc::Response::new(tts::server_synth(&ai.client, &url, &voice, &text, rate).await?))
+}
+
 #[tauri::command]
 fn ai_settings(ai: State<'_, AiState>) -> Result<AiSettingsView, String> {
     Ok(lock(&ai.settings)?.view())
@@ -736,6 +929,7 @@ pub fn run() {
                 .build()
                 .map_err(|e| format!("Не удалось создать HTTP-клиент: {e}"))?;
             app.manage(AiState { client, settings: Mutex::new(settings), store });
+            app.manage(TtsState::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -791,7 +985,17 @@ pub fn run() {
             ai_select_model,
             ai_list_models,
             ai_chat,
-            ai_update
+            ai_update,
+            tts_silero_available,
+            tts_silero_voices,
+            tts_silero_synth,
+            tts_share_status,
+            tts_share_start,
+            tts_share_stop,
+            tts_cloud_models,
+            tts_cloud_synth,
+            tts_server_voices,
+            tts_server_synth
         ])
         .run(tauri::generate_context!())
         .expect("не удалось запустить приложение");

@@ -1,16 +1,8 @@
 // Окно «Настройки»: озвучка и ИИ-мастер.
 
 import { useEffect, useState } from "react";
-import {
-  DEFAULT_CHARACTERS,
-  DEFAULT_PRONUNCIATIONS,
-  preview,
-  saveTtsSettings,
-  ttsPlayer,
-  type TtsEngine,
-  type Gender,
-  type TtsSettings,
-} from "../lib/tts";
+import { DEFAULT_CHARACTERS, DEFAULT_PRONUNCIATIONS, saveTtsSettings, type Gender, type TtsSettings } from "../lib/tts";
+import TtsEnginePanel from "./TtsEnginePanel";
 import { musicPlayer, saveMusicSettings, type MusicSettings, type MusicState, type MusicTrack } from "../lib/music";
 import AiSettingsWindow, { type AiSettingsWindowProps } from "./AiSettingsWindow";
 import Modal from "./Modal";
@@ -101,51 +93,11 @@ const input =
   "rounded-md border border-edge bg-ink px-2 py-1.5 text-sm text-parchment placeholder:text-muted/70 focus:border-gold focus:outline-none";
 
 function TtsSettingsPanel({ tts, onChange }: { tts: TtsSettings; onChange: (s: TtsSettings) => void }) {
-  const [engine, setEngine] = useState<TtsEngine | null | undefined>(undefined);
-  useEffect(() => {
-    void ttsPlayer.engine().then(setEngine);
-  }, []);
   const update = (patch: Partial<TtsSettings>) => onChange({ ...tts, ...patch });
 
   return (
     <div className="space-y-5 p-4 text-sm">
-      <p className="text-xs text-muted">
-        {engine === undefined
-          ? "Проверяю голоса…"
-          : engine === "piper"
-            ? "Голоса Piper (Дима и Ира) установлены вместе с приложением и работают без интернета."
-            : engine === "android"
-              ? "Голоса Piper не найдены — читает синтез речи Android (Google TTS). Если тишина: Настройки телефона → Синтез речи → установите русский язык."
-              : engine === "system"
-              ? "Голоса Piper в этой версии недоступны (веб-версия внутри Claude не может запускать модели) — читает системный голос устройства."
-              : "Озвучка недоступна: на устройстве нет голосов."}
-      </p>
-
-      <section className="space-y-2">
-        <h3 className="font-serif text-gold">Голоса</h3>
-        <p className="text-xs text-muted">
-          Реплики («&gt; — …») читаются голосом по полу говорящего: мужские — Дима, женские — Ира.
-        </p>
-        <label className="flex items-center justify-between gap-2">
-          <span>Повествование</span>
-          <select
-            value={tts.narrator}
-            onChange={(e) => update({ narrator: e.target.value as Gender })}
-            className={input}
-          >
-            <option value="m">Дима (мужской)</option>
-            <option value="f">Ира (женский)</option>
-          </select>
-        </label>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => preview("m", tts)} className="rounded-md border border-edge px-3 py-1.5 hover:border-gold">
-            ▶ Дима
-          </button>
-          <button type="button" onClick={() => preview("f", tts)} className="rounded-md border border-edge px-3 py-1.5 hover:border-gold">
-            ▶ Ира
-          </button>
-        </div>
-      </section>
+      <TtsEnginePanel tts={tts} onChange={onChange} />
 
       <section className="space-y-2">
         <h3 className="font-serif text-gold">Скорость и громкость</h3>

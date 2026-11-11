@@ -53,6 +53,11 @@ function hint(provider: WebProvider, key: string): string {
   return `…${key.slice(-4)}`;
 }
 
+/** Ключ провайдера в веб-версии (для облачной озвучки тем же ключом). */
+export function webAiKey(provider: WebProvider): string | null {
+  return state.keys[provider] ?? null;
+}
+
 /** Страница открыта внутри Claude (запросы к другим сайтам там запрещены). */
 export function insideClaude(): boolean {
   return typeof window !== "undefined" && window.claude !== undefined;

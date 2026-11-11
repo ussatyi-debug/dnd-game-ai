@@ -8,9 +8,24 @@
 //
 // Голоса: повествование — голос рассказчика; реплики «> — [Имя, ж] …» — голос по полу
 // говорящего (пометка мастера, иначе список персонажей в настройках).
+//
+// Движок выбирается в настройках: Piper (встроенные и скачанные голоса), Silero (встроен в
+// версию для Windows), свой сервер озвучки или облачные голоса (OpenAI, Gemini, Яндекс) —
+// см. ttsVoices.ts. Для каждого движка свой мужской и женский голос.
+
+import {
+  cloudSynth,
+  decodeAudio,
+  DEFAULT_VOICES,
+  serverSynth,
+  sileroSynth,
+  storedVoice,
+  type TtsEngineId,
+} from "./ttsVoices";
 
 export type Gender = "m" | "f";
-export type VoiceId = "dmitri" | "irina";
+/** Голос Piper: встроенный (dmitri, irina) или скачанный (denis, ruslan). */
+export type VoiceId = string;
 
 export interface Pronunciation {
   from: string;
@@ -23,6 +38,14 @@ export interface CharacterVoice {
 }
 
 export interface TtsSettings {
+  /** Движок озвучки. */
+  engine: TtsEngineId;
+  /** Мужской и женский голос каждого движка. */
+  voices: Partial<Record<TtsEngineId, { m: string; f: string }>>;
+  /** Адрес своего сервера озвучки (или ПК с раздачей Silero). */
+  serverUrl: string;
+  /** Модель облачной озвучки по провайдеру. */
+  models: Partial<Record<"openai" | "gemini" | "yandex", string>>;
   /** Пол голоса повествования. */
   narrator: Gender;
   /** Скорость: 1 — как в модели. */
@@ -32,8 +55,11 @@ export interface TtsSettings {
   characters: CharacterVoice[];
 }
 
-const VOICE_BY_GENDER: Record<Gender, VoiceId> = { m: "dmitri", f: "irina" };
-export const VOICE_LABEL: Record<VoiceId, string> = { dmitri: "Дима", irina: "Ира" };
+/** Голос движка для пола говорящего. */
+export function voiceFor(settings: TtsSettings, gender: Gender): string {
+  const chosen = settings.voices[settings.engine]?.[gender];
+  return chosen || DEFAULT_VOICES[settings.engine][gender];
+}
 
 /** Ударения в именах кампании (знак ударения U+0301 после ударной гласной). */
 export const DEFAULT_PRONUNCIATIONS: Pronunciation[] = [
@@ -62,6 +88,10 @@ export const DEFAULT_CHARACTERS: CharacterVoice[] = [
 ];
 
 export const DEFAULT_TTS: TtsSettings = {
+  engine: "piper",
+  voices: {},
+  serverUrl: "",
+  models: {},
   narrator: "m",
   rate: 1,
   volume: 1,
@@ -108,7 +138,8 @@ export function stripSpeakerTag(line: string): string {
 
 export interface Segment {
   text: string;
-  voice: VoiceId;
+  /** Пол говорящего: голос берётся из настроек движка. */
+  voice: Gender;
 }
 
 function genderOf(name: string, settings: TtsSettings): Gender | null {
@@ -159,7 +190,7 @@ function sentences(text: string): string[] {
 
 /** Ответ мастера → фразы с голосами. */
 export function segments(masterText: string, settings: TtsSettings): Segment[] {
-  const narrator = VOICE_BY_GENDER[settings.narrator];
+  const narrator: Gender = settings.narrator;
   const out: Segment[] = [];
   let narration: string[] = [];
   const flush = () => {
@@ -183,12 +214,11 @@ export function segments(masterText: string, settings: TtsSettings): Segment[] {
     let voice = narrator;
     if (tag) {
       const mark = (tag[3] ?? "").toLowerCase();
-      const gender: Gender = mark === "ж" || mark === "f" ? "f" : "m";
-      voice = VOICE_BY_GENDER[gender];
+      voice = mark === "ж" || mark === "f" ? "f" : "m";
     } else {
       const name = /^\s*[—–-]?\s*([А-ЯЁA-Z][\p{L}-]+)/u.exec(body)?.[1];
       const g = name ? genderOf(name, settings) : null;
-      if (g) voice = VOICE_BY_GENDER[g];
+      if (g) voice = g;
     }
     const text = clean(stripSpeakerTag(body).replace(/^\s*[—–-]\s*/, ""));
     for (const s of sentences(text)) out.push({ text: s, voice });
@@ -202,7 +232,7 @@ export function segments(masterText: string, settings: TtsSettings): Segment[] {
 // ───────────────────────────── Piper ─────────────────────────────
 
 interface Manifest {
-  voices: Record<VoiceId, { model: string; config: string }>;
+  voices: Record<string, { model: string; config: string }>;
 }
 
 interface VoiceConfig {
@@ -340,11 +370,21 @@ class PiperEngine {
         const manifest = await this.available();
         if (!manifest) throw new Error("Голоса Piper не установлены");
         const files = manifest.voices[id];
-        const [ort, model, config] = await Promise.all([
-          this.loadOrt(),
-          fetchBuffer(`${BASE}${files.model}`),
-          fetch(`${BASE}${files.config}`).then((r) => r.json() as Promise<VoiceConfig>),
-        ]);
+        const ort = await this.loadOrt();
+        let model: ArrayBuffer;
+        let config: VoiceConfig;
+        if (files) {
+          [model, config] = await Promise.all([
+            fetchBuffer(`${BASE}${files.model}`),
+            fetch(`${BASE}${files.config}`).then((r) => r.json() as Promise<VoiceConfig>),
+          ]);
+        } else {
+          // Скачанный голос — из хранилища браузера (настройки → Piper → «Скачать»).
+          const stored = await storedVoice(id);
+          if (!stored) throw new Error(`Голос «${id}» не скачан — скачайте его в настройках озвучки.`);
+          model = stored.model;
+          config = stored.config as VoiceConfig;
+        }
         let session: OrtSession;
         try {
           ort.env.wasm.proxy = true;
@@ -408,8 +448,11 @@ export interface TtsState {
   error: string | null;
 }
 
-/** Piper в приложении; голос браузера; синтез речи Android (мост из MainActivity). */
-export type TtsEngine = "piper" | "system" | "android";
+/**
+ * Что сейчас читает: Piper; Silero, свой сервер или облако (нейросетевой голос); голос
+ * браузера; синтез речи Android (мост из MainActivity).
+ */
+export type TtsEngine = "piper" | "neural" | "system" | "android";
 
 const IDLE: TtsState = { status: "idle", messageId: null, label: "", index: 0, total: 0, engine: null, error: null };
 
@@ -473,11 +516,32 @@ class TtsPlayer {
     for (const fn of this.listeners) fn(this.state);
   }
 
-  /** Какой движок доступен: Piper, системный голос или ничего. */
-  async engine(): Promise<TtsEngine | null> {
+  /** Какой движок будет читать: выбранный в настройках или запасной (системный голос). */
+  async engine(settings?: TtsSettings): Promise<TtsEngine | null> {
+    const chosen = settings?.engine ?? "piper";
+    if (chosen !== "piper") return "neural";
     if (await piper.available()) return "piper";
     if (androidSpeech()) return "android";
     return systemSpeech() ? "system" : null;
+  }
+
+  /** Синтез одной фразы выбранным движком. */
+  private async synth(part: Segment, settings: TtsSettings): Promise<{ pcm: Float32Array; sampleRate: number }> {
+    const voice = voiceFor(settings, part.voice);
+    const engine = settings.engine;
+    if (engine === "piper") return piper.synth(part.text, voice, settings.rate);
+    const ctx = this.ctx as AudioContext;
+    let bytes: ArrayBuffer;
+    if (engine === "silero") bytes = await sileroSynth(voice, part.text, settings.rate);
+    else if (engine === "server") {
+      if (!voice) throw new Error("Выберите голоса своего сервера в настройках озвучки.");
+      bytes = await serverSynth(settings.serverUrl, voice, part.text, settings.rate);
+    } else {
+      const model = settings.models[engine] ?? "";
+      if (!model) throw new Error("Выберите модель озвучки в настройках.");
+      bytes = await cloudSynth(engine, model, voice, part.text, settings.rate);
+    }
+    return decodeAudio(ctx, bytes);
   }
 
   /** Озвучить ответ мастера (вызывать из обработчика нажатия). */
@@ -486,7 +550,7 @@ class TtsPlayer {
     const run = ++this.run;
     this.current = { messageId, label, text, settings };
     const parts = segments(text, settings);
-    const engine = await this.engine();
+    const engine = await this.engine(settings);
     if (!engine) {
       this.set({ ...IDLE, error: "Озвучка недоступна: нет голосов Piper и системного синтеза речи." });
       return;
@@ -507,14 +571,14 @@ class TtsPlayer {
       this.gain = this.ctx.createGain();
       this.gain.gain.value = settings.volume;
       this.gain.connect(this.ctx.destination);
-      let next = parts[from] ? piper.synth(parts[from].text, parts[from].voice, settings.rate) : null;
+      let next = parts[from] ? this.synth(parts[from], settings) : null;
       for (let i = from; i < parts.length; i++) {
         if (run !== this.run || !next) return;
         const audio = await next;
         if (run !== this.run) return;
         // Следующая фраза синтезируется, пока звучит текущая.
         const following = parts[i + 1];
-        next = following ? piper.synth(following.text, following.voice, settings.rate) : null;
+        next = following ? this.synth(following, settings) : null;
         if (audio.pcm.length === 0) continue;
         this.set({ status: this.state.status === "paused" ? "paused" : "playing", index: i });
         await this.playBuffer(run, audio.pcm, audio.sampleRate);
@@ -566,7 +630,7 @@ class TtsPlayer {
       } else if (event === "stop") androidHandlers.delete(id);
     });
     // Голоса различаются высотой: у системного синтеза нет надёжной пометки пола голоса.
-    const pitch = part.voice === "irina" ? 1.15 : 0.85;
+    const pitch = part.voice === "f" ? 1.15 : 0.85;
     this.set({ index });
     bridge.speak(part.text, id, settings.rate, pitch, settings.volume, true);
   }
@@ -584,7 +648,7 @@ class TtsPlayer {
       u.lang = "ru-RU";
       u.rate = settings.rate;
       u.volume = settings.volume;
-      const v = systemVoice(p.voice === "irina" ? "f" : "m");
+      const v = systemVoice(p.voice);
       if (v) u.voice = v;
       u.onstart = () => run === this.run && this.set({ status: "playing", index: from + k });
       u.onend = () => {
@@ -665,7 +729,7 @@ export const PREVIEW_TEXT =
   "Мистический заряд по метнувшему камень. Вы стоите глубоко в сфере, и снаружи вас не видят. Атака невидимого противника идёт с преимуществом. Я беру больший куб из каждой пары, а до уступа вы достаёте: «Взор дьявола» видит сквозь свою же тьму, а дальность заклинания сто двадцать футов.";
 
 /** Прослушать пример голоса в настройках. */
-export function preview(gender: Gender, settings: TtsSettings) {
-  const name = gender === "f" ? "Ира" : "Дима";
+export function preview(gender: Gender, settings: TtsSettings, label?: string) {
+  const name = label ?? (gender === "f" ? "женский голос" : "мужской голос");
   void ttsPlayer.play(-1, `Пример: ${name}`, PREVIEW_TEXT, { ...settings, narrator: gender });
 }

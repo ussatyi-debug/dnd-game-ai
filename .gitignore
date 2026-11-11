@@ -32,3 +32,9 @@ Thumbs.db
 
 # Фоновая музыка (скачивает scripts/fetch-music.mjs при сборке приложения)
 /public/music/
+
+# Встроенный Silero: библиотеки и модели готовит CI
+src-tauri/libtorch/
+src-tauri/silero/
+scripts/silero/out/
+scripts/silero/tchprobe/target/

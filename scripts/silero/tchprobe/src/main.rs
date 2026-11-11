@@ -11,7 +11,8 @@ fn main() {
         IValue::String("елка".into()),
     ]);
     let out = stress.method_is("forward", &[words]).expect("stress forward");
-    println!("STRESS {out:?}".chars().take(300).collect::<String>());
+    let shown: String = format!("{out:?}").chars().take(300).collect();
+    println!("STRESS {shown}");
 
     let tts = CModule::load(format!("{dir}/silero_tts.jit")).expect("tts");
     let ids: Vec<i64> = vec![2, 28, 29, 21, 15, 5, 18, 31, 6, 84, 25, 21, 29, 8, 1];

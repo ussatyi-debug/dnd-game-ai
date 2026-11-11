@@ -21,3 +21,7 @@ serde_json = "1"
 dnd-engine = { path = "../crates/engine", features = ["serde"] }
 dnd-master = { path = "../crates/master" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Встроенный Silero (озвучка) — только в версии для Windows: libtorch скачивается при сборке.
+[target.'cfg(windows)'.dependencies]
+tch = { version = "0.20", features = ["download-libtorch"] }

@@ -62,6 +62,22 @@ npm run tauri build    # установщик: target/release/bundle/nsis/
 cargo test -p dnd-engine
 ```
 
+## Свой сервер озвучки
+
+Озвучку Silero на телефоне и в веб-версии даёт компьютер в домашней сети:
+
+- **Версия для Windows:** Настройки → Озвучка → Silero → «Раздавать озвучку в домашнюю сеть».
+  Адрес для телефона показан там же (порт по умолчанию 5150).
+- **Любой компьютер с Python 3.10+** (Linux, macOS, Windows без приложения):
+  ```bash
+  pip install --index-url https://download.pytorch.org/whl/cpu torch
+  pip install silero silero-stress omegaconf
+  python tools/tts-server/silero_server.py        # порт 5150; другой: … 6000
+  ```
+
+В игре: Настройки → Озвучка → «Свой сервер» → `http://<IP компьютера>:5150` → «Подключить».
+Протокол простой (`GET /voices`, `POST /tts` → WAV) — подойдёт и свой сервер с другим движком.
+
 ## Сборки
 
 Каждый пуш в `main` проверяется в GitHub Actions: согласованность версий, форматирование,
@@ -80,6 +96,12 @@ cargo test -p dnd-engine
 - Найти коммит, который что-то сломал: `git bisect`; отменить его: `git revert <коммит>`.
 
 ## Лицензии контента
+
+Озвучка: голоса Piper ([rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices),
+лицензия — в карточке каждого голоса); Silero — модели `v5_cis_base` и
+[silero-stress](https://github.com/snakers4/silero-stress) под лицензией MIT (© Silero Team),
+выполняются через libtorch (BSD-3-Clause). Голос `v5_ru` и другие модели Silero под CC BY-NC
+в игру не входят.
 
 Механики основаны на System Reference Document 5.1 (Wizards of the Coast LLC), доступном по
 лицензии [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).

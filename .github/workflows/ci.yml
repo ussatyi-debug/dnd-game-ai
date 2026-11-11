@@ -211,11 +211,37 @@ jobs:
         run: node scripts/fetch-music.mjs
       - name: Сборка интерфейса
         run: npm run build
-      - name: Линтер и тесты приложения
+      - uses: actions/cache@v4
+        id: silero-cache
+        with:
+          path: src-tauri/silero
+          key: silero-${{ hashFiles('scripts/silero/export.py') }}
+      - uses: actions/setup-python@v5
+        if: steps.silero-cache.outputs.cache-hit != 'true'
+        with:
+          python-version: "3.11"
+      - name: Модели Silero (синтез и ударения, MIT) для встроенной озвучки
+        if: steps.silero-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          cargo clippy -p dnd-game-ai --all-targets -- -D warnings
-          cargo test -p dnd-game-ai
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install silero silero-stress omegaconf
+          python scripts/silero/export.py src-tauri/silero
+      - name: Линтер приложения (скачивает libtorch для Silero)
+        shell: bash
+        run: cargo clippy -p dnd-game-ai --all-targets -- -D warnings
+      - name: Библиотеки libtorch рядом с приложением
+        shell: bash
+        run: |
+          lib=$(dirname "$(find target -name torch_cpu.dll -path '*torch-sys*' | head -n 1)")
+          test -n "$lib" && test -f "$lib/torch_cpu.dll"
+          mkdir -p src-tauri/libtorch
+          cp "$lib"/*.dll src-tauri/libtorch/
+          du -sh src-tauri/libtorch src-tauri/silero
+          echo "$(pwd)/src-tauri/libtorch" >> "$GITHUB_PATH"
+      - name: Тесты приложения
+        shell: bash
+        run: cargo test -p dnd-game-ai
       - name: Сборка установщика
         run: npx tauri build
       - name: Установщик
