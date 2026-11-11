@@ -183,7 +183,7 @@ fn goal_json(c: &CustomCard) -> Value {
         "id": c.id,
         "цель": c.title,
         "суть": c.summary,
-        "статус": c.status.as_deref().map(dnd_engine::status_label),
+        "статус": c.status.as_deref().map(crate::status_label),
         "заказчик": g.giver,
         "награда": g.reward,
         "срок_день": g.due_day,
