@@ -3,7 +3,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import worldMap from "../../assets/world-map.webp";
-import { buildSpec, newDraft, STEPS, stepIssues, type Draft, type StepId } from "../../lib/creation.ts";
+import { portraitUrl } from "../../data/rules/portraits.ts";
+import { CLASSES } from "../../data/rules/classes/index.ts";
+import { SPECIES } from "../../data/rules/species.ts";
+import { buildSpec, newDraft, portraitKey, STEPS, stepIssues, type Draft, type StepId } from "../../lib/creation.ts";
+import { QUICK_HEROES, quickDraft, type QuickHero } from "../../lib/quickstart.ts";
 import type { HeroSpec } from "../../lib/heroSpec";
 import HeroSheet from "./HeroSheet.tsx";
 import { Issues } from "./parts.tsx";
@@ -35,6 +39,7 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
   const [step, setStep] = useState<StepId>("species");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quick, setQuick] = useState(false);
 
   useEffect(() => {
     try {
@@ -84,6 +89,14 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
     }
   }
 
+  /** Готовый герой: черновик заполнен целиком, открывается итоговый лист — можно сразу начать или поправить. */
+  function chooseQuick(h: QuickHero) {
+    setDraft(quickDraft(h));
+    setQuick(false);
+    setStep("sheet");
+    setError(null);
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-ink">
       <img src={worldMap} alt="" aria-hidden="true" className="pointer-events-none fixed inset-0 h-full w-full object-cover opacity-15" />
@@ -91,6 +104,13 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <h2 className="font-serif text-lg text-gold sm:text-xl">Новый герой</h2>
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setQuick((v) => !v)}
+              className={`rounded-md border px-2 py-1 text-xs ${quick ? "border-gold bg-gold/15 text-gold" : "border-gold/60 text-gold hover:bg-gold/10"}`}
+            >
+              ⚡ Быстрый старт
+            </button>
             <button type="button" onClick={reset} className="rounded-md px-2 py-1 text-xs text-muted hover:text-parchment">
               Сбросить
             </button>
@@ -127,15 +147,16 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
 
       <main id="creation-body" className="relative flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl space-y-4 px-3 py-4 sm:px-5">
-          {step === "species" && <StepSpecies draft={draft} update={update} />}
-          {step === "background" && <StepBackground draft={draft} update={update} />}
-          {step === "class" && <StepClass draft={draft} update={update} />}
-          {step === "feats" && <StepFeats draft={draft} update={update} />}
-          {step === "spells" && <StepSpells draft={draft} update={update} />}
-          {step === "abilities" && <StepAbilities draft={draft} update={update} />}
-          {step === "details" && <StepDetails draft={draft} update={update} />}
-          {step === "sheet" && spec && <HeroSheet draft={draft} spec={spec} />}
-          <Issues items={issues} />
+          {quick && <QuickStart onPick={chooseQuick} />}
+          {!quick && step === "species" && <StepSpecies draft={draft} update={update} />}
+          {!quick && step === "background" && <StepBackground draft={draft} update={update} />}
+          {!quick && step === "class" && <StepClass draft={draft} update={update} />}
+          {!quick && step === "feats" && <StepFeats draft={draft} update={update} />}
+          {!quick && step === "spells" && <StepSpells draft={draft} update={update} />}
+          {!quick && step === "abilities" && <StepAbilities draft={draft} update={update} />}
+          {!quick && step === "details" && <StepDetails draft={draft} update={update} />}
+          {!quick && step === "sheet" && spec && <HeroSheet draft={draft} spec={spec} />}
+          {!quick && <Issues items={issues} />}
           {error && <p className="rounded-md border border-fumble/60 bg-fumble/10 px-3 py-2 text-sm text-fumble">{error}</p>}
         </div>
       </main>
@@ -169,5 +190,49 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
         )}
       </footer>
     </div>
+  );
+}
+
+/** Готовые герои: по 4 на ступени «Уровни 1–3» и «Уровни 4–6». */
+function QuickStart({ onPick }: { onPick: (h: QuickHero) => void }) {
+  const tiers: { tier: 1 | 2; title: string }[] = [
+    { tier: 1, title: "Ступень 1 · 3 уровень" },
+    { tier: 2, title: "Ступень 2 · 5 уровень" },
+  ];
+  return (
+    <section className="space-y-4">
+      <p className="text-sm text-parchment/80">
+        Готовые герои: выберите — откроется итоговый лист. Можно сразу начать приключение или вернуться к любому шагу и поправить.
+      </p>
+      {tiers.map((t) => (
+        <div key={t.tier} className="space-y-2">
+          <h3 className="font-serif text-gold">{t.title}</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {QUICK_HEROES.filter((h) => h.tier === t.tier).map((h) => {
+              const species = SPECIES.find((s) => s.id === h.speciesId);
+              const cls = CLASSES.find((c) => c.id === h.classId);
+              const img = portraitUrl(portraitKey(h.speciesId, h.gender));
+              return (
+                <button
+                  key={h.id}
+                  type="button"
+                  onClick={() => onPick(h)}
+                  className="flex gap-3 rounded-lg border border-edge bg-ink/80 p-2 text-left hover:border-gold"
+                >
+                  {img && <img src={img} alt="" className="h-20 w-16 shrink-0 rounded-md object-cover" />}
+                  <span className="min-w-0">
+                    <span className="block font-serif text-parchment">{h.name}</span>
+                    <span className="block text-xs text-gold/90">
+                      {[species?.name, cls ? `${cls.name} ${h.level}` : null].filter(Boolean).join(" · ")}
+                    </span>
+                    <span className="mt-1 block text-xs text-parchment/75">{h.pitch}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </section>
   );
 }

@@ -23,6 +23,7 @@ import {
   STEPS,
   type Draft,
 } from "../src/lib/creation.ts";
+import { QUICK_HEROES, quickDraft } from "../src/lib/quickstart.ts";
 
 /** Заполняет черновик первыми подходящими вариантами (несколько проходов — выборы зависят друг от друга). */
 function autofill(d: Draft, seed: number): void {
@@ -146,6 +147,27 @@ if (engine) {
   engine.call({ cmd: "restart_demo" });
   const nikis = engine.call<{ name: string }>({ cmd: "character_sheet", id: "pc.nikis" });
   assert.equal(nikis.name, "Сэр Никис Стрэндж");
+}
+
+// Быстрый старт: готовые герои проходят все шаги мастера и проверку движком.
+for (const h of QUICK_HEROES) {
+  const d = quickDraft(h);
+  const label = `Быстрый старт: ${h.name}`;
+  for (const step of STEPS) {
+    if (step.id === "sheet") continue;
+    const issues = stepIssues(d, step.id);
+    if (issues.length) failures.push(`${label} / ${step.title}: ${issues.join("; ")}`);
+  }
+  const spec = buildSpec(d);
+  assert.equal(spec.classes[0]?.level, h.level, `${label}: уровень`);
+  assert.equal(spec.classes[0]?.subclass ? true : false, true, `${label}: подкласс`);
+  const spellNames = spec.casters.flatMap((c) => (c as { spells?: { name: string }[] }).spells?.map((s) => s.name) ?? []);
+  console.log(`${label}: хиты ${maxHp(d)}, КД ${spec.armor_class}${spellNames.length ? `, заклинания: ${spellNames.join(", ")}` : ""}`);
+  if (engine) {
+    const errors = engine.call<string[]>({ cmd: "validate_hero", spec });
+    if (errors.length) failures.push(`${label} / движок: ${errors.join("; ")}`);
+  }
+  built++;
 }
 
 if (failures.length) {
