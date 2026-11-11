@@ -55,6 +55,8 @@ pub enum EngineError {
     DayInPast { current: u32, requested: u32 },
     /// Пустая запись в базу знаний.
     EmptyNote,
+    /// Шага с таким номером у цели нет.
+    GoalStep { step: usize, count: usize },
     /// Пересказ дня, которого ещё не было (или нулевого).
     ChronicleDay { day: u32, today: u32 },
     /// Нет записи базы знаний с таким номером.
@@ -216,6 +218,9 @@ impl fmt::Display for EngineError {
                 "Сейчас День {current} — вернуться в День {requested} нельзя"
             ),
             Self::EmptyNote => write!(f, "Пустая запись: нужен заголовок или текст"),
+            Self::GoalStep { step, count } => {
+                write!(f, "У цели нет шага {step}: шагов {count}, нумерация с 1")
+            }
             Self::ChronicleDay { day, today } => {
                 write!(f, "Пересказ Дня {day} нельзя записать: сейчас День {today}")
             }

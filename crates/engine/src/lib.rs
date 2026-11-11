@@ -60,8 +60,9 @@ pub use inventory::{
     ON_PERSON,
 };
 pub use knowledge::{
-    CardDraft, CardFact, CustomCard, KbCard, KbOverride, MasterNote, NewNote, NoteEdit, NoteKind,
-    NoteLayer, KB_SECTIONS, KB_STATUSES, NOTE_REMINDER_TURNS,
+    CardDraft, CardFact, CustomCard, Goal, GoalEdit, GoalLog, GoalStep, KbCard, KbOverride,
+    MasterNote, NewNote, NoteEdit, NoteKind, NoteLayer, KB_SECTIONS, KB_STATUSES,
+    NOTE_REMINDER_TURNS, TIMER_AUTO_DONE_TURNS,
 };
 pub use master_ops::{Checkpoint, HpChange, SceneChange, UndoInfo};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};

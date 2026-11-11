@@ -94,7 +94,14 @@ pub struct MasterNote {
     /// Таймер отработан (или план исполнен) — в напоминания не попадает.
     #[cfg_attr(feature = "serde", serde(default))]
     pub done: bool,
+    /// Сколько ходов мастера таймер уже висит сработавшим: после
+    /// [`TIMER_AUTO_DONE_TURNS`] движок сам отмечает его отработанным.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub due_turns: u32,
 }
+
+/// Через сколько ходов мастера сработавший таймер закрывается сам.
+pub const TIMER_AUTO_DONE_TURNS: u32 = 3;
 
 /// Изменение записи. `None` — поле не меняется; пустая карточка — отвязать.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -163,6 +170,71 @@ pub struct CustomCard {
     pub day: u32,
     #[cfg_attr(feature = "serde", serde(default))]
     pub by_player: bool,
+    /// Развёрнутое описание (абзацы через пустую строку).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub text: String,
+    /// Карточка, внутри которой находится эта: место внутри локации.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub parent: Option<String>,
+    /// Данные цели (раздел `goals`): заказчик, награда, срок, шаги, ход выполнения.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub goal: Option<Goal>,
+}
+
+/// Цель героя: что обещано, к какому сроку, из каких шагов состоит и как продвигается.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Goal {
+    /// Кто поручил.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub giver: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub reward: String,
+    /// Срок: день кампании.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub due_day: Option<u32>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub steps: Vec<GoalStep>,
+    /// Ход выполнения: записи не затирают друг друга.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub log: Vec<GoalLog>,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalStep {
+    pub text: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub done: bool,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalLog {
+    pub day: u32,
+    pub text: String,
+}
+
+/// Изменение цели одной командой. `None` — поле не меняется.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GoalEdit {
+    pub giver: Option<String>,
+    pub reward: Option<String>,
+    /// `Some(0)` — убрать срок.
+    pub due_day: Option<u32>,
+    /// Заменить список шагов.
+    pub steps: Option<Vec<String>>,
+    /// Добавить шаг.
+    pub add_step: Option<String>,
+    /// Отметить шаг выполненным: номер с единицы.
+    pub step_done: Option<usize>,
+    /// Снять отметку с шага: номер с единицы.
+    pub step_undone: Option<usize>,
+    /// Строка в ход выполнения.
+    pub log: Option<String>,
+    pub status: Option<String>,
 }
 
 /// Данные новой или изменённой карточки. `None` — поле не меняется.
@@ -177,6 +249,10 @@ pub struct CardDraft {
     pub summary: Option<String>,
     pub facts: Option<Vec<CardFact>>,
     pub status: Option<String>,
+    pub text: Option<String>,
+    /// Пустая строка — убрать родителя.
+    pub parent: Option<String>,
+    pub goal: Option<GoalEdit>,
 }
 
 /// Разделы слоёв базы (совпадают с интерфейсом).
@@ -249,12 +325,15 @@ pub fn status_label(id: &str) -> &str {
     KB_STATUSES.iter().find(|(s, _)| *s == id).map_or(id, |(_, label)| label)
 }
 
-/// Слова запроса для поиска: от четырёх букв, с основой без окончания.
+/// Слова запроса для поиска: от трёх букв (числа — любые), с основой без окончания.
 pub fn query_stems(text: &str) -> Vec<String> {
     let lower = text.to_lowercase().replace('ё', "е");
     let mut stems: Vec<String> = lower
         .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| w.chars().count() >= 4)
+        .filter(|w| {
+            w.chars().count() >= 3 || (!w.is_empty() && w.chars().all(|c| c.is_ascii_digit()))
+        })
+        .filter(|w| !STOP_WORDS.contains(w))
         .map(|w| {
             let chars: Vec<char> = w.chars().collect();
             let cut = match chars.len() {
@@ -269,6 +348,14 @@ pub fn query_stems(text: &str) -> Vec<String> {
     stems.dedup();
     stems
 }
+
+/// Частые короткие слова: в поиске по базе только шумят.
+const STOP_WORDS: [&str; 40] = [
+    "что", "как", "это", "его", "она", "они", "мне", "мой", "моя", "мои", "тут", "там", "все",
+    "всё", "для", "при", "под", "над", "без", "или", "уже", "еще", "ещё", "так", "вот", "вам",
+    "нас", "вас", "них", "ним", "ней", "был", "кто", "где", "раз", "ему", "тем", "чем", "про",
+    "иду",
+];
 
 /// Сколько слов запроса встречается в тексте.
 pub fn matches(stems: &[String], text: &str) -> usize {
@@ -391,6 +478,27 @@ impl Session {
             if new.kind == NoteKind::Timer && new.due_day.is_none() {
                 return Err(EngineError::TimerWithoutDay);
             }
+            // Защита от дублей: мастер повторил запись за тот же день — обновляется прежняя.
+            if !new.by_player {
+                let (t, x) = (fold(title), fold(text));
+                let today = self.scene.day;
+                if let Some(old) = self.notes.iter_mut().find(|n| {
+                    !n.by_player
+                        && n.layer == layer
+                        && n.day == today
+                        && n.kind == new.kind
+                        && ((!t.is_empty() && fold(&n.title) == t)
+                            || (!x.is_empty() && fold(&n.text) == x))
+                }) {
+                    if !text.is_empty() && fold(&old.text) != x {
+                        old.text = text.into();
+                    }
+                    if old.card.is_none() {
+                        old.card = card;
+                    }
+                    return Ok((old.id, old.title.clone(), new.kind, new.due_day, unlinked, true));
+                }
+            }
             let id = self.next_note_id;
             self.next_note_id += 1;
             let title: String =
@@ -407,12 +515,19 @@ impl Session {
                 kind: new.kind,
                 due_day: new.due_day,
                 done: false,
+                due_turns: 0,
             });
-            Ok((id, title, new.kind, new.due_day, unlinked))
+            Ok((id, title, new.kind, new.due_day, unlinked, false))
         })();
         self.logged(
             result,
-            |(id, title, kind, due, unlinked)| {
+            |(id, title, kind, due, unlinked, existing)| {
+                if *existing {
+                    return format!(
+                        "База знаний ({}): запись «{title}» уже есть — обновлена [запись {id}]",
+                        layer.section()
+                    );
+                }
                 let extra = match (kind, due) {
                     (NoteKind::Event, _) => String::new(),
                     (k, Some(d)) => format!(", {} на День {d}", k.label()),
@@ -556,6 +671,10 @@ impl Session {
     }
 
     /// Новая карточка базы. ID строится из названия: `dyn.<слова>`.
+    ///
+    /// Карточка не теряется и не дублируется: неизвестный раздел заменяется запасным
+    /// («Заметки» у игрока, «Журнал мастера» у мастера, «Лор» у мира), а повтор мастером
+    /// карточки с тем же названием в том же разделе обновляет прежнюю.
     pub fn create_card(
         &mut self,
         draft: CardDraft,
@@ -566,15 +685,61 @@ impl Session {
             if title.is_empty() {
                 return Err(EngineError::EmptyNote);
             }
-            let layer = draft.layer.as_deref().unwrap_or("master").trim().to_string();
-            let section = draft.section.as_deref().unwrap_or_default().trim().to_string();
-            check_section(&layer, &section)?;
+            let mut layer = draft.layer.as_deref().unwrap_or("master").trim().to_string();
+            let mut section = draft.section.as_deref().unwrap_or_default().trim().to_string();
+            let mut moved = None;
+            if check_section(&layer, &section).is_err() {
+                let asked = format!("{layer}/{section}");
+                if by_player {
+                    check_section(&layer, &section)?;
+                }
+                (layer, section) = match layer.as_str() {
+                    "player" => ("player".into(), "notes".into()),
+                    "world" => ("world".into(), "lore".into()),
+                    _ => ("master".into(), "journal".into()),
+                };
+                moved = Some(asked);
+            }
             let status = match draft.status.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
                 Some(s) => {
                     Some(status_id(s).ok_or_else(|| EngineError::UnknownStatus(s.into()))?.into())
                 }
+                None if section == "goals" => Some("active".to_string()),
                 None => None,
             };
+            let parent = self.resolve_parent(draft.parent.as_deref());
+            let day = self.scene.day;
+            if !by_player {
+                let key = fold(&title);
+                if let Some(old) = self
+                    .custom_cards
+                    .iter_mut()
+                    .find(|c| c.layer == layer && c.section == section && fold(&c.title) == key)
+                {
+                    for (field, value) in [
+                        (&mut old.subtitle, draft.subtitle.as_deref()),
+                        (&mut old.summary, draft.summary.as_deref()),
+                        (&mut old.text, draft.text.as_deref()),
+                    ] {
+                        if let Some(v) = value.map(str::trim).filter(|v| !v.is_empty()) {
+                            *field = v.to_string();
+                        }
+                    }
+                    if let Some(f) = draft.facts.filter(|f| !f.is_empty()) {
+                        old.facts = f;
+                    }
+                    if draft.status.is_some() {
+                        old.status = status;
+                    }
+                    if parent.is_some() {
+                        old.parent = parent;
+                    }
+                    if let Some(edit) = &draft.goal {
+                        apply_goal(old.goal.get_or_insert_with(Goal::default), edit, day)?;
+                    }
+                    return Ok((old.id.clone(), title, Some("уже есть — обновлена".to_string())));
+                }
+            }
             let base = title
                 .to_lowercase()
                 .chars()
@@ -592,6 +757,15 @@ impl Session {
                 id = format!("dyn.{base}_{n}");
                 n += 1;
             }
+            let goal = if section == "goals" {
+                let mut goal = Goal::default();
+                if let Some(edit) = &draft.goal {
+                    apply_goal(&mut goal, edit, day)?;
+                }
+                Some(goal)
+            } else {
+                None
+            };
             self.custom_cards.push(CustomCard {
                 id: id.clone(),
                 layer,
@@ -601,21 +775,35 @@ impl Session {
                 summary: draft.summary.unwrap_or_default().trim().to_string(),
                 facts: draft.facts.unwrap_or_default(),
                 status,
-                day: self.scene.day,
+                day,
                 by_player,
+                text: draft.text.unwrap_or_default().trim().to_string(),
+                parent,
+                goal,
             });
-            Ok((id, title))
+            Ok((id, title, moved.map(|m| format!("раздела «{m}» нет — положена в запасной"))))
         })();
         self.logged(
             result,
-            |(id, title)| format!("База знаний: новая карточка «{title}» [{id}]"),
+            |(id, title, note)| match note {
+                Some(n) => format!("База знаний: карточка «{title}» [{id}] — {n}"),
+                None => format!("База знаний: новая карточка «{title}» [{id}]"),
+            },
             || "новая карточка".into(),
         )
-        .map(|(id, _)| id)
+        .map(|(id, _, _)| id)
+    }
+
+    /// Родитель карточки: существующая карточка или `None` (неизвестный родитель не мешает).
+    fn resolve_parent(&self, parent: Option<&str>) -> Option<String> {
+        let p = parent.map(str::trim).filter(|p| !p.is_empty())?;
+        self.resolve_card(p).ok().filter(|_| !self.kb_cards.is_empty() || p.starts_with("dyn."))
     }
 
     /// Правка карточки, созданной по ходу игры.
     pub fn update_card(&mut self, id: &str, draft: CardDraft) -> Result<(), EngineError> {
+        let parent = draft.parent.as_deref().map(|p| self.resolve_parent(Some(p)));
+        let day = self.scene.day;
         let result = (|| {
             let card = self
                 .custom_cards
@@ -639,6 +827,12 @@ impl Session {
             if let Some(t) = draft.summary {
                 next.summary = t.trim().into();
             }
+            if let Some(t) = draft.text {
+                next.text = t.trim().into();
+            }
+            if let Some(p) = parent {
+                next.parent = p.filter(|p| p != id);
+            }
             if let Some(f) = draft.facts {
                 next.facts = f;
             }
@@ -650,6 +844,14 @@ impl Session {
                     Some(status_id(s).ok_or_else(|| EngineError::UnknownStatus(s.into()))?.into())
                 };
             }
+            if let Some(edit) = &draft.goal {
+                apply_goal(next.goal.get_or_insert_with(Goal::default), edit, day)?;
+                if let Some(s) = edit.status.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                    next.status = Some(
+                        status_id(s).ok_or_else(|| EngineError::UnknownStatus(s.into()))?.into(),
+                    );
+                }
+            }
             *card = next.clone();
             Ok(next.title)
         })();
@@ -659,6 +861,95 @@ impl Session {
             || format!("карточка «{id}»"),
         )
         .map(|_| ())
+    }
+
+    /// Ход цели: шаги, срок, запись о продвижении, статус. У цели из встроенной базы
+    /// меняется только статус (с пояснением из `log`).
+    pub fn update_goal(&mut self, card: &str, edit: GoalEdit) -> Result<(), EngineError> {
+        let id = match self.resolve_card(card) {
+            Ok(id) => id,
+            Err(e) => return self.logged(Err(e), |()| String::new(), || format!("цель «{card}»")),
+        };
+        if self.custom_cards.iter().any(|c| c.id == id) {
+            return self.update_card(&id, CardDraft { goal: Some(edit), ..CardDraft::default() });
+        }
+        match edit.status.as_deref() {
+            Some(status) => {
+                self.set_card_status(&id, Some(status), edit.log.as_deref().unwrap_or(""))
+            }
+            None => self.logged(
+                Err(EngineError::NotCustomCard(id.clone())),
+                |()| String::new(),
+                || format!("цель «{card}»"),
+            ),
+        }
+    }
+
+    /// Цели героя, которые ещё не закрыты (созданные по ходу игры).
+    pub fn active_goals(&self) -> Vec<&CustomCard> {
+        self.custom_cards
+            .iter()
+            .filter(|c| c.section == "goals" && c.layer == "player")
+            .filter(|c| !matches!(c.status.as_deref(), Some("done" | "failed")))
+            .collect()
+    }
+
+    /// После загрузки: привязки записей и статусы карточек, которых больше нет в базе
+    /// (изменился состав встроенной базы), снимаются, а не висят молча.
+    pub fn repair_links(&mut self) -> usize {
+        if self.kb_cards.is_empty() {
+            return 0;
+        }
+        let known = |id: &str| {
+            self.kb_cards.iter().any(|c| c.id == id) || self.custom_cards.iter().any(|c| c.id == id)
+        };
+        let lost: Vec<String> = self
+            .notes
+            .iter()
+            .filter_map(|n| n.card.clone())
+            .chain(self.kb_overrides.iter().map(|o| o.card_id.clone()))
+            .filter(|id| !known(id))
+            .collect();
+        if lost.is_empty() {
+            return 0;
+        }
+        for n in &mut self.notes {
+            if n.card.as_ref().is_some_and(|c| lost.contains(c)) {
+                n.card = None;
+            }
+        }
+        self.kb_overrides.retain(|o| !lost.contains(&o.card_id));
+        let mut ids = lost.clone();
+        ids.sort();
+        ids.dedup();
+        self.log(format!(
+            "База знаний: карточек больше нет в базе, привязки и статусы сняты — {}",
+            ids.join(", ")
+        ));
+        ids.len()
+    }
+
+    /// Конец хода мастера: сработавший таймер, который мастер так и не закрыл, движок
+    /// закрывает сам через [`TIMER_AUTO_DONE_TURNS`] ходов — иначе он «срабатывает» вечно.
+    pub(crate) fn age_due_timers(&mut self) {
+        let today = self.scene.day;
+        let mut closed = Vec::new();
+        for n in &mut self.notes {
+            if n.done || !n.due_day.is_some_and(|d| d <= today) {
+                continue;
+            }
+            n.due_turns += 1;
+            if n.due_turns >= TIMER_AUTO_DONE_TURNS {
+                n.done = true;
+                closed.push(format!("«{}» [запись {}]", n.title, n.id));
+            }
+        }
+        if !closed.is_empty() {
+            self.log(format!(
+                "База знаний: сработавшие таймеры закрыты движком (мастер не отметил) — {}",
+                closed.join(", ")
+            ));
+        }
     }
 
     /// Удаление карточки, созданной по ходу игры; записи отвязываются от неё.
@@ -732,6 +1023,7 @@ impl Session {
                 kind: NoteKind::Day,
                 due_day: None,
                 done: false,
+                due_turns: 0,
             });
             Ok((id, true))
         })();
@@ -787,6 +1079,56 @@ impl Session {
     }
 }
 
+/// Текст для сравнения: без регистра, «ё» и лишних пробелов.
+fn fold(text: &str) -> String {
+    text.to_lowercase().replace('ё', "е").split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Применяет изменение к цели.
+fn apply_goal(goal: &mut Goal, edit: &GoalEdit, day: u32) -> Result<(), EngineError> {
+    if let Some(g) = &edit.giver {
+        goal.giver = g.trim().into();
+    }
+    if let Some(r) = &edit.reward {
+        goal.reward = r.trim().into();
+    }
+    if let Some(d) = edit.due_day {
+        goal.due_day = (d > 0).then_some(d);
+    }
+    if let Some(steps) = &edit.steps {
+        goal.steps = steps
+            .iter()
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .map(|t| {
+                let done = goal.steps.iter().any(|s| s.done && fold(&s.text) == fold(t));
+                GoalStep { text: t.into(), done }
+            })
+            .collect();
+    }
+    if let Some(step) = edit.add_step.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        if !goal.steps.iter().any(|s| fold(&s.text) == fold(step)) {
+            goal.steps.push(GoalStep { text: step.into(), done: false });
+        }
+    }
+    for (number, done) in [(edit.step_done, true), (edit.step_undone, false)] {
+        if let Some(n) = number {
+            let count = goal.steps.len();
+            let step = n
+                .checked_sub(1)
+                .and_then(|i| goal.steps.get_mut(i))
+                .ok_or(EngineError::GoalStep { step: n, count })?;
+            step.done = done;
+        }
+    }
+    if let Some(line) = edit.log.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        if goal.log.last().is_none_or(|l| fold(&l.text) != fold(line)) {
+            goal.log.push(GoalLog { day, text: line.into() });
+        }
+    }
+    Ok(())
+}
+
 /// Пометка в журнале движка: запись сохранена без привязки к несуществующей карточке.
 fn unlinked_note(card: Option<&str>) -> String {
     card.map_or_else(String::new, |c| {
@@ -825,6 +1167,79 @@ mod tests {
             .expect("правка проходит");
         assert_eq!(edited.text, "Новый текст");
         assert_eq!(edited.card, None);
+    }
+
+    #[test]
+    fn goals_keep_steps_and_progress() {
+        let mut s = session();
+        let id = s
+            .create_card(
+                CardDraft {
+                    layer: Some("player".into()),
+                    section: Some("goals".into()),
+                    title: Some("Найти курьера".into()),
+                    goal: Some(GoalEdit {
+                        giver: Some("Сержант Хольм".into()),
+                        reward: Some("50 зм".into()),
+                        steps: Some(vec!["Расспросить в доках".into(), "Найти след".into()]),
+                        ..GoalEdit::default()
+                    }),
+                    ..CardDraft::default()
+                },
+                false,
+            )
+            .unwrap();
+        assert_eq!(s.active_goals().len(), 1);
+        assert_eq!(s.custom_cards()[0].status.as_deref(), Some("active"));
+        s.update_goal(
+            &id,
+            GoalEdit {
+                step_done: Some(1),
+                log: Some("Докеры видели его".into()),
+                ..GoalEdit::default()
+            },
+        )
+        .unwrap();
+        s.update_goal(
+            &id,
+            GoalEdit {
+                log: Some("След ведёт на склад".into()), ..GoalEdit::default()
+            },
+        )
+        .unwrap();
+        let goal = s.custom_cards()[0].goal.clone().unwrap();
+        assert!(goal.steps[0].done && !goal.steps[1].done);
+        assert_eq!(goal.log.len(), 2);
+        assert!(s
+            .update_goal(&id, GoalEdit { step_done: Some(5), ..GoalEdit::default() })
+            .is_err());
+        s.update_goal(&id, GoalEdit { status: Some("done".into()), ..GoalEdit::default() })
+            .unwrap();
+        assert!(s.active_goals().is_empty());
+    }
+
+    #[test]
+    fn master_note_repeat_updates_and_timer_closes_itself() {
+        let mut s = session();
+        let a = s.add_note(NoteLayer::Master, "Слух о складе", "Крот знает о складе").unwrap();
+        let b = s.add_note(NoteLayer::Master, "слух о складе", "Крот продал сведения").unwrap();
+        assert_eq!(a, b);
+        assert_eq!(s.notes().iter().filter(|n| n.id == a).count(), 1);
+        assert_eq!(s.notes().iter().find(|n| n.id == a).unwrap().text, "Крот продал сведения");
+        let today = s.scene().day;
+        let timer = s
+            .create_note(NewNote {
+                kind: NoteKind::Timer,
+                due_day: Some(today),
+                ..NewNote::new(NoteLayer::Master, "Гонец", "Прибывает гонец")
+            })
+            .unwrap();
+        for _ in 0..TIMER_AUTO_DONE_TURNS {
+            assert!(!s.notes().iter().find(|n| n.id == timer).unwrap().done);
+            s.age_due_timers();
+        }
+        assert!(s.notes().iter().find(|n| n.id == timer).unwrap().done);
+        assert!(s.due_notes().is_empty());
     }
 
     fn session() -> Session {
@@ -936,16 +1351,33 @@ mod tests {
             .unwrap();
         assert_eq!(id, "dyn.соглядатай_в_серо_бурой");
         assert_eq!(s.custom_cards()[0].status.as_deref(), Some("prisoner"));
-        assert!(s
+        // Неизвестный раздел: карточка мастера не теряется, а ложится в запасной раздел;
+        // игроку интерфейс такого не даёт — для него это ошибка.
+        let stray = CardDraft {
+            title: Some("x".into()),
+            section: Some("tavern".into()),
+            ..CardDraft::default()
+        };
+        assert!(s.create_card(stray.clone(), true).is_err());
+        let stray_id = s.create_card(stray, false).unwrap();
+        assert_eq!(s.custom_cards()[1].section, "journal");
+        s.delete_card(&stray_id).unwrap();
+        // Повтор карточки мастером обновляет прежнюю, а не плодит копию.
+        let again = s
             .create_card(
                 CardDraft {
-                    title: Some("x".into()),
-                    section: Some("tavern".into()),
+                    layer: Some("master".into()),
+                    section: Some("prisoners".into()),
+                    title: Some("соглядатай в серо-бурой робе".into()),
+                    summary: Some("Заговорил на допросе".into()),
                     ..CardDraft::default()
                 },
-                false
+                false,
             )
-            .is_err());
+            .unwrap();
+        assert_eq!(again, id);
+        assert_eq!(s.custom_cards().len(), 1);
+        assert_eq!(s.custom_cards()[0].summary, "Заговорил на допросе");
         let note = s
             .create_note(NewNote {
                 kind: NoteKind::Timer,

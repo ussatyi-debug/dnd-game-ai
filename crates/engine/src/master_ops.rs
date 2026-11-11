@@ -133,6 +133,7 @@ impl Session {
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
+        self.age_due_timers();
         let after = self.checkpoint();
         let today = self.scene.day;
         let day_note = |c: &Checkpoint| {
