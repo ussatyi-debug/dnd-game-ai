@@ -325,8 +325,8 @@ struct AutosaveMeta {
     name: String,
 }
 
-/// Ячейки 0–2 — автосохранения по кругу, 10–19 — ручные сохранения игрока.
-const AUTOSAVE_SLOTS: u8 = 3;
+/// Ячейки 0–4 — автосохранения по кругу, 10–19 — ручные сохранения игрока.
+const AUTOSAVE_SLOTS: u8 = 5;
 const MANUAL_SLOTS: std::ops::Range<u8> = 10..20;
 
 fn all_slots() -> impl Iterator<Item = u8> {

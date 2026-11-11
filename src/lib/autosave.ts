@@ -12,10 +12,10 @@ import { saveState } from "./engine";
 import type { TrayRoll } from "./rolls";
 import type { ChatMessage } from "../components/ChatPanel";
 
-/** Сколько ходов мастера между автосохранениями. */
-export const AUTOSAVE_EVERY = 5;
+/** Сколько ходов мастера между автосохранениями (при двухшаговом ходе — после обновления данных). */
+export const AUTOSAVE_EVERY = 1;
 /** Сколько автосохранений хранится по кругу. */
-export const AUTOSAVE_SLOTS = 3;
+export const AUTOSAVE_SLOTS = 5;
 /** Ячейки ручных сохранений игрока: 10–19. */
 export const MANUAL_FIRST = 10;
 export const MANUAL_SLOTS = 10;

@@ -83,6 +83,7 @@ import {
   readAutosave,
   setAutosaveCampaign,
   writeAutosave,
+  writeManualSave,
   type AutosaveInfo,
 } from "./lib/autosave";
 import {
@@ -843,7 +844,7 @@ export default function App() {
       });
   }
 
-  function loaded(save: ParsedSave, report: LoadReport) {
+  function loaded(save: ParsedSave, report: LoadReport, fromFile = false) {
     const maxId = Math.max(0, ...save.chat.map((m) => m.id), ...save.rolls.map((r) => r.id));
     nextId.current = maxId + 1;
     setMessages(save.chat);
@@ -860,7 +861,48 @@ export default function App() {
     addMessage("system", `Загружено сохранение: День ${report.day}, ${report.location}.${extra}`);
     setFailed(null);
     refresh().catch((e: unknown) => addMessage("system", errorText(e)));
+    adoptCampaign(save.engine as Record<string, unknown>);
+    if (fromFile) {
+      // Сейв из файла — отдельной ручной ячейкой: автосохранения по кругу его не вытеснят.
+      window.setTimeout(() => {
+        writeManualSave(messagesRef.current ?? [], rollsRef.current ?? [], `Из файла · День ${report.day}`)
+          .then(() => listAutosaves().then(setAutosaves))
+          .catch((e: unknown) => addMessage("system", `Сейв из файла не записан в ячейку: ${errorText(e)}`));
+      }, 300);
+    }
     autosave();
+  }
+
+  /**
+   * Сохранение (в том числе из файла) принадлежит своей кампании: автосохранения пишутся в неё,
+   * а если кампании нет на устройстве — она добавляется в список, чтобы сейв не потерялся.
+   */
+  function adoptCampaign(engine: Record<string, unknown>) {
+    const c = (engine.campaign ?? null) as { id?: unknown; title?: unknown; heroes?: unknown } | null;
+    const id = c && typeof c.id === "string" && c.id ? c.id : STRANGE_ID;
+    if (id !== campaignId) {
+      applyCampaign(id);
+      setCurrentCampaignId(id);
+      setCampaignId(id);
+      setKbCards(kbIndex()).catch(() => undefined);
+    }
+    if (id === STRANGE_ID || campaigns.some((x) => x.id === id)) return;
+    const hero = (Array.isArray(c?.heroes) ? c.heroes[0] : null) as Partial<HeroSpec> | null;
+    const scene = (engine.scene ?? {}) as { day?: unknown };
+    const cls = hero?.classes?.[0];
+    const info: CampaignInfo = {
+      id,
+      title: typeof c?.title === "string" && c.title ? c.title : `Путь героя ${hero?.name ?? ""}`.trim(),
+      createdAt: new Date().toISOString(),
+      startDay: typeof scene.day === "number" ? scene.day : CURRENT_DAY,
+      hero: {
+        name: hero?.name ?? "Герой",
+        summary: [hero?.species, cls ? `${cls.name} ${cls.level}` : null].filter(Boolean).join(" · "),
+        portrait: hero?.portrait ?? "",
+      },
+    };
+    addCampaign(info).catch(() => undefined);
+    setCampaigns((prev) => [info, ...prev.filter((x) => x.id !== id)]);
   }
 
   function openFullSheet(id: string) {
@@ -1055,7 +1097,7 @@ export default function App() {
         </div>
         <span className="text-right text-xs text-muted">
           {sinceAutosave !== null && (
-            <span className="mr-2" title="Автосохранение каждые 5 ходов мастера">
+            <span className="mr-2" title="Автосохранение после каждого хода мастера (5 последних)">
               💾 {sinceAutosave === 0 ? "сохранено" : `${sinceAutosave} ход. назад`}
             </span>
           )}
@@ -1207,7 +1249,7 @@ export default function App() {
         />
       )}
       {openWindow === "load" && (
-        <LoadWindow onClose={() => setOpenWindow(null)} onSaveFirst={() => setOpenWindow("save")} onLoaded={loaded} />
+        <LoadWindow onClose={() => setOpenWindow(null)} onSaveFirst={() => setOpenWindow("save")} onLoaded={(save, report) => loaded(save, report, true)} />
       )}
       {openWindow === "save" && (
         <SaveWindow
