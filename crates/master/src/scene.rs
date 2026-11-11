@@ -47,7 +47,8 @@ const PROTOCOL: &str = r#"
 const CHEAT_SHEET: &str = "Механика — только командами в блоке ```engine (по одной JSON-строке): \
 броски — roll (числа только от движка), хиты — hp, ресурсы — resource, состояния — condition, \
 заклинания — cast, предметы — item, деньги — treasury/transfer, сцена и время — scene, отдых — rest, \
-записи — note (layer player и master), пересказ дня — chronicle, недостающие сведения — query. \
+записи — note (layer player и master), новое задание или цель героя — new_card (player, goals, status active), \
+пересказ дня — chronicle, недостающие сведения — query. \
 Без команды изменение не сохранится.";
 
 /// Запрос к модели: системный текст и последняя реплика игрока.
@@ -353,6 +354,21 @@ pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
     {
         out.push("деньги и вещи: treasury/transfer, item add/remove/move");
     }
+    if has(&[
+        "задани",
+        "поручени",
+        "контракт",
+        "заказ",
+        "награда",
+        "берусь",
+        "соглашаюсь",
+        "возьмусь",
+        "принимаю",
+    ]) {
+        out.push(
+            "задание: new_card player/goals со status active; подоплёка — note в журнал мастера",
+        );
+    }
     if has(&["иду", "едем", "идем", "отправля", "переход", "возвраща", "скачем", "плывем"])
     {
         out.push("перемещение: scene location (и time), спутники — move");
@@ -604,6 +620,7 @@ pub fn update_request(
 - note: {{"cmd":"note","layer":"player","title":"...","text":"..."}} — что герой узнал или решил; "layer":"master" — правда за событием, планы NPC. Вид "kind": event, secret, plan, timer (с "due_day").
 - chronicle: {{"cmd":"chronicle","day":N,"text":"5–10 предложений о дне"}}
 - card: {{"cmd":"card","card":"id","status":"done"}}; new_card: {{"cmd":"new_card","layer":"master","section":"...","title":"...","summary":"..."}}
+- задание, поручение или цель, которую герой принял: {{"cmd":"new_card","layer":"player","section":"goals","title":"...","summary":"кто поручил, что сделать, награда, срок","status":"active"}} — отдельная карточка цели, не просто note; ход и итог — card со status progress / done / failed.
 
 Правила:
 - Только то, что в рассказе произошло. Броски уже сделаны — не добавляй roll.
@@ -743,6 +760,13 @@ mod tests {
         let sheet = answer_query(&s, &json!({"cmd":"query","what":"sheet","id":id})).unwrap();
         assert!(sheet.contains("лист"));
         assert!(answer_query(&s, &json!({"cmd":"query","what":"card","id":"нет.такой"})).is_err());
+    }
+
+    #[test]
+    fn quest_words_hint_a_goal_card() {
+        assert!(turn_hint("Хорошо, берусь за это поручение")
+            .iter()
+            .any(|h| h.starts_with("задание")));
     }
 
     #[test]
