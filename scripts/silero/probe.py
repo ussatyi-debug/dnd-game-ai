@@ -1,40 +1,35 @@
-"""Пробный разбор Silero v5_cis_base: что внутри и можно ли перевести в ONNX."""
-import inspect, json, sys, traceback
-import torch
+"""Разбор пакета Silero v5_cis_base изнутри: из чего состоит синтез."""
+import inspect, torch
 from silero import silero_tts
 
-model, example = silero_tts(language="ru", speaker="v5_cis_base")
-print("TYPE", type(model))
-print("DIR", [a for a in dir(model) if not a.startswith("__")])
-for name in ("speakers", "symbols", "sample_rate"):
-    print(name.upper(), getattr(model, name, None))
-for name, val in vars(model).items() if hasattr(model, "__dict__") else []:
-    print("ATTR", name, type(val))
+model, _ = silero_tts(language="ru", speaker="v5_cis_base")
+pid = model.speaker_to_package["ru_dmitriy"]
+pack = model.packages[pid]
+print("PACKS", len(model.packages), "PID", pid, "TYPE", type(pack))
+print("DIR", [a for a in dir(pack) if not a.startswith("__")])
+for k, v in vars(pack).items():
+    print("ATTR", k, type(v), (v if isinstance(v, (int, float, str, bool)) else ""))
 try:
-    print("APPLY_SIG", inspect.signature(model.apply_tts))
-    print(inspect.getsource(type(model)))
+    print(inspect.getsource(type(pack))[:15000])
 except Exception as e:
     print("NO SOURCE", e)
-inner = getattr(model, "model", None)
-if inner is not None:
-    print("INNER", type(inner))
-    try:
-        print(inner.code[:6000])
-    except Exception as e:
-        print("NO CODE", e)
-    try:
-        for n, m in inner.named_children():
-            print("CHILD", n, type(m))
-            try:
-                print(m.code[:3000])
-            except Exception:
-                pass
-    except Exception as e:
-        print("NO CHILDREN", e)
-spk = [s for s in (getattr(model, "speakers", []) or []) if str(s).startswith("ru_")]
-print("RU_SPEAKERS", spk)
-try:
-    audio = model.apply_tts(text="Прив+ет, мир. Это пр+оба г+олоса.", speaker=spk[0] if spk else None, sample_rate=24000)
-    print("AUDIO", audio.shape)
-except Exception:
-    traceback.print_exc()
+for k, v in vars(pack).items():
+    if isinstance(v, torch.jit.ScriptModule) or isinstance(v, torch.nn.Module):
+        print("=== MODULE", k, type(v))
+        try:
+            print("CODE", v.code[:4000])
+        except Exception as e:
+            print("NO CODE", e)
+        try:
+            for n, m in v.named_children():
+                print("  CHILD", n, type(m))
+        except Exception:
+            pass
+        try:
+            for n in dir(v):
+                if not n.startswith("_"):
+                    a = getattr(v, n, None)
+                    if callable(a) and hasattr(a, "schema"):
+                        print("  METHOD", n, a.schema)
+        except Exception as e:
+            print("NO METHODS", e)
