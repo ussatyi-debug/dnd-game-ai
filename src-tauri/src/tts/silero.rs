@@ -288,8 +288,9 @@ impl Silero {
     }
 
     fn predict(&self, words: &[String]) -> Result<Vec<WordPred>, String> {
-        let list = IValue::GenericList(words.iter().map(|w| IValue::String(w.clone())).collect());
-        let out = tch::no_grad(|| self.stress.method_is("forward", &[list]))
+        // Модель ударений обёрнута при экспорте: слова одной строкой через пробел.
+        let line = IValue::String(words.join(" "));
+        let out = tch::no_grad(|| self.stress.method_is("forward", &[line]))
             .map_err(|e| err("ударения", e))?;
         let (stress, yo) = match out {
             IValue::Tuple(v) if v.len() == 2 => match (&v[0], &v[1]) {

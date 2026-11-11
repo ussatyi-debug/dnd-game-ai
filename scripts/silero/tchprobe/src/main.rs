@@ -5,11 +5,7 @@ fn main() {
     let dir = std::env::args().nth(1).unwrap_or_else(|| "out".into());
     tch::set_num_threads(2);
     let stress = CModule::load(format!("{dir}/silero_stress.jit")).expect("stress");
-    let words = IValue::GenericList(vec![
-        IValue::String("грегори".into()),
-        IValue::String("замок".into()),
-        IValue::String("елка".into()),
-    ]);
+    let words = IValue::String("грегори замок елка".into());
     let out = stress.method_is("forward", &[words]).expect("stress forward");
     let shown: String = format!("{out:?}").chars().take(300).collect();
     println!("STRESS {shown}");
