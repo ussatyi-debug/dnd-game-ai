@@ -29,6 +29,8 @@ import {
 import { FullSheet, PartySection } from "./FullSheet";
 import KbArtifacts from "./KbArtifacts";
 import { CardForm, customEntry } from "./KbCards";
+import { GoalPanel, MasterLock, MasterPasswordButton } from "./KbExtras";
+import { gmLocked, kbSeen, markKbSeen } from "../lib/kbState";
 import { LinkedText, NoteList, type CardOption, type CardTitle } from "./KbNotes";
 import Modal from "./Modal";
 
@@ -36,6 +38,8 @@ interface KnowledgeBaseProps {
   onClose: () => void;
   /** Открыть сразу полный лист этого персонажа. */
   initialCharacterId?: string | null;
+  /** Открыть сразу эту карточку (цель из строки целей над диалогом). */
+  initialCardId?: string | null;
   onOpenTreasury?: () => void;
   /** Записи изменены — обновить состояние приложения. */
   onChanged?: () => void;
@@ -62,9 +66,12 @@ const ARTIFACTS_SECTION = {
 };
 const LIVE_IDS = new Set([PARTY_SECTION.id, NOTES_SECTION.player.id, ARTIFACTS_SECTION.id]);
 
+/** Группа закрытых целей (выполнено, провалено). */
+const CLOSED_GOALS = "Завершённые";
+
 /** Слои под спойлером: содержимое скрыто, пока игрок сам не откроет слой. */
 const SPOILER_TEXT: Partial<Record<KbLayer, string>> = {
-  master: "Тайны, планы и угрозы мастера. Слой пока открыт без пароля — вход по паролю гейм-мастера появится позже. Карточки с пометкой «черновик мастера» не из документов кампании и ждут вашего утверждения.",
+  master: "Тайны, планы и угрозы мастера. Слой можно закрыть паролем — он спрашивается после каждого запуска игры. Карточки с пометкой «черновик мастера» не из документов кампании и ждут вашего утверждения.",
   world: "Лор, локации, NPC и фракции мира. Здесь есть сведения, которых герой может ещё не знать.",
 };
 
@@ -132,11 +139,14 @@ function EntryCard({
   onOpen,
   override,
   noteCount = 0,
+  fresh = false,
 }: {
   entry: KbEntry;
   onOpen: (id: string) => void;
   override?: KbOverride;
   noteCount?: number;
+  /** Появилась с прошлого открытия базы. */
+  fresh?: boolean;
 }) {
   return (
     <li>
@@ -146,7 +156,10 @@ function EntryCard({
         className="w-full rounded-lg border border-edge p-3 text-left hover:border-gold/60"
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="font-medium">{entry.title}</span>
+          <span className="font-medium">
+            {entry.title}
+            {fresh && <span className="ml-2 rounded bg-gold/20 px-1.5 py-0.5 text-[10px] font-normal text-gold">новое</span>}
+          </span>
           {entry.link && <span className="shrink-0 text-xs text-gold">карта ↗</span>}
         </div>
         {entry.subtitle && <div className="text-xs text-muted">{entry.subtitle}</div>}
@@ -154,6 +167,12 @@ function EntryCard({
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badges entry={entry} override={override} />
           {noteCount > 0 && <span className="text-[10px] text-arcane">записей: {noteCount}</span>}
+          {entry.goal && entry.goal.steps.length > 0 && (
+            <span className="text-[10px] text-muted">
+              шаги: {entry.goal.steps.filter((s) => s.done).length}/{entry.goal.steps.length}
+            </span>
+          )}
+          {entry.goal?.due_day != null && <span className="text-[10px] text-muted">срок: День {entry.goal.due_day}</span>}
         </div>
       </button>
     </li>
@@ -173,10 +192,13 @@ function EntryDetail({
   cardTitle,
   customs,
   today,
+  parents,
 }: {
   entry: KbEntry;
   onOpen: (id: string) => void;
   onBack: () => void;
+  /** Места, внутри которых может лежать карточка-место. */
+  parents: { id: string; title: string }[];
   override?: KbOverride;
   notes: MasterNote[];
   onNotesChanged: () => void;
@@ -246,6 +268,7 @@ function EntryDetail({
           layer={entry.layer}
           section={entry.section}
           card={custom}
+          parents={entry.section === "locations" ? parents : []}
           onDone={() => {
             setEditing(false);
             onCardChanged();
@@ -253,6 +276,7 @@ function EntryDetail({
           onCancel={() => setEditing(false)}
         />
       )}
+      {custom?.goal && !editing && <GoalPanel card={custom} goal={custom.goal} today={today} onChanged={onCardChanged} />}
 
       <p className="leading-relaxed">
         <LinkedText text={entry.summary} onOpenCard={onOpen} cardTitle={cardTitle} />
@@ -343,13 +367,14 @@ function EntryDetail({
 export default function KnowledgeBase({
   onClose,
   initialCharacterId = null,
+  initialCardId = null,
   onOpenTreasury,
   onChanged,
 }: KnowledgeBaseProps) {
   const [layerId, setLayerId] = useState<KbLayer>("player");
-  const [sectionId, setSectionId] = useState<string>(PARTY_SECTION.id);
+  const [sectionId, setSectionId] = useState<string>(initialCardId ? "goals" : PARTY_SECTION.id);
   const [query, setQuery] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialCardId);
   const [sheetId, setSheetId] = useState<string | null>(initialCharacterId);
   const [history, setHistory] = useState<string[]>([]);
   const [revealed, setRevealed] = useState<ReadonlySet<KbLayer>>(new Set(["player"]));
@@ -373,7 +398,38 @@ export default function KnowledgeBase({
   }, []);
 
   /** Все карточки: из файлов базы и созданные по ходу игры. */
-  const entries = useMemo(() => [...kbEntries(), ...customs.map(customEntry)], [customs]);
+  const entries = useMemo(() => {
+    const base = kbEntries();
+    const staticById = new Map(base.map((e) => [e.id, e]));
+    const closed = (id: string, own?: string | null) => {
+      const status = overrides.find((o) => o.card_id === id)?.status ?? own;
+      return status === "done" || status === "failed";
+    };
+    const made = customs.map((c) => {
+      const entry = customEntry(c);
+      // Место внутри встроенной локации — в её группе, под её спойлером.
+      const parent = c.parent ? staticById.get(c.parent) : undefined;
+      if (parent && parent.layer === entry.layer && parent.section === entry.section) entry.group = parent.group;
+      if (c.section === "goals") entry.group = closed(c.id, c.status) ? CLOSED_GOALS : "Активные";
+      return entry;
+    });
+    // Закрытые цели — отдельной свёрнутой группой, чтобы не мешались с активными.
+    const fixed = base.map((e) =>
+      e.layer === "player" && e.section === "goals" && closed(e.id, e.status) ? { ...e, group: CLOSED_GOALS } : e,
+    );
+    return [...fixed, ...made];
+  }, [customs, overrides]);
+  const locationParents = useMemo(
+    () => entries.filter((e) => e.layer === "world" && e.section === "locations" && !e.parent).map((e) => ({ id: e.id, title: e.title })),
+    [entries],
+  );
+  // «Новое»: что появилось с прошлого открытия базы (в первый раз новым ничего не считается).
+  const [seen] = useState(kbSeen);
+  const isFresh = (id: string) => !!seen && !seen.cards.includes(id) && customs.some((c) => c.id === id && !c.by_player);
+  useEffect(() => {
+    if (!notes.length && !customs.length) return;
+    markKbSeen({ noteId: notes.reduce((max, n) => Math.max(max, n.id), 0), cards: customs.map((c) => c.id) });
+  }, [notes, customs]);
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   const cardTitle: CardTitle = useCallback((id: string) => byId.get(id)?.title ?? null, [byId]);
   const cardOptions: CardOption[] = useMemo(
@@ -430,7 +486,8 @@ export default function KnowledgeBase({
     // игрок сам перешёл по ссылке).
     if (entry.layer !== layerId) {
       setLayerId(entry.layer);
-      reveal(entry.layer);
+      // Слой мастера под паролем ссылка не открывает.
+      if (!(entry.layer === "master" && gmLocked())) reveal(entry.layer);
     }
     setSectionId(entry.section);
     setOpenId(id);
@@ -464,7 +521,8 @@ export default function KnowledgeBase({
       if (e.layer !== layerId || e.section !== sectionId) continue;
       groups.set(e.group, [...(groups.get(e.group) ?? []), e]);
     }
-    return [...groups.entries()];
+    // Закрытые цели — в конце.
+    return [...groups.entries()].sort((a, b) => Number(a[0] === CLOSED_GOALS) - Number(b[0] === CLOSED_GOALS));
   }, [entries, layerId, sectionId]);
   const journalSection = layerId === "master" && sectionId === "journal";
   const chronicleSection = layerId === "player" && sectionId === "chronicle";
@@ -478,6 +536,20 @@ export default function KnowledgeBase({
     return layerId === "master" && id === "journal" ? cards + layerNotes("master").length : cards;
   };
   const section = layer?.sections.find((s) => s.id === sectionId);
+  const freshItems = !seen
+    ? []
+    : [
+        ...customs
+          .filter((c) => c.layer === layerId && isFresh(c.id))
+          .map((c) => ({ key: c.id, card: c.id as string | null, label: `Карточка: ${c.title}` })),
+        ...notes
+          .filter((n) => n.layer === layerId && n.id > seen.noteId && !n.by_player)
+          .map((n) => ({
+            key: `n${n.id}`,
+            card: n.card ?? null,
+            label: `${n.kind === "day" ? "Хроника" : "Запись"}: ${n.title}`,
+          })),
+      ];
   const layerCount = (id: KbLayer) =>
     entries.filter((e) => e.layer === id).length + layerNotes(id).length + (id === "player" ? (party?.members.length ?? 0) : 0);
 
@@ -529,13 +601,17 @@ export default function KnowledgeBase({
         <div className="space-y-3 p-6 text-center">
           <p className="font-serif text-lg text-gold">Спойлеры · {layer?.title}</p>
           <p className="mx-auto max-w-prose text-sm text-muted">{SPOILER_TEXT[layerId]}</p>
-          <button
-            type="button"
-            onClick={() => reveal(layerId)}
-            className="rounded-md border border-gold px-4 py-2 text-sm text-gold hover:bg-gold/10"
-          >
-            Открыть слой «{layer?.title}»
-          </button>
+          {layerId === "master" && gmLocked() ? (
+            <MasterLock onUnlocked={() => reveal("master")} />
+          ) : (
+            <button
+              type="button"
+              onClick={() => reveal(layerId)}
+              className="rounded-md border border-gold px-4 py-2 text-sm text-gold hover:bg-gold/10"
+            >
+              Открыть слой «{layer?.title}»
+            </button>
+          )}
         </div>
       ) : sheetId ? (
         <FullSheet id={sheetId} onBack={() => setSheetId(null)} onOpenTreasury={onOpenTreasury} onChanged={onChanged} />
@@ -556,11 +632,33 @@ export default function KnowledgeBase({
           cardTitle={cardTitle}
           customs={cardOptions}
           today={today}
+          parents={locationParents}
         />
       ) : (
         <>
           {layerId === "master" && (
-            <p className="border-b border-fumble/40 bg-blood/20 px-4 py-2 text-xs">{SPOILER_TEXT.master}</p>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-fumble/40 bg-blood/20 px-4 py-2 text-xs">
+              <span className="min-w-0 flex-1">{SPOILER_TEXT.master}</span>
+              <MasterPasswordButton />
+            </div>
+          )}
+          {freshItems.length > 0 && (
+            <details open className="border-b border-edge bg-gold/5 px-4 py-2 text-sm">
+              <summary className="cursor-pointer text-gold">Новое с прошлого раза: {freshItems.length}</summary>
+              <ul className="mt-2 space-y-1">
+                {freshItems.map((item) => (
+                  <li key={item.key}>
+                    {item.card ? (
+                      <button type="button" onClick={() => open(item.card as string)} className="text-left underline decoration-gold/40 hover:text-gold">
+                        {item.label}
+                      </button>
+                    ) : (
+                      <span>{item.label}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
           <div className="border-b border-edge p-3">
             <p className="mb-2 text-xs text-muted">{layer?.description}</p>
@@ -628,6 +726,7 @@ export default function KnowledgeBase({
                       <CardForm
                         layer={layerId}
                         section={sectionId}
+                        parents={layerId === "world" && sectionId === "locations" ? locationParents : []}
                         onDone={() => {
                           setCreating(false);
                           notesChanged();
@@ -651,6 +750,7 @@ export default function KnowledgeBase({
                           onOpen={open}
                           override={overrideOf(e.id)}
                           noteCount={notesOf(e.id).length}
+                          fresh={isFresh(e.id)}
                         />
                       );
                       const ids = new Set(groupEntries.map((e) => e.id));
@@ -658,7 +758,11 @@ export default function KnowledgeBase({
                       const children = (id: string) => groupEntries.filter((e) => e.parent === id);
                       const top = groupEntries.filter((e) => !e.parent || !ids.has(e.parent));
                       return (
-                        <details key={group} open={sectionEntries.length === 1} className="group/kb">
+                        <details
+                          key={group}
+                          open={sectionEntries.length === 1 || (sectionId === "goals" && group !== CLOSED_GOALS) ? true : undefined}
+                          className="group/kb"
+                        >
                           <summary className="mb-2 flex cursor-pointer list-none items-center gap-2 font-serif text-gold">
                             <span className="text-xs transition-transform group-open/kb:rotate-90">▶</span>
                             {group}

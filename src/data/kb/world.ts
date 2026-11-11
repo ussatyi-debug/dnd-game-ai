@@ -659,6 +659,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   // ───────────── Лор ─────────────
   lore({
     id: "lore.xartas",
+    strangeOnly: true,
     group: "Космология",
     title: "Ксартас",
     subtitle: "Покровитель Бездны, патрон колдуна",
@@ -758,6 +759,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   // ───────────── Артефакты ─────────────
   art({
     id: "art.ocular",
+    strangeOnly: true,
     group: "Реликвии героя",
     title: "Великий Окуляр Фантомного Луча",
     subtitle: "Настроенный артефакт сэра Никиса (homebrew)",
@@ -774,6 +776,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   }),
   art({
     id: "art.sunset_blade",
+    strangeOnly: true,
     group: "Реликвии героя",
     title: "Клинок Закатного Савана +3",
     subtitle: "Восстановленный меч Первой Эпохи",
@@ -788,6 +791,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   }),
   art({
     id: "art.star_shroud",
+    strangeOnly: true,
     group: "Реликвии героя",
     title: "Латный Панцирь Звёздного Савана",
     subtitle: "Доспех из Королевского Схрона № 1",
@@ -802,6 +806,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   }),
   art({
     id: "art.astrolabe",
+    strangeOnly: true,
     group: "Проекты",
     title: "Княжеская Астролябия Звёздного Моста",
     subtitle: "Собирается в мануфактуре «Северная Звезда»",
@@ -817,6 +822,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   }),
   art({
     id: "art.jade_key",
+    strangeOnly: true,
     group: "Реликвии героя",
     title: "Чёрный Нефритовый Ключ",
     subtitle: "Гармонический стабилизатор лей-линий",
@@ -851,6 +857,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   }),
   rule({
     id: "rules.lucky",
+    strangeOnly: true,
     group: "Кодекс мастера",
     title: "Нотация «- везунчик»",
     summary: "«12 - везунчик» — переброс чертой Lucky уже сделан, 12 — итог. 3 заряда, только на длительном отдыхе.",
@@ -921,6 +928,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   }),
   rule({
     id: "rules.homebrew",
+    strangeOnly: true,
     group: "Механика",
     title: "Домашние правила и проекты",
     summary: "Кастомные артефакты и механики Первой Эпохи внедряются через квесты: чертежи, компоненты, мастера, ритуалы.",
@@ -964,6 +972,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
   }),
   map({
     id: "map.crow_rock",
+    strangeOnly: true,
     group: "Планы",
     title: "План Цитадели Кроу-Рок и поместья",
     summary: "Четыре яруса цитадели и угодья.",

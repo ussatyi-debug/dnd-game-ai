@@ -28,7 +28,7 @@ export function kbScope(): "all" | "world" {
 
 /** Карточки, видимые в текущей кампании. */
 export function kbEntries(): KbEntry[] {
-  return scope === "all" ? KB_ENTRIES : KB_ENTRIES.filter((e) => e.layer === "world");
+  return scope === "all" ? KB_ENTRIES : KB_ENTRIES.filter((e) => e.layer === "world" && !e.strangeOnly);
 }
 
 /** Слои базы: в своей кампании слои игрока и мастера наполняются по ходу игры. */
@@ -88,12 +88,19 @@ export function kbIndex(): { id: string; title: string; layer: string; status: s
   }));
 }
 
+/** Частые короткие слова: в поиске по базе только шумят (как в движке). */
+const STOP_WORDS = new Set(
+  "что как это его она они мне мой моя мои тут там все всё для при под над без или уже еще ещё так вот вам нас вас них ним ней был кто где раз ему тем чем про иду".split(
+    " ",
+  ),
+);
+
 function stems(text: string): string[] {
   const words = text
     .toLowerCase()
     .replace(/ё/g, "е")
     .split(/[^\p{L}\p{N}]+/u)
-    .filter((w) => w.length >= 4)
+    .filter((w) => (w.length >= 3 || /^\d+$/.test(w)) && !STOP_WORDS.has(w))
     .map((w) => (w.length > 5 ? w.slice(0, -2) : w.length > 4 ? w.slice(0, -1) : w));
   return [...new Set(words)];
 }

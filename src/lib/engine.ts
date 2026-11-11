@@ -706,6 +706,35 @@ export interface CustomCard {
   status: string | null;
   day: number;
   by_player: boolean;
+  /** Развёрнутое описание (абзацы через пустую строку). */
+  text?: string;
+  /** Карточка, внутри которой находится эта (место внутри локации). */
+  parent?: string | null;
+  /** Данные цели (раздел «Цели»). */
+  goal?: Goal | null;
+}
+
+export interface Goal {
+  giver: string;
+  reward: string;
+  due_day: number | null;
+  steps: { text: string; done: boolean }[];
+  log: { day: number; text: string }[];
+}
+
+/** Изменение цели: только заданные поля. */
+export interface GoalEditInput {
+  giver?: string;
+  reward?: string;
+  /** 0 — убрать срок. */
+  due_day?: number;
+  steps?: string[];
+  add_step?: string;
+  /** Номер шага с единицы. */
+  step_done?: number;
+  step_undone?: number;
+  log?: string;
+  status?: string;
 }
 
 export interface CardDraftInput {
@@ -716,6 +745,10 @@ export interface CardDraftInput {
   summary?: string;
   facts?: CardFactInput[];
   status?: string;
+  text?: string;
+  /** Пустая строка — убрать родителя. */
+  parent?: string;
+  goal?: GoalEditInput;
 }
 
 export function customCards(): Promise<CustomCard[]> {

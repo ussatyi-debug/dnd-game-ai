@@ -3,6 +3,7 @@ import CharacterSheetPanel from "./components/CharacterSheetPanel";
 import ChatPanel, { type ChatMessage, type MasterMode } from "./components/ChatPanel";
 import DiceDrawer from "./components/DiceDrawer";
 import KnowledgeBase from "./components/KnowledgeBase";
+import GoalsStrip from "./components/GoalsStrip";
 import LoadWindow, { parseSave, type ParsedSave } from "./components/LoadWindow";
 import MiniPlayer from "./components/MiniPlayer";
 import SettingsWindow, { type SettingsTab } from "./components/SettingsWindow";
@@ -226,6 +227,8 @@ export default function App() {
   const [undo, setUndo] = useState<UndoInfo | null>(null);
   const [proposals, setProposals] = useState<SheetProposal[]>([]);
   const [kbCharacter, setKbCharacter] = useState<string | null>(null);
+  /** Карточка базы знаний, которую нужно открыть сразу (цель из строки целей). */
+  const [kbCard, setKbCard] = useState<string | null>(null);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("tts");
   const [tts, setTts] = useState<TtsSettings>(loadTtsSettings);
   const [music, setMusic] = useState<MusicSettings>(loadMusicSettings);
@@ -1080,6 +1083,15 @@ export default function App() {
         </div>
 
         <div className={`${shown("dialog")} min-h-0 flex-col lg:flex`}>
+          <GoalsStrip
+            stamp={party}
+            today={party?.scene.day}
+            onOpen={(id) => {
+              setKbCharacter(null);
+              setKbCard(id);
+              setOpenWindow("knowledge");
+            }}
+          />
           <ChatPanel
             masterReady={masterReady}
             messages={messages}
@@ -1181,9 +1193,13 @@ export default function App() {
 
       {openWindow === "knowledge" && (
         <KnowledgeBase
-          key={kbCharacter ?? "kb"}
+          key={kbCharacter ?? kbCard ?? "kb"}
           initialCharacterId={kbCharacter}
-          onClose={() => setOpenWindow(null)}
+          initialCardId={kbCard}
+          onClose={() => {
+            setKbCard(null);
+            setOpenWindow(null);
+          }}
           onOpenTreasury={() => setOpenWindow("treasury")}
           onChanged={() => {
             refresh().catch(() => undefined);
