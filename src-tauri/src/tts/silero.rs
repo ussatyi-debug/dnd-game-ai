@@ -126,10 +126,15 @@ impl Silero {
         tch::set_num_threads(
             std::thread::available_parallelism().map(|n| n.get().clamp(1, 4)).unwrap_or(2) as i32,
         );
+        // Как в пакете Silero: без профилирующего исполнителя первые фразы не тормозят.
+        tch::jit::set_profiling_mode(false);
         let tts = CModule::load(dir.join("silero_tts.jit")).map_err(|e| err("модель речи", e))?;
         let stress =
             CModule::load(dir.join("silero_stress.jit")).map_err(|e| err("модель ударений", e))?;
-        Ok(Self { tts, stress, symbols, speakers: meta.speakers, sos, eos, exceptions })
+        let engine = Self { tts, stress, symbols, speakers: meta.speakers, sos, eos, exceptions };
+        // Разогрев: первый проход модели самый долгий — пусть он придётся на загрузку.
+        let _ = engine.synth("Привет.", "ru_dmitriy", 1.0);
+        Ok(engine)
     }
 
     pub fn voices(&self) -> Vec<VoiceInfo> {
