@@ -13,8 +13,9 @@
 //! движка, который мастер видит на следующем ходу.
 
 use dnd_engine::{
-    all_spells, AssetKind, CardDraft, CardFact, CastMethod, CastRequest, Character, HpChange, Mood,
-    NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SceneChange, Session, SheetEdit, SlotRef,
+    all_spells, AssetKind, CardDraft, CardFact, CastMethod, CastRequest, Character, GoalEdit,
+    HpChange, Mood, NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SceneChange, Session,
+    SheetEdit, SlotRef,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -311,6 +312,27 @@ fn engine<T>(result: Result<T, dnd_engine::EngineError>) -> Result<T, String> {
     result.map_err(|e| e.to_string())
 }
 
+/// Поля цели из команды `new_card` / `edit_card` / `goal` (без статуса).
+fn goal_edit(cmd: &Value) -> GoalEdit {
+    let text = |key: &str| cmd.get(key).and_then(Value::as_str).map(str::to_string);
+    let number =
+        |key: &str| cmd.get(key).and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok());
+    GoalEdit {
+        giver: text("giver"),
+        reward: text("reward"),
+        due_day: cmd.get("due_day").and_then(Value::as_u64).and_then(|d| u32::try_from(d).ok()),
+        steps: cmd
+            .get("steps")
+            .and_then(Value::as_array)
+            .map(|items| items.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()),
+        add_step: text("add_step"),
+        step_done: number("step_done"),
+        step_undone: number("step_undone"),
+        log: text("log"),
+        status: None,
+    }
+}
+
 fn last_log(session: &Session) -> String {
     session.engine_log().last().cloned().unwrap_or_default()
 }
@@ -460,6 +482,7 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
                     })
                     .collect()
             });
+            let goal = goal_edit(cmd);
             let draft = CardDraft {
                 layer: field("layer"),
                 section: field("section"),
@@ -468,12 +491,26 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
                 summary: field("summary"),
                 facts,
                 status: field("status"),
+                text: field("text"),
+                parent: field("parent"),
+                goal: (goal != GoalEdit::default()).then_some(goal),
             };
             if name == "new_card" {
                 engine(session.create_card(draft, false))?;
             } else {
                 engine(session.update_card(text_field(cmd, "card")?, draft))?;
             }
+            Ok(last_log(session))
+        })(),
+        "goal" => (|| -> Result<String, String> {
+            let mut edit = goal_edit(cmd);
+            edit.status = opt_text(cmd, "status").map(Into::into);
+            if edit == GoalEdit::default() {
+                return Err(
+                    "у goal нечего менять: step_done, add_step, log, status, due_day…".into()
+                );
+            }
+            engine(session.update_goal(text_field(cmd, "card")?, edit))?;
             Ok(last_log(session))
         })(),
         "card" => (|| -> Result<String, String> {

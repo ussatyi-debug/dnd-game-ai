@@ -13,7 +13,8 @@
 
 use std::collections::BTreeMap;
 
-use dnd_engine::{CharacterKind, MasterMemo, NoteKind, NoteLayer, Session};
+use dnd_engine::knowledge::{matches, query_stems};
+use dnd_engine::{CharacterKind, CustomCard, MasterMemo, NoteKind, NoteLayer, Session};
 use serde_json::{json, Value};
 
 use crate::{custom_codex, kb_index, magic_context, note_json, sheet_context, CODEX};
@@ -25,6 +26,10 @@ pub const HISTORY_TURNS_MIN: usize = 6;
 pub const HISTORY_TURNS_MAX: usize = 20;
 /// Сколько последних записей журнала мастера входит в снимок сцены.
 const SNAPSHOT_JOURNAL: usize = 10;
+/// Сколько последних записей слоя игрока входит в снимок сцены (остальные — по заявке и query).
+const SNAPSHOT_PLAYER_NOTES: usize = 15;
+/// Сколько созданных по ходу игры карточек, подходящих к заявке, добавляется к реплике.
+const TURN_CARDS_FOUND: usize = 3;
 /// Сколько записей журнала, подходящих к заявке, добавляется к реплике.
 const TURN_JOURNAL_FOUND: usize = 5;
 /// Сколько последних дней хроники идёт целиком; более ранние — первой фразой.
@@ -40,6 +45,7 @@ const PROTOCOL: &str = r#"
   {"cmd":"query","what":"sheet","id":"npc.valeria"} — лист; "spells" — книга заклинаний и ячейки; {"cmd":"query","what":"card","id":"npc.krot"} — текст карточки базы; {"cmd":"query","what":"notes","text":"склад"} — поиск по журналу мастера; {"cmd":"query","what":"chronicle","day":54} — пересказ дня.
 - Запрос бросков или запрос к движку можно дописать в конце уже начатого рассказа: рассказ игрок увидит, движок вернёт ответ, и ты продолжишь с места остановки.
 - Блоки последнего сообщения игрока заменяют поля прежнего контекста: [ЖУРНАЛ ДВИЖКА] — «журнал_движка», [СРАБОТАВШИЕ ТАЙМЕРЫ] — «сработавшие_таймеры», [ПРЕДЛОЖЕНИЯ ЛИСТА ЖДУТ ИГРОКА] — «предложения_листа_ждут_игрока», [НАПОМИНАНИЯ] — «напоминание_о_записях», [КАРТОЧКИ ПО ЗАЯВКЕ] и [ЖУРНАЛ МАСТЕРА ПО ЗАЯВКЕ] — подходящие к заявке карточки и записи.
+- В снимке — только последние записи игроку; старые приходят блоком [ЗАПИСИ ИГРОКУ ПО ЗАЯВКЕ] или по query notes. Описания карточек, созданных по ходу игры, — блоком [КАРТОЧКИ ИГРЫ ПО ЗАЯВКЕ] или по query card. Всё, что изменилось в базе с начала сцены (новые карточки с их id, статусы, правки и удаления записей, в том числе сделанные игроком), — в [ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ].
 - Ранний диалог тебе не присылается — его заменяет ХРОНИКА. Пересказ дня: {"cmd":"chronicle","day":N,"text":"5–10 предложений: что произошло, кто что узнал и решил, чем кончился день"}. Пересказ текущего дня обновляй по ходу — та же команда перезаписывает его.
 "#;
 
@@ -47,7 +53,7 @@ const PROTOCOL: &str = r#"
 const CHEAT_SHEET: &str = "Механика — только командами в блоке ```engine (по одной JSON-строке): \
 броски — roll (числа только от движка), хиты — hp, ресурсы — resource, состояния — condition, \
 заклинания — cast, предметы — item, деньги — treasury/transfer, сцена и время — scene, отдых — rest, \
-записи — note (layer player и master), новое задание или цель героя — new_card (player, goals, status active), \
+записи — note (layer player и master), новое задание или цель героя — new_card (player, goals), её ход и итог — goal, \
 пересказ дня — chronicle, недостающие сведения — query. \
 Без команды изменение не сохранится.";
 
@@ -130,7 +136,60 @@ fn state_lines(session: &Session) -> Vec<(String, String)> {
             out.push((format!("казна|{}|{}", place.name, line.name), line.quantity.to_string()));
         }
     }
+    // База знаний: созданные карточки, статусы встроенных и записи — чтобы мастер видел
+    // свои и чужие правки сразу, а не с новой сцены.
+    for c in session.custom_cards() {
+        out.push((format!("база|карточка|{}", c.id), card_line(c)));
+    }
+    for o in session.kb_overrides() {
+        let note = if o.note.is_empty() { String::new() } else { format!(" ({})", o.note) };
+        out.push((
+            format!("база|статус|{}", o.card_id),
+            format!("{}{note}", crate::status_label(&o.status)),
+        ));
+    }
+    for n in session.notes() {
+        let done = if n.done { " (отработано)" } else { "" };
+        out.push((format!("база|запись|{}", n.id), format!("«{}»{done}: {}", n.title, n.text)));
+    }
     out
+}
+
+/// Карточка одной строкой для списка изменений: название, id, статус, ход цели.
+fn card_line(c: &CustomCard) -> String {
+    let mut line = format!("«{}» [{}]", c.title, c.id);
+    if let Some(s) = c.status.as_deref() {
+        line.push_str(&format!(" — {}", crate::status_label(s)));
+    }
+    if let Some(g) = &c.goal {
+        if !g.steps.is_empty() {
+            let done = g.steps.iter().filter(|s| s.done).count();
+            line.push_str(&format!("; шаги {done}/{}", g.steps.len()));
+        }
+        if let Some(last) = g.log.last() {
+            line.push_str(&format!("; ход: {}", last.text));
+        }
+    }
+    if !c.summary.is_empty() {
+        line.push_str(&format!("; {}", c.summary));
+    }
+    line
+}
+
+/// Цель для снимка сцены и второго шага: всё, что нужно, чтобы её вести.
+fn goal_json(c: &CustomCard) -> Value {
+    let g = c.goal.clone().unwrap_or_default();
+    json!({
+        "id": c.id,
+        "цель": c.title,
+        "суть": c.summary,
+        "статус": c.status.as_deref().map(dnd_engine::status_label),
+        "заказчик": g.giver,
+        "награда": g.reward,
+        "срок_день": g.due_day,
+        "шаги": g.steps.iter().enumerate().map(|(i, s)| format!("{}. {}{}", i + 1, s.text, if s.done { " — сделано" } else { "" })).collect::<Vec<_>>(),
+        "ход": g.log.iter().rev().take(3).rev().map(|l| format!("День {}: {}", l.day, l.text)).collect::<Vec<_>>(),
+    })
 }
 
 /// Изменения с момента снимка, строками для мастера.
@@ -153,7 +212,7 @@ fn changes(session: &Session, memo: &MasterMemo) -> Vec<String> {
         (owner, field.replace('|', " — "))
     };
     let mut out = Vec::new();
-    for (key, value) in &now {
+    for (key, value) in now.iter().filter(|(k, _)| !k.starts_with("база|")) {
         let (owner, field) = who(key);
         match before.get(key) {
             Some(old) if old == value => {}
@@ -165,7 +224,7 @@ fn changes(session: &Session, memo: &MasterMemo) -> Vec<String> {
             None => out.push(format!("{owner}: {field} — {value}")),
         }
     }
-    for key in before.keys().filter(|k| !now.contains_key(*k)) {
+    for key in before.keys().filter(|k| !now.contains_key(*k) && !k.starts_with("база|")) {
         let (owner, field) = who(key);
         if key.contains("|предмет|") {
             let item = field.strip_prefix("предмет — ").unwrap_or(&field);
@@ -174,17 +233,51 @@ fn changes(session: &Session, memo: &MasterMemo) -> Vec<String> {
             out.push(format!("{owner}: {field} — израсходовано полностью"));
         }
     }
-    for n in session.notes().iter().filter(|n| n.id > memo.last_note_id) {
-        let layer = match n.layer {
-            NoteLayer::Player => "игроку",
-            NoteLayer::Master => "журнал мастера",
-        };
-        out.push(format!(
-            "Новая запись ({layer}, {}): «{}» [запись {}]",
-            n.kind.label(),
-            n.title,
-            n.id
-        ));
+    // База знаний.
+    let kb = |map: &BTreeMap<&str, &str>, key: &str| map.get(key).map(|v| (*v).to_string());
+    for (key, value) in now.iter().filter(|(k, _)| k.starts_with("база|")) {
+        let old = kb(&before, key);
+        if old.as_deref() == Some(*value) {
+            continue;
+        }
+        let id = key.rsplit('|').next().unwrap_or_default();
+        let new = old.is_none();
+        if key.starts_with("база|карточка|") {
+            out.push(format!(
+                "{}: {value}",
+                if new {
+                    "Новая карточка"
+                } else {
+                    "Карточка изменена"
+                }
+            ));
+        } else if key.starts_with("база|статус|") {
+            out.push(format!("Статус карточки [{id}]: {value}"));
+        } else if let Some(n) = session.notes().iter().find(|n| n.id.to_string() == id) {
+            let layer = match n.layer {
+                NoteLayer::Player => "игроку",
+                NoteLayer::Master => "журнал мастера",
+            };
+            let who = if n.by_player { ", записал игрок" } else { "" };
+            if new {
+                out.push(format!(
+                    "Новая запись ({layer}, {}{who}) [запись {id}]: {value}",
+                    n.kind.label()
+                ));
+            } else {
+                out.push(format!("Запись изменена ({layer}{who}) [запись {id}]: {value}"));
+            }
+        }
+    }
+    for key in before.keys().filter(|k| k.starts_with("база|") && !now.contains_key(*k)) {
+        let id = key.rsplit('|').next().unwrap_or_default();
+        if key.starts_with("база|карточка|") {
+            out.push(format!("Карточка удалена: {}", before[key]));
+        } else if key.starts_with("база|статус|") {
+            out.push(format!("Статус карточки [{id}] возвращён к исходному"));
+        } else {
+            out.push(format!("Запись удалена [запись {id}]: {}", before[key]));
+        }
     }
     out
 }
@@ -196,6 +289,12 @@ fn snapshot(session: &Session) -> Value {
     let player =
         session.party().iter().find(|c| c.kind == CharacterKind::Player).map(|c| c.sheet());
     let journal: Vec<_> = session.notes().iter().filter(|n| n.layer == NoteLayer::Master).collect();
+    let for_player: Vec<_> = session
+        .notes()
+        .iter()
+        .filter(|n| n.layer == NoteLayer::Player && n.kind != NoteKind::Day)
+        .collect();
+    let player_from = for_player.len().saturating_sub(SNAPSHOT_PLAYER_NOTES);
     let recent = journal.len().saturating_sub(SNAPSHOT_JOURNAL);
     let timers: Vec<String> = session
         .notes()
@@ -229,10 +328,10 @@ fn snapshot(session: &Session) -> Value {
             "состав": l.lines.iter().map(|h| format!("{} [{}] ×{}", h.name, h.asset_id, h.quantity)).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "карточки_базы": kb_index(session),
+        "цели_активные": session.active_goals().into_iter().map(goal_json).collect::<Vec<_>>(),
         "записи_базы_знаний": {
-            "записи_мастера_игроку": session.notes().iter()
-                .filter(|n| n.layer == NoteLayer::Player && n.kind != NoteKind::Day)
-                .map(|n| note_json(session, n)).collect::<Vec<_>>(),
+            "записи_игроку_последние": for_player[player_from..].iter().map(|n| note_json(session, n)).collect::<Vec<_>>(),
+            "всего_записей_игроку": for_player.len(),
             "журнал_мастера_последние": journal[recent..].iter().map(|n| note_json(session, n)).collect::<Vec<_>>(),
             "всего_в_журнале": journal.len(),
         },
@@ -366,7 +465,7 @@ pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
         "принимаю",
     ]) {
         out.push(
-            "задание: new_card player/goals со status active; подоплёка — note в журнал мастера",
+            "задание: new_card player/goals (giver, reward, due_day, steps); подоплёка — note в журнал мастера",
         );
     }
     if has(&["иду", "едем", "идем", "отправля", "переход", "возвраща", "скачем", "плывем"])
@@ -440,6 +539,16 @@ fn turn_message(
         .map(|n| format!("«{}» [запись {}, День {}]: {}", n.title, n.id, n.day, n.text))
         .collect();
     block(&mut out, "ЖУРНАЛ МАСТЕРА ПО ЗАЯВКЕ", &found);
+    // Старые записи игроку в снимок не входят — подходящие к заявке приходят сюда.
+    let old_player: Vec<String> = session
+        .notes_matching(player_text, NoteLayer::Player)
+        .into_iter()
+        .filter(|n| n.kind != NoteKind::Day)
+        .take(TURN_JOURNAL_FOUND)
+        .map(|n| format!("«{}» [запись {}, День {}]: {}", n.title, n.id, n.day, n.text))
+        .collect();
+    block(&mut out, "ЗАПИСИ ИГРОКУ ПО ЗАЯВКЕ", &old_player);
+    block(&mut out, "КАРТОЧКИ ИГРЫ ПО ЗАЯВКЕ", &cards_matching(session, player_text));
     if !kb_extra.trim().is_empty() {
         out.push_str("[КАРТОЧКИ ПО ЗАЯВКЕ]\n");
         out.push_str(kb_extra.trim());
@@ -464,6 +573,34 @@ fn turn_message(
     out.push_str("[ЗАЯВКА ИГРОКА]\n");
     out.push_str(player_text);
     out
+}
+
+/// Созданные по ходу игры карточки, подходящие к заявке, с описанием.
+fn cards_matching(session: &Session, query: &str) -> Vec<String> {
+    let stems = query_stems(query);
+    if stems.is_empty() {
+        return Vec::new();
+    }
+    let mut scored: Vec<(usize, &CustomCard)> = session
+        .custom_cards()
+        .iter()
+        .map(|c| {
+            let title = matches(&stems, &format!("{} {}", c.title, c.subtitle)) * 3;
+            (title + matches(&stems, &format!("{} {}", c.summary, c.text)), c)
+        })
+        .filter(|(score, _)| *score >= 3)
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored
+        .into_iter()
+        .take(TURN_CARDS_FOUND)
+        .map(|(_, c)| {
+            let facts: Vec<String> =
+                c.facts.iter().map(|f| format!("{}: {}", f.label, f.value)).collect();
+            let text: String = c.text.chars().take(1200).collect();
+            format!("{}. {} {}", card_line(c), facts.join("; "), text).trim().to_string()
+        })
+        .collect()
 }
 
 /// Запрос мастеру на ход: системный текст сцены и последняя реплика игрока.
@@ -593,8 +730,20 @@ pub fn update_request(
             format!("{} [{}]: {}", l.name, l.id, lines.join(", "))
         })
         .collect();
-    let custom: Vec<String> =
-        session.custom_cards().iter().map(|c| format!("{} [{}]", c.title, c.id)).collect();
+    let custom: Vec<String> = session.custom_cards().iter().map(card_line).collect();
+    let index = serde_json::to_string(&kb_index(session)).unwrap_or_default();
+    let goals = serde_json::to_string(
+        &session.active_goals().into_iter().map(goal_json).collect::<Vec<_>>(),
+    )
+    .unwrap_or_default();
+    let recent: Vec<String> = session
+        .notes()
+        .iter()
+        .rev()
+        .filter(|n| n.kind != NoteKind::Day)
+        .take(12)
+        .map(|n| format!("[запись {}] День {} «{}»", n.id, n.day, n.title))
+        .collect();
     let scene = session.scene();
     let mut reminders = Vec::new();
     for day in session.chronicle_missing() {
@@ -620,7 +769,8 @@ pub fn update_request(
 - note: {{"cmd":"note","layer":"player","title":"...","text":"..."}} — что герой узнал или решил; "layer":"master" — правда за событием, планы NPC. Вид "kind": event, secret, plan, timer (с "due_day").
 - chronicle: {{"cmd":"chronicle","day":N,"text":"5–10 предложений о дне"}}
 - card: {{"cmd":"card","card":"id","status":"done"}}; new_card: {{"cmd":"new_card","layer":"master","section":"...","title":"...","summary":"..."}}
-- задание, поручение или цель, которую герой принял: {{"cmd":"new_card","layer":"player","section":"goals","title":"...","summary":"кто поручил, что сделать, награда, срок","status":"active"}} — отдельная карточка цели, не просто note; ход и итог — card со status progress / done / failed.
+- задание, поручение или цель, которую герой принял: {{"cmd":"new_card","layer":"player","section":"goals","title":"...","summary":"что сделать","giver":"кто поручил","reward":"...","due_day":N,"steps":["...","..."]}} — отдельная карточка цели, не просто note.
+- ход активной цели (см. «Активные цели героя»): {{"cmd":"goal","card":"id цели","step_done":1,"log":"что продвинулось"}}; "add_step":"..."; итог — "status":"done" или "failed". Если рассказ продвинул или закрыл цель — команда goal обязательна.
 
 Правила:
 - Только то, что в рассказе произошло. Броски уже сделаны — не добавляй roll.
@@ -633,6 +783,9 @@ pub fn update_request(
 Казна:
 {}
 Карточки, созданные по ходу игры: {}
+Оглавление базы знаний (id для "card" бери только отсюда): {}
+Активные цели героя: {}
+Последние записи (не повторяй их): {}
 Журнал движка: {}
 {}"#,
         scene.day,
@@ -640,7 +793,10 @@ pub fn update_request(
         scene.location,
         party.join("\n"),
         places.join("\n"),
-        if custom.is_empty() { "нет".to_string() } else { custom.join(", ") },
+        if custom.is_empty() { "нет".to_string() } else { custom.join("; ") },
+        index,
+        goals,
+        if recent.is_empty() { "нет".to_string() } else { recent.join("; ") },
         session.engine_log().join(" | "),
         if reminders.is_empty() {
             String::new()
@@ -760,6 +916,37 @@ mod tests {
         let sheet = answer_query(&s, &json!({"cmd":"query","what":"sheet","id":id})).unwrap();
         assert!(sheet.contains("лист"));
         assert!(answer_query(&s, &json!({"cmd":"query","what":"card","id":"нет.такой"})).is_err());
+    }
+
+    #[test]
+    fn new_cards_and_goal_progress_reach_the_master_within_the_scene() {
+        let mut s = session();
+        master_request(&mut s, "x", "", false);
+        let turn = crate::apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"new_card\",\"layer\":\"player\",\"section\":\"goals\",\"title\":\"Найти курьера\",\"summary\":\"Пропал у доков\",\"giver\":\"Хольм\",\"steps\":[\"Расспросить докеров\"]}\n```",
+        );
+        assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
+        let id = s.custom_cards()[0].id.clone();
+        let req = master_request(&mut s, "x", "", false);
+        assert!(
+            req.turn.contains(&format!("Новая карточка: «Найти курьера» [{id}]")),
+            "{}",
+            req.turn
+        );
+        let turn = crate::apply_directives(
+            &mut s,
+            &format!("```engine\n{{\"cmd\":\"goal\",\"card\":\"{id}\",\"step_done\":1,\"log\":\"Докеры видели его\"}}\n```"),
+        );
+        assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
+        let req = master_request(&mut s, "Что с курьером?", "", false);
+        assert!(req.turn.contains("шаги 1/1"), "{}", req.turn);
+        assert!(req.turn.contains("[КАРТОЧКИ ИГРЫ ПО ЗАЯВКЕ]"), "{}", req.turn);
+        // Новая сцена: цель уже в снимке.
+        crate::apply_directives(&mut s, "```engine\n{\"cmd\":\"rest\",\"kind\":\"short\"}\n```");
+        assert!(master_request(&mut s, "x", "", false).system.contains("цели_активные"));
+        let update = update_request(&s, "x", "y", "");
+        assert!(update.system.contains("Найти курьера"));
     }
 
     #[test]

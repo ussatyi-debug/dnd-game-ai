@@ -221,6 +221,9 @@ pub struct CardInput {
     pub summary: Option<String>,
     pub facts: Option<Vec<CardFact>>,
     pub status: Option<String>,
+    pub text: Option<String>,
+    pub parent: Option<String>,
+    pub goal: Option<dnd_engine::GoalEdit>,
 }
 
 impl From<CardInput> for CardDraft {
@@ -233,6 +236,9 @@ impl From<CardInput> for CardDraft {
             summary: c.summary,
             facts: c.facts,
             status: c.status,
+            text: c.text,
+            parent: c.parent,
+            goal: c.goal,
         }
     }
 }
