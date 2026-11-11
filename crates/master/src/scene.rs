@@ -590,7 +590,7 @@ fn cards_matching(session: &Session, query: &str) -> Vec<String> {
         })
         .filter(|(score, _)| *score >= 3)
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
     scored
         .into_iter()
         .take(TURN_CARDS_FOUND)
