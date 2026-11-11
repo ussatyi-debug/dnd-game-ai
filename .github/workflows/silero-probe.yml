@@ -5,14 +5,33 @@ on:
     paths: [scripts/silero/**, .github/workflows/silero-probe.yml]
   workflow_dispatch:
 jobs:
-  probe:
+  export:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
-      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch && pip install silero silero-stress omegaconf onnx onnxruntime
-      - run: python scripts/silero/probe.py 2>&1 | tee probe.log
+      - run: pip install --index-url https://download.pytorch.org/whl/cpu torch && pip install silero silero-stress omegaconf
+      - run: python scripts/silero/probe.py
+      - run: python scripts/silero/export.py scripts/silero/out
       - uses: actions/upload-artifact@v4
-        if: always()
-        with: { name: silero-probe, path: "probe.log\nscripts/silero/out/**" }
+        with: { name: silero-models, path: scripts/silero/out }
+  windows:
+    needs: export
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: silero-models, path: scripts/silero/tchprobe/out }
+      - uses: dtolnay/rust-toolchain@stable
+      - name: build
+        working-directory: scripts/silero/tchprobe
+        run: cargo build --release
+      - name: run
+        working-directory: scripts/silero/tchprobe
+        shell: bash
+        run: |
+          LIBDIR=$(dirname $(find target/release/build -name "torch_cpu.dll" | head -1))
+          echo "libtorch dlls in $LIBDIR"; ls -la "$LIBDIR" | head -40
+          du -sh "$LIBDIR"
+          PATH="$LIBDIR:$PATH" ./target/release/tchprobe.exe out
