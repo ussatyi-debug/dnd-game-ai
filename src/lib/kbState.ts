@@ -83,3 +83,20 @@ export function kbSeen(): KbSeen | null {
 export function markKbSeen(seen: KbSeen): void {
   write(SEEN_KEY, { ...(read<SeenStore>(SEEN_KEY) ?? {}), [currentCampaignId()]: seen });
 }
+
+/**
+ * Сколько нового в базе с прошлого открытия (для отметки на кнопке меню): записи и
+ * карточки мастера в слоях игрока и мира. Слой мастера не считается — это его тайны.
+ */
+export function kbFreshCount(
+  notes: { id: number; layer: string; by_player: boolean }[],
+  cards: { id: string; layer: string; by_player: boolean }[],
+): number {
+  const seen = kbSeen();
+  if (!seen) return 0;
+  const visible = (layer: string) => layer !== "master";
+  return (
+    notes.filter((n) => visible(n.layer) && !n.by_player && n.id > seen.noteId).length +
+    cards.filter((c) => visible(c.layer) && !c.by_player && !seen.cards.includes(c.id)).length
+  );
+}

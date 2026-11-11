@@ -4,6 +4,8 @@ export type MenuAction = "home" | "knowledge" | "reference" | "save" | "load" | 
 
 interface MainMenuProps {
   onAction: (action: MenuAction) => void;
+  /** Нового в базе знаний с прошлого открытия. */
+  kbFresh?: number;
 }
 
 const ITEMS: { id: MenuAction; label: string; hint?: string }[] = [
@@ -16,7 +18,7 @@ const ITEMS: { id: MenuAction; label: string; hint?: string }[] = [
   { id: "log", label: "Логирование", hint: "разбор ошибок" },
 ];
 
-export default function MainMenu({ onAction }: MainMenuProps) {
+export default function MainMenu({ onAction, kbFresh = 0 }: MainMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -43,9 +45,12 @@ export default function MainMenu({ onAction }: MainMenuProps) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="rounded-md border border-edge px-3 py-1.5 text-sm hover:border-gold"
+        className="relative rounded-md border border-edge px-3 py-1.5 text-sm hover:border-gold"
       >
         ☰ Меню
+        {kbFresh > 0 && (
+          <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-gold" title="В базе знаний есть новое" />
+        )}
       </button>
       {open && (
         <ul
@@ -64,7 +69,12 @@ export default function MainMenu({ onAction }: MainMenuProps) {
                   }}
                   className="flex w-full items-baseline justify-between gap-2 px-4 py-2.5 text-left text-sm hover:bg-gold/10 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
                 >
-                  {item.label}
+                  <span>
+                    {item.label}
+                    {item.id === "knowledge" && kbFresh > 0 && (
+                      <span className="ml-2 rounded bg-gold/20 px-1.5 py-0.5 text-[10px] text-gold">новое: {kbFresh}</span>
+                    )}
+                  </span>
                   {item.hint && <span className="text-[11px] text-muted">{item.hint}</span>}
                 </button>
               </li>

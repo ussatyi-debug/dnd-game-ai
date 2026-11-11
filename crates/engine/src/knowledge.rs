@@ -802,6 +802,11 @@ impl Session {
 
     /// Правка карточки, созданной по ходу игры.
     pub fn update_card(&mut self, id: &str, draft: CardDraft) -> Result<(), EngineError> {
+        if !self.custom_cards.iter().any(|c| c.id == id) {
+            if let Some(card) = self.kb_cards.iter().find(|c| c.id == id).cloned() {
+                return self.add_to_builtin(&card, draft);
+            }
+        }
         let parent = draft.parent.as_deref().map(|p| self.resolve_parent(Some(p)));
         let day = self.scene.day;
         let result = (|| {
@@ -861,6 +866,43 @@ impl Session {
             || format!("карточка «{id}»"),
         )
         .map(|_| ())
+    }
+
+    /// Дополнение встроенной карточки: файл базы не меняется, новое о карточке становится
+    /// записью, привязанной к ней (видна в карточке как «Дополнено в игре»). Статус — как
+    /// командой `card`. Слой записи — слой карточки (тайны мастера остаются у мастера).
+    fn add_to_builtin(&mut self, card: &KbCard, draft: CardDraft) -> Result<(), EngineError> {
+        if let Some(status) = draft.status.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            self.set_card_status(&card.id, Some(status), "")?;
+        }
+        let mut parts: Vec<String> = Vec::new();
+        for t in [draft.summary.as_deref(), draft.text.as_deref()].into_iter().flatten() {
+            let t = t.trim();
+            if !t.is_empty() && !parts.iter().any(|p| p == t) {
+                parts.push(t.to_string());
+            }
+        }
+        for f in draft.facts.unwrap_or_default() {
+            if !f.label.trim().is_empty() || !f.value.trim().is_empty() {
+                parts.push(format!("{}: {}", f.label.trim(), f.value.trim()));
+            }
+        }
+        if parts.is_empty() {
+            return if draft.status.is_some() {
+                Ok(())
+            } else {
+                self.logged(
+                    Err(EngineError::EmptyNote),
+                    |()| String::new(),
+                    || format!("карточка «{}»", card.title),
+                )
+            };
+        }
+        let layer = if card.layer == "master" { NoteLayer::Master } else { NoteLayer::Player };
+        let mut note =
+            NewNote::new(layer, &format!("Дополнение: {}", card.title), &parts.join("\n"));
+        note.card = Some(card.id.clone());
+        self.create_note(note).map(|_| ())
     }
 
     /// Ход цели: шаги, срок, запись о продвижении, статус. У цели из встроенной базы
@@ -1263,6 +1305,26 @@ mod tests {
             },
         ]);
         s
+    }
+
+    #[test]
+    fn builtin_card_edit_becomes_linked_addition() {
+        let mut s = session();
+        s.update_card(
+            "npc.orelie",
+            CardDraft {
+                text: Some("Должна ростовщику сорок золотых".into()),
+                status: Some("ally".into()),
+                ..CardDraft::default()
+            },
+        )
+        .unwrap();
+        let note = s.notes().iter().find(|n| n.card.as_deref() == Some("npc.orelie")).unwrap();
+        assert_eq!(note.title, "Дополнение: Мадам Орели");
+        assert_eq!(note.layer, NoteLayer::Player);
+        assert_eq!(s.kb_overrides()[0].status, "ally");
+        // Пустое дополнение без статуса — ошибка, а не тихий пропуск.
+        assert!(s.update_card("npc.orelie", CardDraft::default()).is_err());
     }
 
     #[test]

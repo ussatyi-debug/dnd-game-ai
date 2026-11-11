@@ -33,6 +33,8 @@ import {
   characterSheet,
   inventory as loadInventory,
   masterUndoInfo,
+  masterNotes,
+  customCards,
   resolveProposal,
   sheetProposals,
   type SheetProposal,
@@ -68,6 +70,7 @@ import {
   type ResourcePool,
   type RestKind,
 } from "./lib/engine";
+import { kbFreshCount } from "./lib/kbState";
 import {
   CLAUDE_TIERS,
   claudeMasterReply,
@@ -216,6 +219,7 @@ export default function App() {
   const [party, setParty] = useState<PartyView | null>(null);
   const [campaignId, setCampaignId] = useState<string>(initialCampaign);
   const [campaigns, setCampaigns] = useState<CampaignInfo[]>([]);
+  const [kbFresh, setKbFresh] = useState(0);
   const [creating, setCreating] = useState(false);
   /** Новая игра началась — мастер должен открыть её вступлением. */
   const [opening, setOpening] = useState(false);
@@ -310,6 +314,9 @@ export default function App() {
     setPlayerSheet(nextPlayer);
     setUndo(nextUndo);
     setProposals(nextProposals);
+    Promise.all([masterNotes(), customCards()])
+      .then(([n, c]) => setKbFresh(kbFreshCount(n, c)))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -915,7 +922,10 @@ export default function App() {
       setHome(true);
       return;
     }
-    if (action === "knowledge") setKbCharacter(null);
+    if (action === "knowledge") {
+      setKbCharacter(null);
+      setKbFresh(0);
+    }
     if (action === "settings") setSettingsTab("tts");
     setOpenWindow(action);
   }
@@ -1092,7 +1102,7 @@ export default function App() {
     <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between gap-2 border-b border-edge px-3 py-2">
         <div className="flex items-center gap-3">
-          <MainMenu onAction={menu} />
+          <MainMenu onAction={menu} kbFresh={kbFresh} />
           <h1 className="font-serif text-lg text-parchment">DnD Game AI</h1>
         </div>
         <span className="text-right text-xs text-muted">
