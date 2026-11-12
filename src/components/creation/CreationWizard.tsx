@@ -6,8 +6,10 @@ import worldMap from "../../assets/world-map.webp";
 import { portraitUrl } from "../../data/rules/portraits.ts";
 import { CLASSES } from "../../data/rules/classes/index.ts";
 import { SPECIES } from "../../data/rules/species.ts";
-import { buildSpec, newDraft, portraitKey, STEPS, stepIssues, type Draft, type StepId } from "../../lib/creation.ts";
+import { buildSpec, newDraft, portraitKey, STEPS, stepIssues, TIERS, type Draft, type StepId } from "../../lib/creation.ts";
 import { QUICK_HEROES, quickDraft, type QuickHero } from "../../lib/quickstart.ts";
+import { validateHero } from "../../lib/engine";
+import { parseSheetFile } from "../../lib/sheetExport";
 import type { HeroSpec } from "../../lib/heroSpec";
 import HeroSheet from "./HeroSheet.tsx";
 import { Issues } from "./parts.tsx";
@@ -89,6 +91,27 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
     }
   }
 
+  /** Импорт листа из JSON: движок проверяет лист так же, как при создании, и игра начинается с ним. */
+  async function importSheet(file: File) {
+    setError(null);
+    try {
+      const spec = parseSheetFile(await file.text());
+      const errors = await validateHero(spec);
+      if (errors.length) throw new Error(`Лист не прошёл проверку движка: ${errors.join("; ")}`);
+      const level = spec.classes.reduce((sum, c) => sum + c.level, 0) || 1;
+      const imported = newDraft();
+      imported.level = level;
+      imported.tier = TIERS.find((t) => (t.levels as readonly number[]).includes(level))?.id ?? 3;
+      imported.name = spec.name;
+      setBusy(true);
+      await onConfirm(imported, spec);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Готовый герой: черновик заполнен целиком, открывается итоговый лист — можно сразу начать или поправить. */
   function chooseQuick(h: QuickHero) {
     setDraft(quickDraft(h));
@@ -104,6 +127,19 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <h2 className="font-serif text-lg text-gold sm:text-xl">Новый герой</h2>
           <div className="flex items-center gap-1">
+            <label className="cursor-pointer rounded-md border border-edge px-2 py-1 text-xs hover:border-gold" title="Лист героя из файла JSON (экспорт листа)">
+              Импорт листа
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void importSheet(f);
+                }}
+              />
+            </label>
             <button
               type="button"
               onClick={() => setQuick((v) => !v)}

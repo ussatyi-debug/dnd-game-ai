@@ -425,7 +425,9 @@ fn export_save(app: tauri::AppHandle, name: String, json: String) -> Result<Stri
             |c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' },
         )
         .collect();
-    let safe = if safe.ends_with(".json") { safe } else { format!("{safe}.json") };
+    // Сохранения и листы — .json; лист для Word — .doc (HTML), для печати — .html.
+    let known = [".json", ".doc", ".html"].iter().any(|ext| safe.ends_with(ext));
+    let safe = if known { safe } else { format!("{safe}.json") };
     let dir = export_dir(&app)?;
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Нет папки для сохранения ({}): {e}", dir.display()))?;

@@ -1,5 +1,6 @@
 // Полный лист персонажа в базе знаний: живые данные движка, все блоки раскрыты.
 
+import { exportSheet, type SheetFormat } from "../lib/sheetExport";
 import { useEffect, useState } from "react";
 import {
   characterDetails,
@@ -97,9 +98,12 @@ export function FullSheet({
 
   return (
     <article className="space-y-3 p-4">
-      <button type="button" onClick={onBack} className="text-sm text-muted hover:text-parchment">
-        ← Назад
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onClick={onBack} className="text-sm text-muted hover:text-parchment">
+          ← Назад
+        </button>
+        <SheetExportButtons id={id} />
+      </div>
       {error && <p className="text-sm text-fumble">{error}</p>}
       {!data && !error && <p className="text-sm text-muted">Лист загружается…</p>}
       {data && (
@@ -224,5 +228,41 @@ export function PartySection({ party, onOpen }: { party: PartyView | null; onOpe
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Экспорт листа: JSON (для импорта), DOC (Word), PDF (печать). */
+function SheetExportButtons({ id }: { id: string }) {
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function run(format: SheetFormat) {
+    setBusy(true);
+    setNote(null);
+    try {
+      setNote(await exportSheet(id, format));
+    } catch (e) {
+      setNote(`Лист не сохранён: ${errorText(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex gap-1 text-xs">
+        <span className="self-center text-muted">Экспорт:</span>
+        {(["json", "pdf", "doc"] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            disabled={busy}
+            onClick={() => void run(f)}
+            className="rounded border border-edge px-2 py-0.5 uppercase hover:border-gold disabled:opacity-40"
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+      {note && <p className="max-w-xs text-right text-[11px] text-muted">{note}</p>}
+    </div>
   );
 }
