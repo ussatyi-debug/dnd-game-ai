@@ -56,6 +56,7 @@ pub use creation::{
     SpecClass, SpecHp, SpecItem, SpecResource, MAX_HERO_LEVEL, XP_THRESHOLDS,
 };
 pub use error::EngineError;
+pub use experience::{XpAward, XpMember, XpNote, XpStatus};
 pub use expr::{DiceExpr, DiceGroupRoll, ExprRoll, Term};
 pub use inventory::{
     Container, ContainerView, Inventory, InventoryView, Item, ItemGroup, ItemLine, NewItem,
@@ -66,7 +67,6 @@ pub use knowledge::{
     MasterNote, NewNote, NoteEdit, NoteKind, NoteLayer, KB_SECTIONS, KB_STATUSES,
     NOTE_REMINDER_TURNS, TIMER_AUTO_DONE_TURNS,
 };
-pub use experience::{XpAward, XpMember, XpNote, XpStatus};
 pub use master_ops::{Checkpoint, HpChange, SceneChange, UndoInfo};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
 pub use profile::{
