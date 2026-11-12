@@ -18,7 +18,7 @@ pack.unpack_q_model()
 pack.models[0].save(f"{OUT}/silero_tts.jit")
 ru = {k: v for k, v in pack.speaker_to_ids[0].items() if k.startswith("ru_")}
 json.dump({"symbol_to_id": pack.symbol_to_id, "speakers": ru, "sos": pack.sos_token, "eos": pack.eos_token},
-          open(f"{OUT}/silero_meta.json", "w"), ensure_ascii=False)
+          open(f"{OUT}/silero_meta.json", "w", encoding="utf-8"), ensure_ascii=False)
 acc = load_accentor()
 
 
@@ -35,7 +35,7 @@ class StressWords(torch.nn.Module):
 
 torch.jit.script(StressWords(acc.accentor.model)).save(f"{OUT}/silero_stress.jit")
 json.dump({k: list(v) for k, v in acc.accentor.exceptions.items()},
-          open(f"{OUT}/silero_stress_exceptions.json", "w"), ensure_ascii=False)
+          open(f"{OUT}/silero_stress_exceptions.json", "w", encoding="utf-8"), ensure_ascii=False)
 words = ["грегори", "добил", "стражника", "замка", "забрал", "замок", "елка"]
 ref = acc.accentor.model(words)
 check = textwrap.dedent(f'''

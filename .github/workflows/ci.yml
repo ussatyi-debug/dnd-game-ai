@@ -223,6 +223,8 @@ jobs:
       - name: Модели Silero (синтез и ударения, MIT) для встроенной озвучки
         if: steps.silero-cache.outputs.cache-hit != 'true'
         shell: bash
+        env:
+          PYTHONUTF8: "1"
         run: |
           pip install --index-url https://download.pytorch.org/whl/cpu torch
           pip install silero silero-stress omegaconf
