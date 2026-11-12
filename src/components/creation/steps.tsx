@@ -563,6 +563,7 @@ export function StepSpells({ draft, update }: StepProps) {
           Заклинания подкласса и класса, которые всегда подготовлены, добавятся сами.
         </p>
       )}
+      <RuleChoices draft={draft} update={update} step="spells" />
       {miSlots.map((slot) => (
         <ChoiceGroup
           key={slot.key}

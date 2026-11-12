@@ -209,6 +209,10 @@ export function featSlots(d: Draft): FeatSlot[] {
         slots.push({ key: c.id, label: categories.includes("fighting_style") ? f.name : `${f.name} (${f.level} ур.)`, categories, level: f.level });
       }
     }
+    // «Уроки Первых» (воззвание колдуна): стартовый талант на выбор.
+    if (r.cls.id === "warlock" && (d.picks["warlock.invocations"] ?? []).includes("lessons_of_the_first_ones")) {
+      slots.push({ key: "warlock.lessons", label: "Уроки Первых", categories: ["origin"] });
+    }
   }
   return slots;
 }
@@ -396,6 +400,16 @@ export function choiceSlots(d: Draft): ChoiceSlot[] {
   const out: ChoiceSlot[] = [];
   if (r.species) {
     for (const c of r.species.choices ?? []) out.push(ruleChoice(d, c, c.id, r.species.name, "species"));
+    if (r.species.size.includes(" или ")) {
+      out.push({
+        key: "species.size",
+        label: "Размер",
+        source: r.species.name,
+        count: 1,
+        options: r.species.size.split(" или ").map((n) => ({ id: n, name: n })),
+        step: "species",
+      });
+    }
   }
   if (r.cls) {
     out.push({
@@ -425,6 +439,7 @@ export function choiceSlots(d: Draft): ChoiceSlot[] {
       step: "class",
     });
   }
+  out.push(...classExtraSlots(d));
   if (r.cls) out.push(...kitSlots(d, r.cls));
   for (const slot of featSlots(d)) {
     const feat = slotFeat(d, slot);
@@ -454,6 +469,104 @@ export function choiceSlots(d: Draft): ChoiceSlot[] {
   }
   return out;
 }
+
+/** Формы дикого облика (звери): ПО и полёт ограничены уровнем друида. */
+const WILD_SHAPES: { id: string; name: string; cr: number; fly?: boolean }[] = [
+  { id: "cat", name: "Кошка (ПО 0)", cr: 0 },
+  { id: "rat", name: "Крыса (ПО 0)", cr: 0 },
+  { id: "hawk", name: "Ястреб (ПО 0, полёт)", cr: 0, fly: true },
+  { id: "bat", name: "Летучая мышь (ПО 0, полёт)", cr: 0, fly: true },
+  { id: "poisonous_snake", name: "Ядовитая змея (ПО 1/8)", cr: 0.125 },
+  { id: "mastiff", name: "Мастиф (ПО 1/8)", cr: 0.125 },
+  { id: "wolf", name: "Волк (ПО 1/4)", cr: 0.25 },
+  { id: "panther", name: "Пантера (ПО 1/4)", cr: 0.25 },
+  { id: "riding_horse", name: "Ездовая лошадь (ПО 1/4)", cr: 0.25 },
+  { id: "giant_lizard", name: "Гигантская ящерица (ПО 1/4)", cr: 0.25 },
+  { id: "giant_owl", name: "Гигантская сова (ПО 1/4, полёт)", cr: 0.25, fly: true },
+  { id: "black_bear", name: "Чёрный медведь (ПО 1/2)", cr: 0.5 },
+  { id: "crocodile", name: "Крокодил (ПО 1/2)", cr: 0.5 },
+  { id: "ape", name: "Обезьяна (ПО 1/2)", cr: 0.5 },
+  { id: "brown_bear", name: "Бурый медведь (ПО 1)", cr: 1 },
+  { id: "dire_wolf", name: "Лютый волк (ПО 1)", cr: 1 },
+  { id: "giant_spider", name: "Гигантский паук (ПО 1)", cr: 1 },
+  { id: "giant_eagle", name: "Гигантский орёл (ПО 1, полёт)", cr: 1, fly: true },
+];
+
+/** Заговоры героя из всех выборов заклинаний. */
+function chosenCantrips(d: Draft): SpellData[] {
+  const ids = Object.entries(d.picks)
+    .filter(([k]) => k.startsWith("spells."))
+    .flatMap(([, v]) => v);
+  return ids.map((id) => SPELL_BY_ID.get(id)).filter((s): s is SpellData => s !== undefined && s.level === 0);
+}
+
+/**
+ * Выборы классов сверх таблицы: Книга теней и цели воззваний колдуна, заклинания
+ * Воплотителя, формы дикого облика друида.
+ */
+function classExtraSlots(d: Draft): ChoiceSlot[] {
+  const r = resolve(d);
+  const out: ChoiceSlot[] = [];
+  if (!r.cls) return out;
+  const asOptions = (list: SpellData[]) => list.map((sp) => ({ id: sp.id, name: sp.name, text: `${levelLabelOf(sp.level)} · ${sp.school}` }));
+  if (r.cls.id === "warlock") {
+    const inv = new Set(d.picks["warlock.invocations"] ?? []);
+    if (inv.has("pact_of_the_tome")) {
+      out.push({
+        key: "warlock.tome.cantrips",
+        label: "Книга теней: заговоры",
+        source: "Договор гримуара",
+        count: 3,
+        options: asOptions(SPELLS.filter((sp) => sp.level === 0)),
+        step: "class",
+      });
+      out.push({
+        key: "warlock.tome.rituals",
+        label: "Книга теней: ритуалы 1 круга",
+        source: "Договор гримуара",
+        count: 2,
+        options: asOptions(SPELLS.filter((sp) => sp.level === 1 && sp.ritual)),
+        step: "class",
+      });
+    }
+    const damaging = chosenCantrips(d).filter((sp) => sp.classes.includes("warlock") && /урон/.test(sp.desc.join(" ")));
+    for (const [id, name] of [
+      ["agonizing_blast", "Мучительный взрыв"],
+      ["eldritch_spear", "Мистическое копьё"],
+      ["repelling_blast", "Отталкивающий взрыв"],
+    ] as const) {
+      if (!inv.has(id)) continue;
+      out.push({ key: `warlock.${id}.cantrip`, label: `${name}: заговор`, source: "Воззвание", count: 1, options: asOptions(damaging), step: "spells" });
+    }
+  }
+  if (r.subclass?.id === "evoker" && d.level >= 3) {
+    // «Знаток Воплощения»: два заклинания школы Воплощения в книгу бесплатно (круг — по ячейкам).
+    const maxLevel = d.level >= 5 ? 3 : 2;
+    out.push({
+      key: "evoker.savant",
+      label: "Знаток Воплощения: заклинания в книгу",
+      source: "Воплотитель",
+      count: 2,
+      options: asOptions(SPELLS.filter((sp) => sp.classes.includes("wizard") && sp.school === "Воплощение" && sp.level >= 1 && sp.level <= maxLevel)),
+      step: "spells",
+    });
+  }
+  if (r.cls.id === "druid" && d.level >= 2) {
+    const maxCr = d.level >= 8 ? 1 : d.level >= 4 ? 0.5 : 0.25;
+    const count = d.level >= 8 ? 8 : d.level >= 4 ? 6 : 4;
+    out.push({
+      key: "druid.wild_forms",
+      label: "Дикий облик: известные формы",
+      source: "Друид",
+      count,
+      options: WILD_SHAPES.filter((b) => b.cr <= maxCr && (!b.fly || d.level >= 8)).map((b) => ({ id: b.id, name: b.name })),
+      step: "class",
+    });
+  }
+  return out;
+}
+
+const levelLabelOf = (level: number) => (level === 0 ? "заговор" : `${level} круг`);
 
 /** Выбор магических предметов стартового набора (ступени 4–6 и 7–9). */
 function kitSlots(d: Draft, cls: ClassData): ChoiceSlot[] {
@@ -678,6 +791,18 @@ export function skillProficiencies(d: Draft, withExpertise = true): SpecSkill[] 
       }
     }
   }
+  if (withExpertise) {
+    // Экспертиза из талантов («Эксперт навыков»).
+    for (const slot of featSlots(d)) {
+      for (const c of slotFeat(d, slot)?.choices ?? []) {
+        if (c.kind !== "expertise") continue;
+        for (const s of pick(d, `${slot.key}:${c.id}`)) {
+          const e = map.get(s as SkillId);
+          if (e) e.proficiency = "expertise";
+        }
+      }
+    }
+  }
   return [...map.values()];
 }
 
@@ -853,7 +978,8 @@ export function armorClass(d: Draft): { total: number; parts: { label: string; v
   const { items } = equipment(d);
   const worn = items.map((i) => ARMOR_BY_NAME.get(i)).filter((a) => a && a.type !== "shield");
   const armor = worn.sort((a, b) => b!.ac - a!.ac)[0];
-  const trained = (t: string) => r.cls?.armorTraining.includes(t as never) ?? false;
+  const featTraining = armorTrainingFromFeats(d);
+  const trained = (t: string) => (r.cls?.armorTraining.includes(t as never) ?? false) || featTraining.has(t);
   const shield = items.includes("Щит") && trained("shield") && r.cls?.id !== "monk";
   let parts: { label: string; value: number }[];
   if (armor && trained(armor.type)) {
@@ -963,6 +1089,7 @@ export function stepIssues(d: Draft, step: StepId): string[] {
       for (const c of spellChoices(d)) {
         issues.push(countIssue(c.label, pick(d, c.key).length, Math.min(c.count, c.options.length)));
       }
+      slotIssues("spells");
       for (const slot of featSlots(d)) {
         const feat = slotFeat(d, slot);
         const needsAbility = feat && ["magic_initiate"].includes(feat.id);
@@ -1181,6 +1308,12 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
     }
   }
 
+  // Выборы сверх таблицы класса (Книга теней, цели воззваний, Воплотитель, дикий облик).
+  for (const slot of classExtraSlots(d)) {
+    const names = pick(d, slot.key).map((id) => slot.options.find((o) => o.id === id)?.name ?? id);
+    if (names.length) features.push({ name: slot.label, source: slot.source, text: names.join(", "), resource_id: null });
+  }
+
   // Таланты.
   for (const slot of featSlots(d)) {
     const feat = slotFeat(d, slot);
@@ -1315,6 +1448,11 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
   // Атаки оружием.
   const { items } = equipment(d);
   const mastered = new Set(pick(d, "weapon_mastery"));
+  for (const slot of featSlots(d)) {
+    for (const c of slotFeat(d, slot)?.choices ?? []) {
+      if (c.kind === "weapon_mastery") for (const w of pick(d, `${slot.key}:${c.id}`)) mastered.add(w);
+    }
+  }
   const attacks: HeroSpec["attacks"] = [];
   const seenWeapons = new Set<string>();
   const magic = kitMagicItems(d);
@@ -1351,7 +1489,10 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
       name: plus ? `${weapon.name} +1` : weapon.name,
       ability,
       caster_id: null,
-      proficient: bracers || (cls ? canUseWeapon(cls, weapon) : false),
+      proficient:
+        bracers ||
+        (cls ? canUseWeapon(cls, weapon) : false) ||
+        (weapon.category === "martial" && slotFeatIds(d).includes("martial_weapon_training")),
       magic: plus,
       damage_dice: weapon.damage,
       damage_type: weapon.damageType,
@@ -1420,8 +1561,13 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
   // Владения.
   const proficiencies: HeroSpec["proficiencies"] = [];
   if (cls) {
-    proficiencies.push({ kind: "Доспехи", text: cls.armor, from_rules: true });
-    proficiencies.push({ kind: "Оружие", text: cls.weapons, from_rules: true });
+    const extraArmor = [...armorTrainingFromFeats(d)]
+      .filter((t) => !cls.armorTraining.includes(t as never))
+      .map((t) => ({ light: "лёгкие доспехи", medium: "средние доспехи", heavy: "тяжёлые доспехи", shield: "щиты" })[t] ?? t);
+    const armorText = [cls.armor, ...extraArmor.map((t) => `${t} (талант)`)].filter((x) => x && x !== "Нет").join(", ");
+    proficiencies.push({ kind: "Доспехи", text: armorText || cls.armor, from_rules: true });
+    const martial = slotFeatIds(d).includes("martial_weapon_training") && !/воинск/i.test(cls.weapons);
+    proficiencies.push({ kind: "Оружие", text: martial ? `${cls.weapons}, воинское оружие (талант)` : cls.weapons, from_rules: true });
   }
   const toolList = tools(d);
   if (toolList.length) proficiencies.push({ kind: "Инструменты", text: toolList.join(", "), from_rules: true });
@@ -1430,7 +1576,8 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
     const senses = species.darkvision
       ? `Тёмное зрение ${species.id === "elf" && r.lineageId === "drow" ? 120 : species.darkvision} фт`
       : "";
-    proficiencies.push({ kind: "Размер и чувства", text: [species.size, senses].filter(Boolean).join(", "), from_rules: true });
+    const size = species.size.includes(" или ") ? (one(d, "species.size") ?? species.size) : species.size;
+    proficiencies.push({ kind: "Размер и чувства", text: [size, senses].filter(Boolean).join(", "), from_rules: true });
   }
 
   const initiative = slotFeatIds(d).includes("alert") ? [{ label: "Бдительный", value: pb }] : [];
@@ -1518,6 +1665,22 @@ function kitSkills(skills: SpecSkill[], magic: KitItem[]): SpecSkill[] {
   };
   if (magic.some((m) => m.effect === "boots_elvenkind")) entry("stealth").advantage.push("Сапоги эльфов (бесшумное передвижение)");
   if (magic.some((m) => m.effect === "gloves_thievery")) entry("sleight_of_hand").bonuses.push({ label: "Перчатки вора", value: 5 });
+  return out;
+}
+
+/** Обучение доспехам из талантов: «Легкобронный» (лёгкие и щиты), «Среднебронный», «Тяжелобронный». */
+export function armorTrainingFromFeats(d: Draft): Set<string> {
+  const ids = new Set(slotFeatIds(d));
+  const out = new Set<string>();
+  if (ids.has("lightly_armored")) {
+    out.add("light");
+    out.add("shield");
+  }
+  if (ids.has("moderately_armored")) {
+    out.add("medium");
+    out.add("shield");
+  }
+  if (ids.has("heavily_armored")) out.add("heavy");
   return out;
 }
 
