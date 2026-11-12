@@ -1,3 +1,4 @@
+import { currentCampaignId, STRANGE_ID } from "../lib/campaigns";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   KB_BY_ID,
@@ -47,6 +48,19 @@ interface KnowledgeBaseProps {
 
 /** Разделы с живыми данными движка (не из файлов базы). */
 const PARTY_SECTION = { id: "party", title: "Отряд", description: "Полные листы отряда — данные движка, меняются по ходу игры" };
+/** Своя кампания: листы отряда «Дома Стрэндж» — NPC мира (для встреч и боёв), только просмотр. */
+const STRANGE_SECTION = {
+  id: "strange_party",
+  title: "Отряд «Дома Стрэндж»",
+  description: "Листы героев основной кампании — в своей кампании они NPC мира; движок их не меняет",
+};
+const STRANGE_SHEETS = [
+  { id: "pc.nikis", name: "Сэр Никис Стрэндж" },
+  { id: "npc.corvus", name: "Корвус «Немой»" },
+  { id: "npc.gunther", name: "Сир Гюнтер «Бастион»" },
+  { id: "npc.valeria", name: "Сестра Валерия «Пепельная Дева»" },
+  { id: "npc.brokk", name: "Брокк Железнолом" },
+];
 const NOTES_SECTION: Record<NoteLayer, { id: string; title: string; description: string }> = {
   player: {
     id: "master_notes",
@@ -64,7 +78,7 @@ const ARTIFACTS_SECTION = {
   title: "Артефакты",
   description: "Магические предметы отряда и известные герою артефакты кампании",
 };
-const LIVE_IDS = new Set([PARTY_SECTION.id, NOTES_SECTION.player.id, ARTIFACTS_SECTION.id]);
+const LIVE_IDS = new Set([PARTY_SECTION.id, NOTES_SECTION.player.id, ARTIFACTS_SECTION.id, STRANGE_SECTION.id]);
 
 /** Группа закрытых целей (выполнено, провалено). */
 const CLOSED_GOALS = "Завершённые";
@@ -452,10 +466,13 @@ export default function KnowledgeBase({
   const layer = useMemo(() => {
     if (!baseLayer) return undefined;
     // Записи журнала мастера показываются в разделе «Журнал мастера» слоя мастера.
+    const ownCampaign = currentCampaignId() !== STRANGE_ID;
     const sections =
       baseLayer.id === "player"
         ? [PARTY_SECTION, ...baseLayer.sections, ARTIFACTS_SECTION, NOTES_SECTION.player]
-        : baseLayer.sections;
+        : baseLayer.id === "world" && ownCampaign
+          ? [...baseLayer.sections, STRANGE_SECTION]
+          : baseLayer.sections;
     return { ...baseLayer, sections };
   }, [baseLayer]);
 
@@ -529,6 +546,7 @@ export default function KnowledgeBase({
 
   const counts = (id: string) => {
     if (id === PARTY_SECTION.id) return party?.members.length ?? 0;
+    if (id === STRANGE_SECTION.id) return STRANGE_SHEETS.length;
     if (id === ARTIFACTS_SECTION.id) return entries.filter((e) => e.layer === "world" && e.section === "artifacts").length;
     if (id === NOTES_SECTION.player.id) return layerNotes("player").length;
     const cards = entries.filter((e) => e.layer === layerId && e.section === id).length;
@@ -555,6 +573,22 @@ export default function KnowledgeBase({
 
   function liveSection() {
     if (sectionId === PARTY_SECTION.id) return <PartySection party={party} onOpen={setSheetId} />;
+    if (sectionId === STRANGE_SECTION.id)
+      return (
+        <ul className="space-y-1.5">
+          {STRANGE_SHEETS.map((h) => (
+            <li key={h.id}>
+              <button
+                type="button"
+                onClick={() => setSheetId(h.id)}
+                className="w-full rounded-md border border-edge px-3 py-2 text-left text-sm hover:border-gold"
+              >
+                {h.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      );
     if (sectionId === ARTIFACTS_SECTION.id) return <KbArtifacts party={party} onOpen={open} />;
     if (sectionId === NOTES_SECTION.player.id)
       return (

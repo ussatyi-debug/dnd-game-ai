@@ -359,8 +359,9 @@ impl Session {
 
     /// Книга заклинаний персонажа.
     pub fn spellbook(&self, id: &str) -> Result<SpellbookView, EngineError> {
-        let c = self.character(id)?;
-        c.spellbook().ok_or_else(|| EngineError::NotASpellcaster(c.name.clone()))
+        self.viewed(id, |c| {
+            c.spellbook().ok_or_else(|| EngineError::NotASpellcaster(c.name.clone()))
+        })?
     }
 
     /// Из чего класс персонажа может подготовить заклинания.
@@ -445,9 +446,30 @@ impl Session {
             .ok_or_else(|| EngineError::CharacterNotFound(id.to_string()))
     }
 
+    /// Лист отряда «Дома Стрэндж» в своей кампании: они — NPC мира, их листы всегда видны
+    /// в слое «Мир» (для встреч и боёв), но в отряд не входят и движком не меняются.
+    pub fn world_character(&self, id: &str) -> Option<Character> {
+        if self.campaign.is_none() || self.party.iter().any(|c| c.id == id) {
+            return None;
+        }
+        crate::fixtures::demo_party().into_iter().find(|c| c.id == id)
+    }
+
+    /// Персонаж для просмотра листа: из отряда или (в своей кампании) из отряда Стрэнджей.
+    pub(crate) fn viewed<T>(
+        &self,
+        id: &str,
+        view: impl Fn(&Character) -> T,
+    ) -> Result<T, EngineError> {
+        match self.character(id) {
+            Ok(c) => Ok(view(c)),
+            Err(e) => self.world_character(id).map(|c| view(&c)).ok_or(e),
+        }
+    }
+
     /// Лист персонажа по ID.
     pub fn sheet(&self, id: &str) -> Result<CharacterSheet, EngineError> {
-        self.character(id).map(Character::sheet)
+        self.viewed(id, Character::sheet)
     }
 
     /// Окно «Отряд».

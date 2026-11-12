@@ -71,6 +71,7 @@ import {
   type RestKind,
 } from "./lib/engine";
 import { kbFreshCount } from "./lib/kbState";
+import { alignmentTone, startPlaces } from "./data/kb/startPlaces";
 import {
   CLAUDE_TIERS,
   claudeMasterReply,
@@ -99,7 +100,7 @@ import {
   STRANGE_ID,
   type CampaignInfo,
 } from "./lib/campaigns";
-import { CURRENT_DAY, equipment, heroSummary, TIERS, type Draft } from "./lib/creation.ts";
+import { CURRENT_DAY, equipment, TIERS, type Draft } from "./lib/creation.ts";
 import type { HeroSpec } from "./lib/heroSpec";
 import CreationWizard from "./components/creation/CreationWizard.tsx";
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
@@ -1012,17 +1013,30 @@ export default function App() {
   }
 
   /** Новая кампания с созданным героем: движок проверяет лист и собирает мир. */
+  /** «Эльф · Волшебник 3» по описанию героя (подходит и для импортированного листа). */
+  function specSummary(spec: HeroSpec): string {
+    const cls = spec.classes.map((c) => `${c.name} ${c.level}`).join(" / ");
+    return [spec.species, cls].filter(Boolean).join(" · ");
+  }
+
   async function startNewCampaign(draft: Draft, spec: HeroSpec) {
     const errors = await validateHero(spec);
     if (errors.length > 0) throw new Error(`Движок не принял лист: ${errors.join("; ")}`);
     const tier = TIERS.find((t) => t.id === draft.tier);
     const day = tier?.days ? tier.days[0] + Math.floor(Math.random() * (tier.days[1] - tier.days[0] + 1)) : CURRENT_DAY;
+    // Место начала: выбор по предыстории (шаг «Личность») или случайное из подходящих.
+    const byBackground = startPlaces(draft.backgroundId);
+    const chosenId = draft.picks["start.place"]?.[0];
+    const start =
+      byBackground.find((p) => p.id === chosenId) ??
+      (byBackground.length ? byBackground[Math.floor(Math.random() * byBackground.length)] : null);
     const places = worldLocations();
-    const place = places[Math.floor(Math.random() * places.length)];
-    const location = place?.title ?? "Тракт";
+    const location = start?.location ?? places[Math.floor(Math.random() * places.length)]?.title ?? "Тракт";
+    const spot = start ? `${start.spot}, ${location}` : location;
     const id = newCampaignId();
     const title = `Путь героя ${spec.name}`;
     const gold = equipment(draft).gold;
+    const summary = specSummary(spec);
     applyCampaign(id);
     await startCampaign(
       { id, title, heroes: [spec] },
@@ -1031,8 +1045,10 @@ export default function App() {
         time: "утро",
         location,
         situation:
-          `Начало новой кампании. ${spec.name} (${heroSummary(draft)}, предыстория «${spec.background}») только что прибыл(а) в ${location}. ` +
-          "Опиши место и людей вокруг, дай завязку и спроси, что делает герой. Спутников пока нет.",
+          `Начало новой кампании. ${spec.name} (${summary}, предыстория «${spec.background}», мировоззрение «${spec.alignment || "не указано"}») — ${spot}. ` +
+          `Тон начальных целей по мировоззрению: ${alignmentTone(spec.alignment)}. ` +
+          "Сначала скрытая подготовка командами (игрок её не видит): в слой игрока — запись «Предыстория героя», связанная с событиями начала кампании, и 2–3 начальные цели (new_card goals с заказчиком и шагами); в слой мастера — зацепки, связанные с героем NPC и тайна героя (secret/plan), 1–2 таймера. " +
+          "Затем вступление: где герой, что он здесь делает, какие у него цели; опиши место и людей вокруг и спроси, что делает герой. Спутников пока нет.",
         mood: "calm",
       },
       gold,
@@ -1045,7 +1061,7 @@ export default function App() {
       title,
       createdAt: new Date().toISOString(),
       startDay: day,
-      hero: { name: spec.name, summary: heroSummary(draft), portrait: spec.portrait },
+      hero: { name: spec.name, summary, portrait: spec.portrait },
     };
     await addCampaign(info).catch(() => undefined);
     setCampaigns((prev) => [info, ...prev.filter((c) => c.id !== id)]);

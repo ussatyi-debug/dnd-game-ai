@@ -202,12 +202,12 @@ impl Session {
 
     /// Полный лист персонажа.
     pub fn details(&self, id: &str) -> Result<SheetDetails, EngineError> {
-        self.character(id).map(Character::details)
+        self.viewed(id, Character::details)
     }
 
     /// Инвентарь персонажа по местам хранения.
     pub fn inventory(&self, id: &str) -> Result<InventoryView, EngineError> {
-        Ok(self.character(id)?.inventory_view(&self.treasury))
+        self.viewed(id, |c| c.inventory_view(&self.treasury))
     }
 
     /// Урон, лечение или временные хиты.

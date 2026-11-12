@@ -936,6 +936,36 @@ impl Session {
             .collect()
     }
 
+    /// Подготовка новой игры своей кампании (скрытый шаг перед вступлением): чего ещё нет.
+    /// Пусто — подготовка готова или это кампания «Дома Стрэндж».
+    pub fn start_prep_missing(&self) -> Vec<&'static str> {
+        if self.campaign().is_none() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let player = |n: &&MasterNote| n.layer == NoteLayer::Player;
+        let master = |n: &&MasterNote| n.layer == NoteLayer::Master;
+        if !self.notes.iter().filter(player).any(|n| fold(&n.title).contains("предыстория героя"))
+        {
+            out.push("запись слоя игрока «Предыстория героя» — кто герой и как он связан с событиями начала кампании");
+        }
+        if self.active_goals().len() < 2 {
+            out.push("2–3 начальные цели героя (new_card в разделе goals слоя игрока, с заказчиком и шагами)");
+        }
+        if !self
+            .notes
+            .iter()
+            .filter(master)
+            .any(|n| matches!(n.kind, NoteKind::Secret | NoteKind::Plan | NoteKind::Event))
+        {
+            out.push("в слой мастера: зацепки, связанные с героем NPC и тайна героя (kind secret или plan)");
+        }
+        if !self.notes.iter().filter(master).any(|n| n.kind == NoteKind::Timer) {
+            out.push("в слой мастера: 1–2 таймера — что случится, если герой ничего не сделает (kind timer, due_day)");
+        }
+        out
+    }
+
     /// После загрузки: привязки записей и статусы карточек, которых больше нет в базе
     /// (изменился состав встроенной базы), снимаются, а не висят молча.
     pub fn repair_links(&mut self) -> usize {
@@ -1305,6 +1335,59 @@ mod tests {
             },
         ]);
         s
+    }
+
+    #[test]
+    fn start_prep_is_checked_only_in_own_campaign() {
+        use crate::creation::tests::wizard_spec;
+        use crate::creation::Campaign;
+        assert!(session().start_prep_missing().is_empty(), "Дом Стрэндж — без подготовки");
+        let campaign =
+            Campaign {
+                id: "camp.t".into(), title: "Проба".into(), heroes: vec![wizard_spec()]
+            };
+        let scene = crate::session::Scene {
+            day: 20,
+            time: None,
+            location: "Нойштадт".into(),
+            situation: String::new(),
+            mood: crate::session::Mood::Calm,
+        };
+        let mut s = Session::new_campaign(Xoshiro256::from_seed(2), campaign, scene, 10).unwrap();
+        assert_eq!(s.start_prep_missing().len(), 4);
+        s.create_note(NewNote::new(
+            NoteLayer::Player,
+            "Предыстория героя",
+            "Бывший писарь гарнизона.",
+        ))
+        .unwrap();
+        for title in ["Найти брата", "Вернуть долг"] {
+            s.create_card(
+                CardDraft {
+                    layer: Some("player".into()),
+                    section: Some("goals".into()),
+                    title: Some(title.into()),
+                    ..CardDraft::default()
+                },
+                false,
+            )
+            .unwrap();
+        }
+        let mut secret =
+            NewNote::new(NoteLayer::Master, "Тайна героя", "Брат жив и служит культу.");
+        secret.kind = NoteKind::Secret;
+        s.create_note(secret).unwrap();
+        assert_eq!(s.start_prep_missing().len(), 1, "остался таймер");
+        let mut timer = NewNote::new(NoteLayer::Master, "Культ уходит", "Культ покидает город.");
+        timer.kind = NoteKind::Timer;
+        timer.due_day = Some(23);
+        s.create_note(timer).unwrap();
+        assert!(s.start_prep_missing().is_empty());
+        // Листы Стрэнджей видны в своей кампании, но в отряд не входят и не меняются.
+        assert_eq!(s.sheet("pc.nikis").unwrap().name, "Сэр Никис Стрэндж");
+        assert!(s.details("pc.nikis").is_ok());
+        assert!(s.character("pc.nikis").is_err());
+        assert!(session().world_character("pc.nikis").is_none(), "в Доме Стрэндж — обычный отряд");
     }
 
     #[test]

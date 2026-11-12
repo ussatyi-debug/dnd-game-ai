@@ -21,6 +21,7 @@ import { FEAT_BY_ID } from "../../data/rules/feats.ts";
 import { randomTags } from "../../data/rules/appearance.ts";
 import { portraitUrl } from "../../data/rules/portraits.ts";
 import { SPECIES } from "../../data/rules/species.ts";
+import { startPlaces } from "../../data/kb/startPlaces.ts";
 import type { AbilityId } from "../../data/rules/types";
 import { levelLabel, type SpellData } from "../../data/spells/index.ts";
 import {
@@ -300,7 +301,7 @@ export function StepClass({ draft, update }: StepProps) {
         </div>
         <p className="text-xs text-muted">
           {tier.days ? `Герой появится в мире между ${tier.days[0]} и ${tier.days[1]} днём кампании.` : "Герой появится в актуальное время кампании."}{" "}
-          Место — случайное.
+          Место — на шаге «Личность».
         </p>
       </Section>
 
@@ -843,8 +844,25 @@ export function StepDetails({ draft, update }: StepProps) {
   const die = r.cls?.hitDie ?? 8;
   const portrait = r.species ? portraitUrl(portraitKey(r.species.id, draft.gender)) : null;
   const eq = useMemo(() => equipment(draft), [draft]);
+  const places = startPlaces(draft.backgroundId);
+  const chosenPlace = pick(draft, "start.place")[0] ?? "";
   return (
     <div className="space-y-4">
+      {places.length > 0 && (
+        <Section title="Место начала" hint="по предыстории; мастер начнёт игру здесь">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[...places, { id: "", location: "Случайное место", spot: "мастер выберет сам" }].map((p) => (
+              <PickCard
+                key={p.id || "random"}
+                selected={chosenPlace === p.id}
+                title={p.location}
+                summary={p.spot}
+                onClick={() => setPick(update, "start.place")(p.id ? [p.id] : [])}
+              />
+            ))}
+          </div>
+        </Section>
+      )}
       <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
         <div className="space-y-3">
           <label className="block text-sm">

@@ -524,6 +524,13 @@ fn turn_message(
             session.scene().day
         ));
     }
+    let prep = session.start_prep_missing();
+    if !prep.is_empty() {
+        reminders.push(format!(
+            "подготовка новой игры не завершена — запиши в этом ходу командами: {}",
+            prep.join("; ")
+        ));
+    }
     if session.turns_without_notes() >= dnd_engine::NOTE_REMINDER_TURNS {
         reminders.push(format!(
             "уже {} ходов без записей в базу знаний — запиши важное: события, тайны, планы NPC, таймеры",
@@ -751,6 +758,10 @@ pub fn update_request(
     }
     if session.turns_since_chronicle() + 1 >= CHRONICLE_REMINDER_TURNS {
         reminders.push(format!("обнови пересказ текущего Дня {} (chronicle)", scene.day));
+    }
+    let prep = session.start_prep_missing();
+    if !prep.is_empty() {
+        reminders.push(format!("подготовка новой игры: {}", prep.join("; ")));
     }
     let system = format!(
         r#"Ты — модуль учёта игрового движка D&D. Мастер уже рассказал ход игроку. Твоя задача — перевести рассказ в команды движка, чтобы состояние игры совпало с рассказом. Сам ничего не придумывай.
