@@ -1,8 +1,9 @@
 // Состояние окна базы знаний на устройстве игрока: пароль слоя мастера и отметки «новое».
 //
-// Пароль мастера: хранится только хэш (SHA-256 с солью) в localStorage. Слой мастера
-// открывается после ввода пароля и остаётся открытым до перезапуска игры — признак
-// «открыт» живёт в памяти и никуда не сохраняется.
+// Пароль мастера: по умолчанию — встроенный (решение владельца 12.11.2026, записан в README
+// игры); свой пароль игрок может задать — тогда хранится только его хэш (SHA-256 с солью)
+// в localStorage. Слой мастера открывается после ввода пароля и остаётся открытым до
+// перезапуска игры — признак «открыт» живёт в памяти и никуда не сохраняется.
 //
 // «Новое»: что игрок уже видел в базе (последняя запись и созданные карточки) — по кампаниям.
 
@@ -11,6 +12,8 @@ import { currentCampaignId } from "./campaigns";
 const HASH_KEY = "dnd.gmHash";
 const SALT = "dnd-game-ai.gm.v1:";
 const SEEN_KEY = "dnd.kbSeen";
+/** Пароль слоя мастера по умолчанию (есть в README игры). */
+export const DEFAULT_GM_PASSWORD = "413386";
 
 let unlocked = false;
 
@@ -38,19 +41,20 @@ async function hash(password: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Задан ли пароль слоя мастера. */
+/** Задан ли свой пароль (иначе действует пароль по умолчанию). */
 export function gmPasswordSet(): boolean {
   return typeof read<string>(HASH_KEY) === "string";
 }
 
 /** Слой мастера закрыт: пароль задан и в этом запуске ещё не введён. */
 export function gmLocked(): boolean {
-  return gmPasswordSet() && !unlocked;
+  return !unlocked;
 }
 
 /** Ввод пароля: `true` — слой открыт до перезапуска игры. */
 export async function gmUnlock(password: string): Promise<boolean> {
-  const ok = (await hash(password)) === read<string>(HASH_KEY);
+  const own = read<string>(HASH_KEY);
+  const ok = own ? (await hash(password)) === own : password.trim() === DEFAULT_GM_PASSWORD;
   if (ok) unlocked = true;
   return ok;
 }
@@ -61,7 +65,7 @@ export async function gmSetPassword(password: string): Promise<void> {
   unlocked = true;
 }
 
-/** Убрать пароль: слой мастера снова открывается одним нажатием. */
+/** Убрать свой пароль: снова действует пароль по умолчанию. */
 export function gmClearPassword(): void {
   write(HASH_KEY, null);
   unlocked = false;

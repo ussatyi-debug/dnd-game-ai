@@ -11,6 +11,7 @@ import ContinueWindow from "./components/ContinueWindow";
 import HomeScreen, { type HomeAction } from "./components/HomeScreen";
 import ReferenceWindow from "./components/ReferenceWindow";
 import LogWindow from "./components/LogWindow";
+import HelpWindow from "./components/HelpWindow";
 import { devLog } from "./lib/devlog";
 import MainMenu, { type MenuAction } from "./components/MainMenu";
 import PartyPanel from "./components/PartyPanel";
@@ -159,7 +160,7 @@ function initialCampaign(): string {
 /** Сколько последних сообщений чата получает мастер; остальное — в базе знаний. */
 
 type Tab = "party" | "dialog" | "character";
-type Overlay = "knowledge" | "save" | "load" | "settings" | "treasury" | "continue" | "reference" | "log" | null;
+type Overlay = "knowledge" | "save" | "load" | "settings" | "treasury" | "continue" | "reference" | "log" | "help" | null;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "party", label: "Отряд" },
@@ -1379,6 +1380,7 @@ export default function App() {
       )}
       {openWindow === "reference" && <ReferenceWindow onClose={() => setOpenWindow(null)} />}
       {openWindow === "log" && <LogWindow onClose={() => setOpenWindow(null)} />}
+      {openWindow === "help" && <HelpWindow onClose={() => setOpenWindow(null)} />}
       {home && (
         <HomeScreen
           last={autosaves[0] ?? null}

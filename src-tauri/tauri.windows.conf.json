@@ -3,7 +3,14 @@
   "bundle": {
     "resources": {
       "libtorch/*": "./",
-      "silero/*": "silero/"
+      "silero/*": "silero/",
+      "README.html": "README.html",
+      "../tools/tts-server/silero_server.py": "tools/silero_server.py"
+    },
+    "windows": {
+      "nsis": {
+        "template": "nsis/installer.nsi"
+      }
     }
   }
 }

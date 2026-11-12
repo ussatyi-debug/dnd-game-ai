@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Наследие дома Стрэндж — инструкция</title>
+<style>
+  body { font-family: Georgia, "Times New Roman", serif; background: #16130f; color: #e9dfc8; max-width: 760px; margin: 0 auto; padding: 24px; line-height: 1.55; }
+  h1, h2 { color: #d4a94f; font-weight: normal; }
+  h1 { font-size: 26px; margin-bottom: 4px; }
+  h2 { font-size: 19px; border-bottom: 1px solid #4a3d29; padding-bottom: 4px; margin-top: 28px; }
+  code, .key { font-family: Consolas, monospace; background: #2a241b; padding: 1px 6px; border-radius: 4px; color: #f2d58c; }
+  pre { background: #2a241b; padding: 10px 12px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+  li { margin: 4px 0; }
+  .note { color: #a89a80; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>Наследие дома Стрэндж</h1>
+<p class="note">Текстовая ролевая игра по D&amp;D 5e с ИИ-мастером. Инструкция для игрока.</p>
+
+<h2>Пароль слоя мастера</h2>
+<p>Слой мастера в базе знаний (тайны, планы NPC, таймеры) закрыт паролем. Пароль по умолчанию: <span class="key">413386</span></p>
+<p>Свой пароль можно задать в базе знаний (кнопка «Сменить пароль» в слое мастера). Свой пароль хранится только на этом устройстве; кнопка «Вернуть пароль по умолчанию» снова включает пароль выше.</p>
+
+<h2>Подключение ИИ-мастера</h2>
+<ul>
+  <li>Меню → Настройки → ИИ: выберите провайдера (Claude, OpenAI, Gemini, Яндекс или локальная модель Ollama) и введите свой ключ.</li>
+  <li>Ключ хранится только на вашем устройстве и отправляется только выбранному провайдеру.</li>
+  <li>Локальная модель Ollama: адрес <code>http://&lt;IP компьютера&gt;:11434</code>.</li>
+</ul>
+
+<h2>Озвучка</h2>
+<p>Меню → Настройки → Озвучка. Вкладки движков:</p>
+<ul>
+  <li><b>Piper</b> — без интернета. Голоса Дмитрий и Ирина встроены; Денис и Руслан скачиваются там же (около 63 МБ каждый).</li>
+  <li><b>Silero</b> — встроен в версию для Windows, без интернета. Первая фраза после запуска — несколько секунд (загрузка модели).</li>
+  <li><b>Свой сервер</b> — озвучка с компьютера в домашней сети (см. ниже).</li>
+  <li><b>OpenAI, Gemini, Яндекс</b> — облачные голоса тем же ключом, что у мастера; нужен интернет, фразы оплачиваются по тарифу провайдера. Для Яндекса сервисному аккаунту нужна роль <code>ai.speechkit-tts.user</code>.</li>
+</ul>
+
+<h2>Озвучка Silero на телефоне (свой сервер)</h2>
+<p><b>Шаг 1. Включите раздачу на ПК.</b> На компьютере с Windows: Настройки → Озвучка → Silero → «Раздавать озвучку в домашнюю сеть». Там же показан адрес, например <code>http://192.168.0.5:5150</code>.</p>
+<p><b>Шаг 2. Откройте доступ в брандмауэре Windows.</b></p>
+<ul>
+  <li>Параметры → Сеть и Интернет → ваша сеть (Wi-Fi или Ethernet) → тип профиля <b>«Частная»</b>.</li>
+  <li>Откройте PowerShell <b>от имени администратора</b> и выполните:</li>
+</ul>
+<pre>New-NetFirewallRule -DisplayName "DnD Game AI озвучка" -Direction Inbound -Protocol TCP -LocalPort 5150 -Action Allow -Profile Private,Public</pre>
+<p><b>Шаг 3. Проверьте адрес ПК.</b> В командной строке выполните <code>ipconfig</code> и найдите «IPv4-адрес» у адаптера Wi-Fi или Ethernet (не у VPN, VirtualBox, Hyper-V или WSL). Если он отличается от показанного в игре — используйте адрес из <code>ipconfig</code>.</p>
+<p><b>Шаг 4. Проверьте связь.</b></p>
+<ul>
+  <li>На ПК откройте в браузере <code>http://localhost:5150/voices</code> — должен появиться список голосов.</li>
+  <li>На телефоне откройте в браузере <code>http://&lt;IP ПК&gt;:5150/voices</code>. Если список есть — в игре на телефоне: Настройки → Озвучка → «Свой сервер» → адрес → «Подключить».</li>
+  <li>На ПК список есть, а на телефоне нет — мешает брандмауэр или роутер. Отключите в роутере «изоляцию клиентов» (AP isolation) или не используйте гостевую сеть.</li>
+</ul>
+
+<h2>Свой сервер без версии для Windows</h2>
+<p>Любой компьютер с Python 3.10+ (Linux, macOS, Windows):</p>
+<pre>pip install --index-url https://download.pytorch.org/whl/cpu torch
+pip install silero silero-stress omegaconf
+python silero_server.py</pre>
+<p>Файл <code>silero_server.py</code> лежит в папке игры (подпапка <code>tools</code> рядом с программой) — скопируйте его на тот компьютер. Порт по умолчанию 5150; другой — <code>python silero_server.py 6000</code>.</p>
+
+<h2>Сохранения</h2>
+<ul>
+  <li>Автосохранение — после каждого хода мастера, 5 последних по кругу.</li>
+  <li>Меню → Сохранить: 10 ручных ячеек, сохранение в файл (папка «Загрузки») и в буфер обмена.</li>
+  <li>Сейв из файла загружается в свою ячейку «Из файла · День N» и не пропадает после «Новой игры».</li>
+</ul>
+
+<h2>Лицензии</h2>
+<p class="note">Правила — SRD 5.2.1 (CC-BY-4.0). Озвучка: голоса Piper (rhasspy/piper-voices); Silero v5_cis_base и silero-stress — MIT, © Silero Team; libtorch — BSD-3-Clause. Музыка — CC0.</p>
+</body>
+</html>

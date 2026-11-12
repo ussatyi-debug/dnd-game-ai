@@ -185,7 +185,7 @@ export function MasterPasswordButton() {
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className={small}>
-        {has ? "🔒 Пароль задан" : "🔓 Задать пароль"}
+        {has ? "🔒 Свой пароль" : "🔒 Сменить пароль"}
       </button>
     );
   }
@@ -232,15 +232,15 @@ export function MasterPasswordButton() {
           }}
           className={small}
         >
-          Убрать пароль
+          Вернуть пароль по умолчанию
         </button>
       )}
       <button type="button" onClick={() => setOpen(false)} className="px-2 py-1 text-xs text-muted">
         Отмена
       </button>
       <span className="w-full text-[11px] text-muted">
-        Пароль спрашивается после каждого запуска игры. Хранится только на этом устройстве; забытый пароль не восстановить —
-        только сбросом данных игры.
+        Пароль спрашивается после каждого запуска игры. По умолчанию — пароль из README игры; свой хранится только на этом
+        устройстве, забытый свой пароль не восстановить — только сбросом данных игры.
       </span>
       {error && <span className="w-full text-fumble">{error}</span>}
     </form>
