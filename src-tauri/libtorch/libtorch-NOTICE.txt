@@ -1,0 +1,11 @@
+DnD Game AI — встроенная озвучка Silero (версия для Windows)
+
+Библиотеки libtorch (PyTorch C++), лицензия BSD-3-Clause:
+https://github.com/pytorch/pytorch/blob/main/LICENSE
+Copyright (c) 2016- Facebook, Inc. and contributors.
+
+Модели Silero v5_cis_base и silero-stress — лицензия MIT, © Silero Team:
+https://github.com/snakers4/silero-models
+https://github.com/snakers4/silero-stress
+
+Файлы *.dll в этой папке кладёт CI при сборке установщика.

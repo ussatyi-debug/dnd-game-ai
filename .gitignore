@@ -34,7 +34,7 @@ Thumbs.db
 /public/music/
 
 # Встроенный Silero: библиотеки и модели готовит CI
-src-tauri/libtorch/
+src-tauri/libtorch/*.dll
 src-tauri/silero/
 scripts/silero/out/
 scripts/silero/tchprobe/target/
