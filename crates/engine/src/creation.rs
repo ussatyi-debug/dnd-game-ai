@@ -131,6 +131,9 @@ pub struct HeroSpec {
     pub attunement: Vec<Attunement>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub notes: Vec<String>,
+    /// Черновик мастера создания (JSON интерфейса) — для повышения уровня; движок его не читает.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub draft: String,
 }
 
 impl HeroSpec {
@@ -652,6 +655,7 @@ pub(crate) mod tests {
             save_bonuses: Vec::new(),
             attunement: Vec::new(),
             notes: Vec::new(),
+            draft: String::new(),
         }
     }
 

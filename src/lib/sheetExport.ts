@@ -85,7 +85,7 @@ export async function saveTextFile(name: string, text: string, mime: string): Pr
 }
 
 /** Описание героя из сохранения своей кампании (по id листа). */
-async function heroSpec(id: string): Promise<HeroSpec | null> {
+export async function heroSpec(id: string): Promise<HeroSpec | null> {
   const state = (await saveState()) as { campaign?: { heroes?: HeroSpec[] } | null } | null;
   return state?.campaign?.heroes?.find((h) => h.id === id) ?? null;
 }

@@ -85,6 +85,8 @@ pub enum EngineError {
     InvalidHero(String),
     /// Набор в отряд нарушает правила (уровень героя, число спутников).
     Recruit(String),
+    /// Опыт и повышение уровня.
+    Experience(String),
     /// Ценность с таким ID уже есть.
     DuplicateAsset(String),
     /// После хода мастера состояние менялось — отмена вернула бы и чужие изменения.
@@ -247,6 +249,7 @@ impl fmt::Display for EngineError {
             Self::InvalidSave(reason) => write!(f, "Сохранение не загружено: {reason}"),
             Self::InvalidHero(reason) => write!(f, "Лист героя не принят: {reason}"),
             Self::Recruit(reason) => write!(f, "Новый член отряда не принят: {reason}"),
+            Self::Experience(reason) => write!(f, "Опыт: {reason}"),
             Self::DuplicateAsset(id) => write!(f, "Ценность «{id}» уже есть в казне"),
             Self::UndoStale => write!(
                 f,

@@ -520,6 +520,18 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             }))?;
             Ok(last_log(session))
         })(),
+        "xp_note" => (|| -> Result<String, String> {
+            let xp = int_field(cmd, "xp").and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
+            engine(session.note_xp(text_field(cmd, "text")?, xp))?;
+            Ok(last_log(session))
+        })(),
+        "xp" => (|| -> Result<String, String> {
+            let each = int_field(cmd, "each")
+                .and_then(|v| u32::try_from(v).ok())
+                .ok_or("у xp нет числа each — опыт каждому члену отряда")?;
+            engine(session.award_xp(each, opt_text(cmd, "reason").unwrap_or("")))?;
+            Ok(last_log(session))
+        })(),
         "goal" => (|| -> Result<String, String> {
             let mut edit = goal_edit(cmd);
             edit.status = opt_text(cmd, "status").map(Into::into);

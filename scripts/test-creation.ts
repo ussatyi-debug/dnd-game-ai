@@ -14,6 +14,7 @@ import {
   choiceSlots,
   featOptions,
   featSlots,
+  levelUpDraft,
   maxHp,
   newDraft,
   pointsSpent,
@@ -167,6 +168,15 @@ for (const h of QUICK_HEROES) {
     const errors = engine.call<string[]>({ cmd: "validate_hero", spec });
     if (errors.length) failures.push(`${label} / движок: ${errors.join("; ")}`);
   }
+
+  // Повышение уровня: прежние выборы и хиты сохранены, уровень +1.
+  const up = levelUpDraft(spec);
+  assert.equal(up.fromSheet, false, `${label}: черновик в листе`);
+  assert.equal(up.draft.level, h.level + 1, `${label}: уровень после повышения`);
+  assert.equal(up.draft.hpRolls.length, h.level, `${label}: хиты по уровням`);
+  const upSpec = buildSpec(up.draft);
+  assert.ok(upSpec.hp.rolls.slice(0, h.level - 1).every((v, i) => v === spec.hp.rolls[i]), `${label}: хиты прошлых уровней`);
+  console.log(`${label}: повышение до ${h.level + 1} — хиты ${maxHp(up.draft)}, требует выбора: ${STEPS.flatMap((s) => (s.id === "sheet" ? [] : stepIssues(up.draft, s.id))).join("; ") || "ничего"}`);
   built++;
 }
 

@@ -113,6 +113,8 @@ export interface HeroSpec {
   /** Предметы, требующие настройки. */
   attunement: { name: string; effect: string }[];
   notes: string[];
+  /** Черновик мастера создания (JSON) — для повышения уровня. */
+  draft?: string;
 }
 
 /** Новая кампания для движка. */

@@ -288,6 +288,20 @@ fn validate_hero(spec: serde_json::Value) -> Result<Vec<String>, String> {
     Ok(check_hero(&spec))
 }
 
+/// Опыт отряда и журнал опыта мастера.
+#[tauri::command]
+fn xp_status(state: State<'_, SessionState>) -> Result<dnd_engine::XpStatus, String> {
+    Ok(lock(&state)?.xp_status())
+}
+
+/// Повышение уровня по листу нового уровня из мастера создания.
+#[tauri::command]
+fn level_up(spec: serde_json::Value, state: State<'_, SessionState>) -> Result<String, String> {
+    let spec: HeroSpec =
+        serde_json::from_value(spec).map_err(|e| format!("Лист героя не прочитан: {e}"))?;
+    lock(&state)?.level_up(spec).map_err(|e| e.to_string())
+}
+
 /// Можно ли принять спутника и какого уровня.
 #[tauri::command]
 fn recruit_info(state: State<'_, SessionState>) -> Result<dnd_engine::RecruitInfo, String> {
@@ -998,6 +1012,8 @@ pub fn run() {
             edit_sheet,
             revert_sheet_edit,
             sheet_proposals,
+            xp_status,
+            level_up,
             recruit_info,
             recruit_requests,
             add_member,

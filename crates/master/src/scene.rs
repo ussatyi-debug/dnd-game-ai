@@ -329,6 +329,7 @@ fn snapshot(session: &Session) -> Value {
         })).collect::<Vec<_>>(),
         "карточки_базы": kb_index(session),
         "цели_активные": session.active_goals().into_iter().map(goal_json).collect::<Vec<_>>(),
+        "опыт": xp_context(session),
         "записи_базы_знаний": {
             "записи_игроку_последние": for_player[player_from..].iter().map(|n| note_json(session, n)).collect::<Vec<_>>(),
             "всего_записей_игроку": for_player.len(),
@@ -781,6 +782,7 @@ pub fn update_request(
 - chronicle: {{"cmd":"chronicle","day":N,"text":"5–10 предложений о дне"}}
 - card: {{"cmd":"card","card":"id","status":"done"}}; new_card: {{"cmd":"new_card","layer":"master","section":"...","title":"...","summary":"..."}}
 - задание, поручение или цель, которую герой принял: {{"cmd":"new_card","layer":"player","section":"goals","title":"...","summary":"что сделать","giver":"кто поручил","reward":"...","due_day":N,"steps":["...","..."]}} — отдельная карточка цели, не просто note.
+- опыт: за бой, найденное, успешную проверку с последствиями, важное решение — {{"cmd":"xp_note","text":"за что","xp":N}} (N — оценка на каждого по таблице опыта правил). Начисление — только когда рассказ закрыл день, отряд отдыхает или игрок попросил: {{"cmd":"xp","each":N,"reason":"..."}}.
 - ход активной цели (см. «Активные цели героя»): {{"cmd":"goal","card":"id цели","step_done":1,"log":"что продвинулось"}}; "add_step":"..."; итог — "status":"done" или "failed". Если рассказ продвинул или закрыл цель — команда goal обязательна.
 
 Правила:
@@ -859,6 +861,23 @@ pub fn update_commands(reply: &str) -> String {
         }
         None => reply.to_string(),
     }
+}
+
+/// Опыт отряда для снимка сцены: уровень, опыт и порог; пометки журнала опыта.
+fn xp_context(session: &Session) -> Value {
+    let xp = session.xp_status();
+    json!({
+        "отряд": xp.members.iter().map(|m| format!(
+            "{} — {} ур., опыт {}{}{}",
+            m.name,
+            m.level,
+            m.xp,
+            m.xp_next.map(|t| format!(" из {t}")).unwrap_or_default(),
+            if m.ready { " (порог пройден — повышение на длительном отдыхе)" } else { "" },
+        )).collect::<Vec<_>>(),
+        "пометки": xp.notes.iter().map(|n| format!("День {}: {} ({})", n.day, n.text, n.xp)).collect::<Vec<_>>(),
+        "оценка_по_пометкам_каждому": xp.pending,
+    })
 }
 
 #[cfg(test)]

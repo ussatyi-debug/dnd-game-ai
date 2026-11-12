@@ -57,6 +57,9 @@ pub struct SavedProfile {
     pub exhaustion: u8,
     #[cfg_attr(feature = "serde", serde(default))]
     pub hit_dice: Vec<HitDice>,
+    /// Опыт (с 0.9.8; у героев своей кампании — ещё и в листе кампании).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub xp: Option<u32>,
 }
 
 /// Персонаж в файле: только то, что меняется в игре (лишние поля файла не читаются).
@@ -105,6 +108,10 @@ pub struct SaveData {
     /// Своя кампания с листами созданных героев (формат 8+); нет — «Дом Стрэндж».
     #[cfg_attr(feature = "serde", serde(default))]
     pub campaign: Option<Campaign>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub xp_log: Vec<crate::experience::XpNote>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub level_up_open: Vec<String>,
 }
 
 /// Итог загрузки.
@@ -118,7 +125,7 @@ pub struct LoadReport {
     pub supplemented: Vec<String>,
 }
 
-fn apply_character(c: &mut Character, saved: SavedCharacter, report: &mut Vec<String>) {
+pub(crate) fn apply_character(c: &mut Character, saved: SavedCharacter, report: &mut Vec<String>) {
     let name = c.name.clone();
     // Сначала правки листа игроком (они могут менять максимум хитов), затем то, что менялось в игре.
     if !saved.edits.is_empty() {
@@ -200,6 +207,9 @@ fn apply_character(c: &mut Character, saved: SavedCharacter, report: &mut Vec<St
         Some(p) => {
             c.profile.conditions = p.conditions;
             c.profile.exhaustion = p.exhaustion.min(6);
+            if let Some(xp) = p.xp {
+                c.profile.xp = Some(xp);
+            }
             for dice in &mut c.profile.hit_dice {
                 if let Some(saved) = p.hit_dice.iter().find(|d| d.die == dice.die) {
                     dice.current = saved.current.min(dice.total);
@@ -359,6 +369,9 @@ impl Session {
         self.proposals = save.proposals;
         self.undo = None;
         self.campaign = save.campaign;
+        self.xp_log = save.xp_log;
+        let ids: Vec<String> = self.party.iter().map(|c| c.id.clone()).collect();
+        self.level_up_open = save.level_up_open.into_iter().filter(|id| ids.contains(id)).collect();
         self.master_memo = None;
         self.repair_links();
         self.chronicle_from = self.scene.day;
@@ -418,6 +431,7 @@ mod tests {
                         conditions: c.profile.conditions.clone(),
                         exhaustion: c.profile.exhaustion,
                         hit_dice: c.profile.hit_dice.clone(),
+                        xp: c.profile.xp,
                     }),
                     inventory: Some(c.inventory.clone()),
                     edits: c.edits.clone(),
@@ -431,6 +445,8 @@ mod tests {
             turns_without_notes: state.turns_without_notes,
             proposals: state.proposals,
             campaign: state.campaign,
+            xp_log: state.xp_log,
+            level_up_open: state.level_up_open,
         }
     }
 

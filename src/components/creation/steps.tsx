@@ -268,12 +268,13 @@ export function StepBackground({ draft, update }: StepProps) {
 
 // ───────────────────────────── 3. Класс ─────────────────────────────
 
-export function StepClass({ draft, update }: StepProps) {
+export function StepClass({ draft, update, levelUp }: StepProps & { levelUp?: { subclassChosen: boolean } }) {
   const r = resolve(draft);
   const tier = TIERS.find((t) => t.id === draft.tier) ?? TIERS[0];
   const kit = pick(draft, "equip.class")[0] ?? "kit";
   return (
     <div className="space-y-4">
+      {!levelUp && (
       <Section title="Уровень начала" hint="ступень определяет день кампании, в который появится герой">
         <div className="flex flex-wrap gap-2">
           <Segmented
@@ -304,7 +305,9 @@ export function StepClass({ draft, update }: StepProps) {
           Место — на шаге «Личность».
         </p>
       </Section>
+      )}
 
+      {!levelUp && (
       <Section title="Класс">
         <div className="grid gap-2 sm:grid-cols-2">
           {CLASSES.map((c) => (
@@ -343,8 +346,9 @@ export function StepClass({ draft, update }: StepProps) {
           ))}
         </div>
       </Section>
+      )}
 
-      {r.cls && draft.level >= r.cls.subclassLevel && (
+      {r.cls && draft.level >= r.cls.subclassLevel && !levelUp?.subclassChosen && (
         <Section title="3.1 Подкласс" hint={`с ${r.cls.subclassLevel} уровня`}>
           <div className="grid gap-2 sm:grid-cols-2">
             {r.cls.subclasses.map((s) => (
@@ -378,6 +382,7 @@ export function StepClass({ draft, update }: StepProps) {
           <Section title="3.2 Навыки, экспертиза и мастерство">
             <RuleChoices draft={draft} update={update} step="class" />
           </Section>
+          {!levelUp && (
           <Section title="Снаряжение класса">
             <Segmented
               value={kit}
@@ -389,6 +394,7 @@ export function StepClass({ draft, update }: StepProps) {
             />
             {kit === "kit" && <p className="text-xs text-parchment/75">{r.cls.equipment.items.join(", ")}</p>}
           </Section>
+          )}
         </>
       )}
     </div>

@@ -46,6 +46,9 @@ pub struct Checkpoint {
     custom_cards: Vec<CustomCard>,
     proposals: Vec<SheetProposal>,
     next_proposal_id: u64,
+    campaign: Option<crate::creation::Campaign>,
+    xp_log: Vec<crate::experience::XpNote>,
+    level_up_open: Vec<String>,
 }
 
 /// Отменяемый ход мастера.
@@ -115,6 +118,9 @@ impl Session {
             custom_cards: self.custom_cards.clone(),
             proposals: self.proposals.clone(),
             next_proposal_id: self.next_proposal_id,
+            campaign: self.campaign.clone(),
+            xp_log: self.xp_log.clone(),
+            level_up_open: self.level_up_open.clone(),
         }
     }
 
@@ -129,6 +135,9 @@ impl Session {
         self.custom_cards = c.custom_cards;
         self.proposals = c.proposals;
         self.next_proposal_id = c.next_proposal_id;
+        self.campaign = c.campaign;
+        self.xp_log = c.xp_log;
+        self.level_up_open = c.level_up_open;
     }
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.

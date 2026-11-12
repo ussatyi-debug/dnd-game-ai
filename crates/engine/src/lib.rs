@@ -26,6 +26,7 @@ pub mod character;
 pub mod check;
 pub mod creation;
 pub mod error;
+pub mod experience;
 pub mod expr;
 pub mod fixtures;
 pub mod inventory;
@@ -65,6 +66,7 @@ pub use knowledge::{
     MasterNote, NewNote, NoteEdit, NoteKind, NoteLayer, KB_SECTIONS, KB_STATUSES,
     NOTE_REMINDER_TURNS, TIMER_AUTO_DONE_TURNS,
 };
+pub use experience::{XpAward, XpMember, XpNote, XpStatus};
 pub use master_ops::{Checkpoint, HpChange, SceneChange, UndoInfo};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
 pub use profile::{

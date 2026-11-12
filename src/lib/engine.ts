@@ -1041,6 +1041,43 @@ export interface RecruitRequest {
   note: string;
 }
 
+export interface XpNote {
+  day: number;
+  text: string;
+  xp: number;
+}
+
+export interface XpMember {
+  id: string;
+  name: string;
+  level: number;
+  xp: number;
+  xp_next: number | null;
+  /** Порог следующего уровня пройден. */
+  ready: boolean;
+  /** Повышение открыто (был длительный отдых после порога). */
+  open: boolean;
+  /** Лист можно повысить (герой или спутник своей кампании). */
+  can_level: boolean;
+  reason: string;
+}
+
+export interface XpStatus {
+  notes: XpNote[];
+  pending: number;
+  members: XpMember[];
+}
+
+/** Опыт отряда и журнал опыта мастера. */
+export function xpStatus(): Promise<XpStatus> {
+  return call<XpStatus>("xp_status");
+}
+
+/** Повышение уровня по листу нового уровня; возвращает строку итога. */
+export function levelUp(spec: HeroSpec): Promise<string> {
+  return call<string>("level_up", { spec });
+}
+
 export function recruitInfo(): Promise<RecruitInfo> {
   return call<RecruitInfo>("recruit_info");
 }

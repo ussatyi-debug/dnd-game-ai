@@ -184,7 +184,7 @@ impl Session {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use crate::creation::tests::wizard_spec;
     use crate::creation::Campaign;
     use crate::session::{Mood, Scene};
@@ -193,7 +193,7 @@ mod tests {
     use super::*;
 
     /// Волшебник из проб создания на нужном уровне (хиты, заклинатель, опыт — согласованы).
-    fn at_level(mut spec: HeroSpec, level: u32) -> HeroSpec {
+    pub(crate) fn at_level(mut spec: HeroSpec, level: u32) -> HeroSpec {
         const XP: [u32; 10] = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000];
         spec.classes[0].level = level;
         spec.hp.rolls = vec![4; level as usize - 1];
@@ -204,7 +204,7 @@ mod tests {
         spec
     }
 
-    fn own(level: u32) -> Session {
+    pub(crate) fn own(level: u32) -> Session {
         let hero = at_level(wizard_spec(), level);
         let campaign =
             Campaign { id: "camp.r".into(), title: "Проба".into(), heroes: vec![hero] };

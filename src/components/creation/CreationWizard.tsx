@@ -6,7 +6,7 @@ import worldMap from "../../assets/world-map.webp";
 import { portraitUrl } from "../../data/rules/portraits.ts";
 import { CLASSES } from "../../data/rules/classes/index.ts";
 import { SPECIES } from "../../data/rules/species.ts";
-import { buildSpec, newDraft, portraitKey, STEPS, stepIssues, TIERS, type Draft, type StepId } from "../../lib/creation.ts";
+import { averageHitDie, buildSpec, levelUpDraft, newDraft, portraitKey, resolve, STEPS, stepIssues, TIERS, type Draft, type StepId } from "../../lib/creation.ts";
 import { QUICK_HEROES, quickDraft, type QuickHero } from "../../lib/quickstart.ts";
 import { validateHero, type RecruitRequest } from "../../lib/engine";
 import { parseSheetFile } from "../../lib/sheetExport";
@@ -42,7 +42,12 @@ interface CreationWizardProps {
   onConfirm: (draft: Draft, spec: HeroSpec) => Promise<void>;
   /** Новый член отряда вместо нового героя. */
   companion?: CompanionMode;
+  /** Повышение уровня: лист героя до повышения. */
+  levelUp?: HeroSpec;
 }
+
+/** Шаги повышения уровня, когда выборы героя сохранены в листе. */
+const LEVEL_UP_STEPS: StepId[] = ["class", "feats", "spells", "sheet"];
 
 /** Черновик спутника по предложению мастера: что мастер назвал — уже выбрано. */
 function companionDraft(mode: CompanionMode): Draft {
@@ -63,15 +68,20 @@ function companionDraft(mode: CompanionMode): Draft {
   return d;
 }
 
-export default function CreationWizard({ onClose, onConfirm, companion }: CreationWizardProps) {
-  const [draft, setDraft] = useState<Draft>(() => (companion ? companionDraft(companion) : loadDraft()));
-  const [step, setStep] = useState<StepId>("species");
+export default function CreationWizard({ onClose, onConfirm, companion, levelUp }: CreationWizardProps) {
+  const [levelStart] = useState(() => (levelUp ? levelUpDraft(levelUp) : null));
+  const [draft, setDraft] = useState<Draft>(() =>
+    levelStart ? levelStart.draft : companion ? companionDraft(companion) : loadDraft(),
+  );
+  // Выборы сохранены в листе — только шаги нового уровня; иначе лист собирается заново.
+  const steps = levelStart && !levelStart.fromSheet ? STEPS.filter((s) => LEVEL_UP_STEPS.includes(s.id)) : STEPS;
+  const [step, setStep] = useState<StepId>(levelStart ? "class" : "species");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quick, setQuick] = useState(false);
 
   useEffect(() => {
-    if (companion) return;
+    if (companion || levelUp) return;
     try {
       window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch {
@@ -86,11 +96,24 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
       return next;
     });
 
-  const index = STEPS.findIndex((s) => s.id === step);
-  const issues = useMemo(() => stepIssues(draft, step), [draft, step]);
-  const spec = useMemo(() => (step === "sheet" ? buildSpec(draft, companion ? "companion" : "player") : null), [draft, step, companion]);
+  const index = steps.findIndex((s) => s.id === step);
+  const issues = useMemo(() => {
+    const list = stepIssues(draft, step);
+    if (levelUp && step === "sheet" && draft.classId !== levelUp.classes[0]?.id) list.push("При повышении уровня класс не меняется");
+    return list;
+  }, [draft, step, levelUp]);
+  const spec = useMemo(() => {
+    if (step !== "sheet") return null;
+    const built = buildSpec(draft, levelUp ? levelUp.kind : companion ? "companion" : "player");
+    if (levelUp) {
+      built.id = levelUp.id;
+      built.xp = levelUp.xp;
+      if (levelUp.portrait) built.portrait = levelUp.portrait;
+    }
+    return built;
+  }, [draft, step, companion, levelUp]);
   const go = (i: number) => {
-    const next = STEPS[Math.max(0, Math.min(STEPS.length - 1, i))];
+    const next = steps[Math.max(0, Math.min(steps.length - 1, i))];
     if (next) {
       setStep(next.id);
       setError(null);
@@ -108,7 +131,7 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
     setError(null);
     try {
       await onConfirm(draft, spec);
-      if (!companion) window.localStorage.removeItem(DRAFT_KEY);
+      if (!companion && !levelUp) window.localStorage.removeItem(DRAFT_KEY);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -158,9 +181,15 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
       <header className="relative border-b border-edge bg-ink/90 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <h2 className="font-serif text-lg text-gold sm:text-xl">
-            {companion ? `Новый член отряда · до ${companion.maxLevel} ур.` : "Новый герой"}
+            {levelUp
+              ? `Повышение уровня · ${levelUp.name} → ${draft.level} ур.`
+              : companion
+                ? `Новый член отряда · до ${companion.maxLevel} ур.`
+                : "Новый герой"}
           </h2>
           <div className="flex items-center gap-1">
+            {!levelUp && (
+              <>
             <label className="cursor-pointer rounded-md border border-edge px-2 py-1 text-xs hover:border-gold" title="Лист героя из файла JSON, DOC или PDF (экспорт листа)">
               Импорт листа
               <input
@@ -184,6 +213,8 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
             <button type="button" onClick={reset} className="rounded-md px-2 py-1 text-xs text-muted hover:text-parchment">
               Сбросить
             </button>
+              </>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -195,7 +226,7 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-2" aria-label="Шаги">
-          {STEPS.map((s, i) => {
+          {steps.map((s, i) => {
             const ready = s.id !== "sheet" && stepIssues(draft, s.id).length === 0;
             return (
               <button
@@ -217,10 +248,19 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
 
       <main id="creation-body" className="relative flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl space-y-4 px-3 py-4 sm:px-5">
+          {levelStart && step === "class" && (
+            <LevelUpIntro fromSheet={levelStart.fromSheet} draft={draft} update={update} />
+          )}
           {quick && <QuickStart onPick={chooseQuick} maxLevel={companion?.maxLevel} />}
           {!quick && step === "species" && <StepSpecies draft={draft} update={update} />}
           {!quick && step === "background" && <StepBackground draft={draft} update={update} />}
-          {!quick && step === "class" && <StepClass draft={draft} update={update} />}
+          {!quick && step === "class" && (
+            <StepClass
+              draft={draft}
+              update={update}
+              levelUp={levelStart && !levelStart.fromSheet ? { subclassChosen: Boolean(levelStart.draft.picks["class.subclass"]?.length) && draft.level - 1 >= (resolve(draft).cls?.subclassLevel ?? 99) } : undefined}
+            />
+          )}
           {!quick && step === "feats" && <StepFeats draft={draft} update={update} />}
           {!quick && step === "spells" && <StepSpells draft={draft} update={update} />}
           {!quick && step === "abilities" && <StepAbilities draft={draft} update={update} />}
@@ -247,7 +287,7 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
             onClick={confirm}
             className="rounded-lg border border-gold bg-gold/15 px-4 py-2 text-sm font-medium text-gold disabled:opacity-40"
           >
-            {busy ? "Собираю мир…" : "Подтвердить и начать приключение"}
+            {busy ? (levelUp ? "Повышаю…" : "Собираю мир…") : levelUp ? "Повысить уровень" : "Подтвердить и начать приключение"}
           </button>
         ) : (
           <button
@@ -260,6 +300,60 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
         )}
       </footer>
     </div>
+  );
+}
+
+/** Повышение уровня: хиты нового уровня и подсказка, что выбрать. */
+function LevelUpIntro({
+  fromSheet,
+  draft,
+  update,
+}: {
+  fromSheet: boolean;
+  draft: Draft;
+  update: (mutate: (d: Draft) => void) => void;
+}) {
+  const die = resolve(draft).cls?.hitDie ?? 8;
+  const i = draft.level - 2;
+  const value = draft.hpRolls[i] ?? averageHitDie(die);
+  const set = (v: number) =>
+    update((d) => {
+      d.hpMode = "manual";
+      d.hpRolls[i] = Math.max(1, Math.min(die, v));
+    });
+  return (
+    <section className="space-y-2 rounded-lg border border-gold/60 bg-gold/5 p-3 text-sm">
+      <p>
+        {fromSheet
+          ? "Лист героя создан до версии 0.9.8, и прежние выборы в нём не сохранены: пройдите шаги заново (класс тот же). Снаряжение, золото и всё, что менялось в игре, останутся как есть."
+          : "Выберите то, что даёт новый уровень: подкласс, увеличение характеристик или талант, новые заклинания и умения. Прежние выборы сохранены; снаряжение и состояние героя не меняются."}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-gold">Хиты {draft.level} уровня (d{die}):</span>
+        <button type="button" onClick={() => set(averageHitDie(die))} className="rounded border border-edge px-2 py-1 text-xs hover:border-gold">
+          Среднее ({averageHitDie(die)})
+        </button>
+        <button
+          type="button"
+          onClick={() => set(1 + Math.floor(Math.random() * die))}
+          className="rounded border border-edge px-2 py-1 text-xs hover:border-gold"
+        >
+          Бросок d{die}
+        </button>
+        <label className="text-xs text-muted">
+          Своё
+          <input
+            type="number"
+            min={1}
+            max={die}
+            value={value}
+            onChange={(e) => set(Number(e.target.value) || 1)}
+            className="ml-1 w-14 rounded-md border border-edge bg-ink px-2 py-1 text-sm text-parchment"
+          />
+        </label>
+        <span className="text-xs text-muted">сейчас: {value} + модификатор Телосложения</span>
+      </div>
+    </section>
   );
 }
 

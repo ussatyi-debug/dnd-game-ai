@@ -106,6 +106,8 @@ export interface Draft {
   gender: Gender;
   alignment: string;
   appearance: string;
+  /** Уровень, на котором герой получил стартовый набор (после повышения набор не меняется). */
+  kitLevel?: number;
 }
 
 const EIGHTS: Record<AbilityId, number> = {
@@ -570,7 +572,7 @@ const levelLabelOf = (level: number) => (level === 0 ? "заговор" : `${lev
 
 /** Выбор магических предметов стартового набора (ступени 4–6 и 7–9). */
 function kitSlots(d: Draft, cls: ClassData): ChoiceSlot[] {
-  const tier = tierOf(d.level);
+  const tier = tierOf(d.kitLevel ?? d.level);
   if (tier === 1) return [];
   const items = classItems(d);
   const hasArmor = items.some((i) => {
@@ -869,7 +871,7 @@ export function tierOf(level: number): 1 | 2 | 3 {
 export function classItems(d: Draft): string[] {
   const r = resolve(d);
   if (!r.cls || one(d, "equip.class") === "gold") return [];
-  const tier = tierOf(d.level);
+  const tier = tierOf(d.kitLevel ?? d.level);
   return r.cls.equipment.items.map((i) => {
     if (i === "Инструменты или музыкальный инструмент") return one(d, "monk.tool") ?? i;
     const a = ARMOR_BY_NAME.get(i);
@@ -890,7 +892,7 @@ export function kitWeapons(d: Draft): WeaponData[] {
 
 /** Выбранные магические предметы стартового набора. */
 export function kitMagicItems(d: Draft): KitItem[] {
-  const tier = tierOf(d.level);
+  const tier = tierOf(d.kitLevel ?? d.level);
   const ids = [...(tier >= 2 ? pick(d, "kit.common") : []), ...(tier >= 3 ? pick(d, "kit.uncommon") : [])];
   return ids.map((id) => KIT_ITEM_BY_ID.get(id)).filter((x): x is KitItem => Boolean(x));
 }
@@ -903,7 +905,7 @@ export function kitWeaponFor(d: Draft, item: KitItem): WeaponData | undefined {
 
 /** Добавка ступени: зелья, предметы, золото. */
 export function tierKit(d: Draft): { items: string[]; gold: number } {
-  const tier = tierOf(d.level);
+  const tier = tierOf(d.kitLevel ?? d.level);
   const items: string[] = [];
   let gold = 0;
   if (tier === 1) {
@@ -1649,6 +1651,7 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
       .filter((m) => m.attunement)
       .map((m) => ({ name: m.name, effect: m.text })),
     notes: [],
+    draft: JSON.stringify(d),
   };
 }
 
@@ -1713,3 +1716,41 @@ export function signed(n: number): string {
 }
 
 export { ABILITY_SHORT, CLASSES };
+
+// ───────────────────────────── повышение уровня ─────────────────────────────
+
+/** Черновик повышения уровня: выборы героя сохранены, уровень +1, хиты прошлых уровней закреплены.
+ *  `fromSheet` — черновика в листе нет (герой создан до 0.9.8): выборы делаются заново. */
+export function levelUpDraft(spec: HeroSpec): { draft: Draft; fromSheet: boolean } {
+  const level = spec.classes.reduce((sum, c) => sum + c.level, 0) || 1;
+  let saved: Draft | null = null;
+  try {
+    const parsed = spec.draft ? (JSON.parse(spec.draft) as Draft) : null;
+    if (parsed?.version === 1 && parsed.level === level) saved = { ...newDraft(), ...parsed };
+  } catch {
+    saved = null;
+  }
+  if (saved) {
+    const d = structuredClone(saved);
+    const die = resolve(d).cls?.hitDie ?? 8;
+    d.hpRolls = hpValues(saved);
+    d.hpMode = "manual";
+    d.kitLevel = saved.kitLevel ?? saved.level;
+    d.level = level + 1;
+    d.hpRolls.push(averageHitDie(die));
+    return { draft: d, fromSheet: false };
+  }
+  const d = newDraft();
+  const byName = (list: { id: string; name: string }[], v: string) => list.find((x) => x.id === v || x.name === v)?.id ?? null;
+  d.speciesId = byName([...SPECIES_BY_ID.values()], spec.species);
+  d.backgroundId = byName([...BACKGROUND_BY_ID.values()], spec.background);
+  d.classId = spec.classes[0]?.id ?? null;
+  d.level = level + 1;
+  d.kitLevel = level;
+  d.tier = tierOf(level);
+  d.name = spec.name;
+  d.alignment = spec.alignment;
+  d.appearance = spec.appearance;
+  d.gender = spec.portrait.endsWith("-f") || spec.portrait.endsWith("_f") ? "f" : "m";
+  return { draft: d, fromSheet: true };
+}

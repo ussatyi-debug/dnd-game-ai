@@ -40,6 +40,9 @@ import {
   recruitRequests,
   addMember,
   dismissRecruit,
+  levelUp,
+  xpStatus,
+  type XpStatus,
   type RecruitInfo,
   type RecruitRequest,
   resolveProposal,
@@ -110,6 +113,7 @@ import {
 import { CURRENT_DAY, equipment, TIERS, type Draft } from "./lib/creation.ts";
 import type { HeroSpec } from "./lib/heroSpec";
 import CreationWizard, { type CompanionMode } from "./components/creation/CreationWizard.tsx";
+import { heroSpec } from "./lib/sheetExport";
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { webAiGenerate } from "./lib/browserAi";
 import { promptSize, recentTurns, twoStepFor, UPDATE_TIMEOUT_MS } from "./lib/masterPrefs";
@@ -230,6 +234,9 @@ export default function App() {
   const [kbFresh, setKbFresh] = useState(0);
   const [recruit, setRecruit] = useState<RecruitInfo | null>(null);
   const [recruits, setRecruits] = useState<RecruitRequest[]>([]);
+  const [xp, setXp] = useState<XpStatus | null>(null);
+  /** Повышение уровня: лист героя до повышения. */
+  const [levelUpSpec, setLevelUpSpec] = useState<HeroSpec | null>(null);
   const [companionMode, setCompanionMode] = useState<CompanionMode | null>(null);
   const [creating, setCreating] = useState(false);
   /** Новая игра началась — мастер должен открыть её вступлением. */
@@ -334,6 +341,9 @@ export default function App() {
         setRecruits(list);
       })
       .catch(() => undefined);
+    xpStatus()
+      .then(setXp)
+      .catch(() => setXp(null));
   }, []);
 
   useEffect(() => {
@@ -1028,7 +1038,36 @@ export default function App() {
     }
   }
 
-  /** Новая кампания с созданным героем: движок проверяет лист и собирает мир. */
+  /** Окно повышения уровня: лист героя из сохранения своей кампании. */
+  async function openLevelUp(id: string) {
+    try {
+      const spec = await heroSpec(id);
+      if (!spec) throw new Error("Лист героя не найден в кампании.");
+      setLevelUpSpec(spec);
+    } catch (e) {
+      addMessage("system", errorText(e));
+    }
+  }
+
+  /** Повышение уровня: движок проверяет лист нового уровня, мастер описывает, как герой вырос. */
+  async function confirmLevelUp(_draft: Draft, spec: HeroSpec) {
+    const line = await levelUp(spec);
+    setLevelUpSpec(null);
+    await refresh();
+    addMessage("system", `Повышение уровня — ${line}.`);
+    if (masterReady && masterKnown) {
+      const message: ChatMessage = {
+        id: nextId.current++,
+        author: "player",
+        text: `[Повышение уровня] ${line}. Коротко опиши, как герой ощущает новую силу, и продолжай сцену.`,
+        time: now(),
+        hidden: true,
+      };
+      setMessages((prev) => [...prev, message]);
+      request(message);
+    }
+  }
+
   /** Новый член отряда: движок проверяет правила и лист, мастер описывает появление спутника. */
   async function confirmCompanion(_draft: Draft, spec: HeroSpec) {
     const id = await addMember(spec, companionMode?.request?.id ?? null);
@@ -1187,6 +1226,8 @@ export default function App() {
             recruits={recruits}
             onAddMember={(req) => recruit && setCompanionMode({ maxLevel: recruit.max_level, request: req })}
             onDismissRecruit={(id) => void dismissRecruit(id).then(() => refresh())}
+            xp={xp}
+            onLevelUp={(id) => void openLevelUp(id)}
           />
         </div>
 
@@ -1375,6 +1416,9 @@ export default function App() {
         />
       )}
       {creating && <CreationWizard onClose={() => setCreating(false)} onConfirm={startNewCampaign} />}
+      {levelUpSpec && (
+        <CreationWizard onClose={() => setLevelUpSpec(null)} onConfirm={confirmLevelUp} levelUp={levelUpSpec} />
+      )}
       {companionMode && (
         <CreationWizard onClose={() => setCompanionMode(null)} onConfirm={confirmCompanion} companion={companionMode} />
       )}

@@ -1,4 +1,4 @@
-import { formatGold, type PartyView, type RecruitInfo, type RecruitRequest } from "../lib/engine";
+import { formatGold, type PartyView, type RecruitInfo, type RecruitRequest, type XpStatus } from "../lib/engine";
 
 interface PartyPanelProps {
   party: PartyView | null;
@@ -11,6 +11,9 @@ interface PartyPanelProps {
   recruits?: RecruitRequest[];
   onAddMember?: (request: RecruitRequest | null) => void;
   onDismissRecruit?: (id: number) => void;
+  /** Опыт отряда. */
+  xp?: XpStatus | null;
+  onLevelUp?: (id: string) => void;
 }
 
 export default function PartyPanel({
@@ -22,6 +25,8 @@ export default function PartyPanel({
   recruits = [],
   onAddMember,
   onDismissRecruit,
+  xp,
+  onLevelUp,
 }: PartyPanelProps) {
   if (!party) {
     return (
@@ -76,8 +81,9 @@ export default function PartyPanel({
         {members.map((m) => {
           const hpPercent = m.hit_points.max > 0 ? (m.hit_points.current / m.hit_points.max) * 100 : 0;
           const active = m.id === activeId;
+          const exp = xp?.members.find((x) => x.id === m.id);
           return (
-            <li key={m.id}>
+            <li key={m.id} className="space-y-1">
               <button
                 type="button"
                 onClick={() => onSelect(m.id)}
@@ -112,8 +118,24 @@ export default function PartyPanel({
                     ))}
                   </div>
                 )}
+                {exp && (
+                  <div className="mt-1 text-[11px] text-muted" title="Опыт и порог следующего уровня">
+                    Опыт <span className={exp.ready ? "text-gold" : "text-parchment/80"}>{exp.xp.toLocaleString("ru-RU")}</span>
+                    {exp.xp_next != null && ` / ${exp.xp_next.toLocaleString("ru-RU")}`}
+                    {exp.ready && !exp.open && exp.can_level && " · повышение на длительном отдыхе"}
+                  </div>
+                )}
                 {!m.in_scene && <div className="mt-1 text-[11px] text-gold/80">📍 {m.location}</div>}
               </button>
+              {exp?.open && exp.can_level && (
+                <button
+                  type="button"
+                  onClick={() => onLevelUp?.(m.id)}
+                  className="w-full rounded-md border border-gold bg-gold/15 px-3 py-1.5 text-sm font-medium text-gold hover:bg-gold/25"
+                >
+                  ⬆ Повысить уровень · {exp.level + 1} ур.
+                </button>
+              )}
             </li>
           );
         })}

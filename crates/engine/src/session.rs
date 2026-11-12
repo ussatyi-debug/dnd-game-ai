@@ -163,6 +163,10 @@ pub struct SaveState {
     pub proposals: Vec<SheetProposal>,
     /// Своя кампания с созданными героями; `None` — кампания «Дом Стрэндж».
     pub campaign: Option<Campaign>,
+    /// Журнал опыта: пометки мастера до начисления.
+    pub xp_log: Vec<crate::experience::XpNote>,
+    /// Кому открыто повышение уровня (после длительного отдыха).
+    pub level_up_open: Vec<String>,
 }
 
 /// Состояние сессии.
@@ -203,6 +207,10 @@ pub struct Session {
     /// Предложения мастера принять персонажа в отряд (ждут листа; в сохранение не попадают).
     pub(crate) recruits: Vec<crate::recruit::RecruitRequest>,
     pub(crate) next_recruit_id: u64,
+    /// Журнал опыта: пометки мастера, за что положен опыт (до начисления).
+    pub(crate) xp_log: Vec<crate::experience::XpNote>,
+    /// Кому открыто повышение уровня (порог пройден и был длительный отдых).
+    pub(crate) level_up_open: Vec<String>,
 }
 
 /// Снимок сцены, который мастер получает неизменным до смены сцены, и состояние на момент
@@ -244,6 +252,8 @@ impl Session {
             turns_since_chronicle: 0,
             recruits: Vec::new(),
             next_recruit_id: 0,
+            xp_log: Vec::new(),
+            level_up_open: Vec::new(),
         }
     }
 
@@ -598,6 +608,9 @@ impl Session {
                 restored: c.apply_rest(kind),
             })
             .collect();
+        if kind == RestKind::Long {
+            self.open_level_ups();
+        }
         RestResult { kind, characters }
     }
 
@@ -615,6 +628,8 @@ impl Session {
             turns_without_notes: self.turns_without_notes,
             proposals: self.proposals.clone(),
             campaign: self.campaign.clone(),
+            xp_log: self.xp_log.clone(),
+            level_up_open: self.level_up_open.clone(),
         }
     }
 }
