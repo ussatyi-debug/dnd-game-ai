@@ -121,7 +121,7 @@ fn api_error(provider: &str, status: u16, body: &Value) -> String {
     }
 }
 
-fn key<'a>(settings: &'a AiSettings, provider: Provider) -> Result<&'a str, String> {
+fn key(settings: &AiSettings, provider: Provider) -> Result<&str, String> {
     settings.key_for(provider).ok_or_else(|| {
         format!(
             "Нет ключа {} — введите его в настройках ИИ-мастера (тот же ключ работает для озвучки)",
@@ -262,7 +262,7 @@ pub async fn cloud_synth(
                 .unwrap_or(24_000);
             let bytes = base64_decode(data)?;
             let pcm: Vec<i16> =
-                bytes.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+                bytes.as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b)).collect();
             Ok(wav_from_i16(&pcm, rate_hz))
         }
         Provider::Yandex => {
