@@ -370,6 +370,8 @@ export function StepClass({ draft, update }: StepProps) {
         </Section>
       )}
 
+      {r.cls && draft.level > 1 && <ClassLevels draft={draft} />}
+
       {r.cls && (
         <>
           <Section title="3.2 Навыки, экспертиза и мастерство">
@@ -389,6 +391,40 @@ export function StepClass({ draft, update }: StepProps) {
         </>
       )}
     </div>
+  );
+}
+
+/** Новые умения класса и подкласса по уровням: что герой получил на пути к стартовому уровню. */
+function ClassLevels({ draft }: { draft: Draft }) {
+  const r = resolve(draft);
+  if (!r.cls) return null;
+  const all = [
+    ...r.cls.features.map((f) => ({ ...f, from: r.cls!.name })),
+    ...(r.subclass?.features ?? []).map((f) => ({ ...f, from: r.subclass!.name })),
+  ].filter((f) => f.level <= draft.level);
+  const levels = [...new Set(all.map((f) => f.level))].sort((a, b) => a - b);
+  return (
+    <Section title="Новые умения класса" hint="по уровням до стартового">
+      <ol className="space-y-2 text-xs">
+        {levels.map((lvl) => (
+          <li key={lvl} className="rounded-md border border-edge/60 p-2">
+            <p className="font-serif text-gold">{lvl} уровень</p>
+            <ul className="mt-1 space-y-1">
+              {all
+                .filter((f) => f.level === lvl)
+                .map((f) => (
+                  <li key={`${f.from}-${f.name}`}>
+                    <span className="text-parchment">{f.name}</span>
+                    <span className="text-muted"> · {f.from}</span>
+                    {f.choices?.length ? <span className="text-gold/80"> · выбор ниже</span> : null}
+                    <p className="text-parchment/75">{f.text}</p>
+                  </li>
+                ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </Section>
   );
 }
 
