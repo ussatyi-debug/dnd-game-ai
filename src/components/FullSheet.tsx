@@ -231,7 +231,7 @@ export function PartySection({ party, onOpen }: { party: PartyView | null; onOpe
   );
 }
 
-/** Экспорт листа: JSON (для импорта), DOC (Word), PDF (печать). */
+/** Экспорт листа: JSON (для импорта), DOC (Word), PDF; DOC и PDF тоже импортируются. */
 function SheetExportButtons({ id }: { id: string }) {
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

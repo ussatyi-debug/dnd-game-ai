@@ -123,7 +123,7 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
     }
   }
 
-  /** Импорт листа из JSON: движок проверяет лист так же, как при создании, и игра начинается с ним. */
+  /** Импорт листа из JSON, DOC или PDF: движок проверяет лист так же, как при создании, и игра начинается с ним. */
   async function importSheet(file: File) {
     setError(null);
     try {
@@ -161,11 +161,11 @@ export default function CreationWizard({ onClose, onConfirm, companion }: Creati
             {companion ? `Новый член отряда · до ${companion.maxLevel} ур.` : "Новый герой"}
           </h2>
           <div className="flex items-center gap-1">
-            <label className="cursor-pointer rounded-md border border-edge px-2 py-1 text-xs hover:border-gold" title="Лист героя из файла JSON (экспорт листа)">
+            <label className="cursor-pointer rounded-md border border-edge px-2 py-1 text-xs hover:border-gold" title="Лист героя из файла JSON, DOC или PDF (экспорт листа)">
               Импорт листа
               <input
                 type="file"
-                accept="application/json,.json"
+                accept=".json,.doc,.html,.pdf,application/json,application/msword,text/html,application/pdf"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

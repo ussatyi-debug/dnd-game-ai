@@ -452,12 +452,14 @@ fn autosave_read(app: tauri::AppHandle, campaign: String, slot: u8) -> Result<St
 fn export_save(app: tauri::AppHandle, name: String, json: String) -> Result<String, String> {
     let safe: String = name
         .chars()
-        .map(
-            |c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' },
-        )
-        .collect();
-    // Сохранения и листы — .json; лист для Word — .doc (HTML), для печати — .html.
-    let known = [".json", ".doc", ".html"].iter().any(|ext| safe.ends_with(ext));
+        .map(|c| if c.is_alphanumeric() || " -_.()".contains(c) { c } else { '_' })
+        .collect::<String>()
+        .trim()
+        .trim_start_matches('.')
+        .to_string();
+    let safe = if safe.is_empty() { "sheet.json".to_string() } else { safe };
+    // Сохранения и листы — .json; лист для Word — .doc (HTML), для печати — .html; PDF — текстовый (ASCII).
+    let known = [".json", ".doc", ".html", ".pdf"].iter().any(|ext| safe.ends_with(ext));
     let safe = if known { safe } else { format!("{safe}.json") };
     let dir = export_dir(&app)?;
     std::fs::create_dir_all(&dir)

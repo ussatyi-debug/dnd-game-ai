@@ -31,7 +31,8 @@ export default function PartyPanel({
     );
   }
 
-  const members = [...party.members].sort((a, b) => Number(b.in_scene) - Number(a.in_scene));
+  // Порядок — как в отряде: новые спутники в конце; отсутствующие в сцене только приглушены.
+  const members = party.members;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge bg-panel">

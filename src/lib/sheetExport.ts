@@ -1,14 +1,16 @@
-// Экспорт листа персонажа (JSON, PDF, DOC) и импорт листа из JSON.
+// Экспорт листа персонажа (JSON, PDF, DOC) и импорт листа из любого из трёх форматов.
 //
 // JSON — описание героя (HeroSpec) в обёртке с версией: его можно импортировать в новой
 // кампании, движок проверит лист так же, как при создании. Для отряда «Дома Стрэндж» описания
 // нет (листы встроены) — в файл попадает только текущий лист, импортировать его нельзя.
-// DOC — HTML-документ, который открывает Word; PDF — печать листа («Сохранить как PDF»).
+// DOC — HTML-документ, который открывает Word; PDF собирается в игре (страницы-картинки).
+// В DOC и PDF вложен тот же файл листа (base64 между метками) — импорт находит его в любом формате.
 
 import { invoke } from "@tauri-apps/api/core";
 import { getDownloads } from "./claude";
 import { characterDetails, characterSheet, saveState, type CharacterSheet, type SheetDetails } from "./engine";
 import type { HeroSpec } from "./heroSpec";
+import { sheetBlocks, sheetPdf } from "./sheetPdf";
 
 export const SHEET_FORMAT = "dnd-game-ai.hero";
 export const SHEET_VERSION = 1;
@@ -24,22 +26,46 @@ export interface SheetFile {
 }
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** Имя файла без запрещённых символов: «Лисса_Терн». */
-function fileBase(name: string): string {
+/** Имя файла по имени героя без запрещённых символов: «Лисса Тёрн». */
+export function fileBase(name: string): string {
   const base = name
     .trim()
-    .replace(/[\\/:*?"<>|]+/g, "")
-    .replace(/\s+/g, "_");
-  return base || "лист";
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^\.+/, "")
+    .trim();
+  return base || "Лист героя";
+}
+
+const EMBED_START = "DND-SHEET-BEGIN:";
+const EMBED_END = ":DND-SHEET-END";
+
+/** Файл листа для вложения в DOC/PDF: base64 от UTF-8 JSON между метками (только ASCII). */
+export function embedSheet(f: SheetFile): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(f));
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `${EMBED_START}${btoa(bin)}${EMBED_END}`;
+}
+
+/** Вложенный файл листа из текста DOC/PDF, если он есть. */
+function extractEmbedded(text: string): string | null {
+  const start = text.indexOf(EMBED_START);
+  if (start < 0) return null;
+  const end = text.indexOf(EMBED_END, start);
+  if (end < 0) return null;
+  const b64 = text.slice(start + EMBED_START.length, end).replace(/\s+/g, "");
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
 }
 
 /** Сохраняет текстовый файл: в приложении — в «Загрузки», в Claude — через платформу, иначе ссылкой. */
 export async function saveTextFile(name: string, text: string, mime: string): Promise<string> {
   if (isTauri()) {
-    const latin = name.replace(/[^\w.-]+/g, "_");
-    const path = await invoke<string>("export_save", { name: latin || "sheet.json", json: text });
+    const path = await invoke<string>("export_save", { name, json: text });
     return `Файл сохранён: ${path}`;
   }
   const downloads = await getDownloads();
@@ -109,12 +135,13 @@ ${rows([["Пассивная Внимательность", String(d.passive_per
 ${d.features.map((x) => `<p class="feat"><b>${esc(x.name)}</b> <i>${esc(x.source)}</i>. ${esc(x.text).replace(/\n/g, "<br>")}</p>`).join("")}
 ${d.appearance ? `<h2>Внешность</h2><p>${esc(d.appearance)}</p>` : ""}
 <p class="sub" style="margin-top:16px">DnD Game AI · ${esc(new Date(f.exported_at).toLocaleDateString("ru-RU"))}</p>
+<!--${embedSheet(f)}-->
 </body></html>`;
 }
 
 export type SheetFormat = "json" | "doc" | "pdf";
 
-/** Экспорт листа: файл JSON или DOC, PDF — печатью листа. Возвращает сообщение для игрока. */
+/** Экспорт листа: файл JSON, DOC или PDF. Возвращает сообщение для игрока. */
 export async function exportSheet(id: string, format: SheetFormat): Promise<string> {
   const f = await sheetFile(id);
   const base = fileBase(f.sheet.name);
@@ -124,48 +151,27 @@ export async function exportSheet(id: string, format: SheetFormat): Promise<stri
   }
   const html = sheetHtml(f);
   if (format === "doc") return saveTextFile(`${base}.doc`, html, "application/msword");
-  return printHtml(html);
-}
-
-/** Печать листа (в окне печати — «Сохранить как PDF»). */
-function printHtml(html: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const frame = document.createElement("iframe");
-    frame.style.position = "fixed";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.style.border = "0";
-    document.body.appendChild(frame);
-    const doc = frame.contentDocument;
-    if (!doc || !frame.contentWindow) {
-      frame.remove();
-      reject(new Error("Печать недоступна"));
-      return;
-    }
-    doc.open();
-    doc.write(html);
-    doc.close();
-    window.setTimeout(() => {
-      try {
-        frame.contentWindow?.focus();
-        frame.contentWindow?.print();
-        resolve("Откроется окно печати: выберите «Сохранить как PDF». На телефоне, если печать недоступна, сохраните лист в DOC.");
-      } catch (e) {
-        reject(new Error(`Печать недоступна: ${errorText(e)}`));
-      } finally {
-        window.setTimeout(() => frame.remove(), 60_000);
-      }
-    }, 300);
-  });
+  const pdf = sheetPdf(sheetBlocks(f), embedSheet(f));
+  return saveTextFile(`${base}.pdf`, pdf, "application/pdf");
 }
 
 /** Описание героя из файла листа (или из голого HeroSpec). */
 export function parseSheetFile(text: string): HeroSpec {
   let data: unknown;
+  let json = text;
+  if (!text.trimStart().startsWith("{")) {
+    const embedded = extractEmbedded(text);
+    if (!embedded) {
+      throw new Error(
+        "В файле нет данных листа. Импортируются JSON, DOC и PDF, сохранённые игрой с версии 0.9.8 (DOC — без пересохранения в Word).",
+      );
+    }
+    json = embedded;
+  }
   try {
-    data = JSON.parse(text);
+    data = JSON.parse(json);
   } catch {
-    throw new Error("Файл не похож на лист: это не JSON.");
+    throw new Error("Файл не похож на лист: данные повреждены.");
   }
   const obj = data as Partial<SheetFile> & Partial<HeroSpec>;
   if (obj.format === SHEET_FORMAT) {
