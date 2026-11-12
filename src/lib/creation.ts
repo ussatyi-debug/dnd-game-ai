@@ -371,11 +371,19 @@ function ruleChoice(d: Draft, c: Choice, key: string, source: string, step: Step
     case "weapon_mastery":
       options = r.cls ? weaponOptions(r.cls) : [];
       break;
-    case "option":
+    case "option": {
+      // Требование другого варианта (воззвания колдуна: «Жаждущий клинок» — после «Договора клинка»).
+      const chosen = new Set(d.picks[key] ?? []);
+      const nameOf = (id: string) => (c.options ?? []).find((o) => o.id === id)?.name ?? id;
       options = (c.options ?? [])
         .filter((o) => !o.minLevel || d.level >= o.minLevel)
-        .map((o) => ({ id: o.id, name: o.name, text: o.text }));
+        .map((o) =>
+          o.requires && !chosen.has(o.requires)
+            ? { id: o.id, name: o.name, text: o.text, disabled: true, note: `нужно: ${nameOf(o.requires)}` }
+            : { id: o.id, name: o.name, text: o.text },
+        );
       break;
+    }
     default:
       break;
   }
@@ -405,6 +413,17 @@ export function choiceSlots(d: Draft): ChoiceSlot[] {
         out.push(ruleChoice(d, c, c.id, `${f.name} (${f.level} ур.)`, "class"));
       }
     }
+  }
+  if (r.cls?.id === "monk") {
+    // Монах: владение одним инструментом ремесленника или музыкальным инструментом (он же — в наборе).
+    out.push({
+      key: "monk.tool",
+      label: "Инструмент (ремесленника или музыкальный)",
+      source: r.cls.name,
+      count: 1,
+      options: [...ARTISAN_TOOLS, ...MUSICAL_INSTRUMENTS].map((n) => ({ id: n, name: n })),
+      step: "class",
+    });
   }
   if (r.cls) out.push(...kitSlots(d, r.cls));
   for (const slot of featSlots(d)) {
@@ -727,6 +746,7 @@ export function classItems(d: Draft): string[] {
   if (!r.cls || one(d, "equip.class") === "gold") return [];
   const tier = tierOf(d.level);
   return r.cls.equipment.items.map((i) => {
+    if (i === "Инструменты или музыкальный инструмент") return one(d, "monk.tool") ?? i;
     const a = ARMOR_BY_NAME.get(i);
     if (!a || a.type === "shield" || tier === 1) return i;
     return tier === 2 ? (ARMOR_UPGRADE_T2[i] ?? i) : ARMOR_BEST[a.type];
@@ -1435,7 +1455,7 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
     armor_class_breakdown: ac.parts,
     speed_ft: speed(d),
     xp: XP_THRESHOLDS[d.level - 1] ?? 0,
-    save_proficiencies: cls?.saves ?? [],
+    save_proficiencies: saveProficiencies(d),
     skills: kitSkills(skillProficiencies(d), magic),
     initiative_bonuses: initiative,
     attacks,
@@ -1498,6 +1518,17 @@ function kitSkills(skills: SpecSkill[], magic: KitItem[]): SpecSkill[] {
   };
   if (magic.some((m) => m.effect === "boots_elvenkind")) entry("stealth").advantage.push("Сапоги эльфов (бесшумное передвижение)");
   if (magic.some((m) => m.effect === "gloves_thievery")) entry("sleight_of_hand").bonuses.push({ label: "Перчатки вора", value: 5 });
+  return out;
+}
+
+/** Спасброски: класса и «Устойчивого» (владение спасброском характеристики, которую он повышает). */
+export function saveProficiencies(d: Draft): AbilityId[] {
+  const out: AbilityId[] = [...(resolve(d).cls?.saves ?? [])];
+  for (const slot of featSlots(d)) {
+    if (slotFeat(d, slot)?.id !== "resilient") continue;
+    const ability = d.picks[`${slot.key}:abilities`]?.[0] as AbilityId | undefined;
+    if (ability && !out.includes(ability)) out.push(ability);
+  }
   return out;
 }
 
