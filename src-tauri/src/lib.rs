@@ -288,6 +288,37 @@ fn validate_hero(spec: serde_json::Value) -> Result<Vec<String>, String> {
     Ok(check_hero(&spec))
 }
 
+/// Можно ли принять спутника и какого уровня.
+#[tauri::command]
+fn recruit_info(state: State<'_, SessionState>) -> Result<dnd_engine::RecruitInfo, String> {
+    Ok(lock(&state)?.recruit_info())
+}
+
+/// Предложения мастера принять персонажа в отряд.
+#[tauri::command]
+fn recruit_requests(
+    state: State<'_, SessionState>,
+) -> Result<Vec<dnd_engine::RecruitRequest>, String> {
+    Ok(lock(&state)?.recruit_requests().to_vec())
+}
+
+/// Принять спутника по листу (необязательно — по предложению мастера `request`).
+#[tauri::command]
+fn add_member(
+    spec: serde_json::Value,
+    request: Option<u64>,
+    state: State<'_, SessionState>,
+) -> Result<String, String> {
+    let spec: HeroSpec =
+        serde_json::from_value(spec).map_err(|e| format!("Лист героя не прочитан: {e}"))?;
+    lock(&state)?.add_member(spec, request).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn dismiss_recruit(id: u64, state: State<'_, SessionState>) -> Result<bool, String> {
+    Ok(lock(&state)?.dismiss_recruit(id))
+}
+
 /// Новая своя кампания вместо текущей игры.
 #[tauri::command]
 fn start_campaign(
@@ -965,6 +996,10 @@ pub fn run() {
             edit_sheet,
             revert_sheet_edit,
             sheet_proposals,
+            recruit_info,
+            recruit_requests,
+            add_member,
+            dismiss_recruit,
             resolve_proposal,
             create_card,
             update_card,

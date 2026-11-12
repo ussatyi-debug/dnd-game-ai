@@ -8,7 +8,7 @@ import { CLASSES } from "../../data/rules/classes/index.ts";
 import { SPECIES } from "../../data/rules/species.ts";
 import { buildSpec, newDraft, portraitKey, STEPS, stepIssues, TIERS, type Draft, type StepId } from "../../lib/creation.ts";
 import { QUICK_HEROES, quickDraft, type QuickHero } from "../../lib/quickstart.ts";
-import { validateHero } from "../../lib/engine";
+import { validateHero, type RecruitRequest } from "../../lib/engine";
 import { parseSheetFile } from "../../lib/sheetExport";
 import type { HeroSpec } from "../../lib/heroSpec";
 import HeroSheet from "./HeroSheet.tsx";
@@ -30,20 +30,48 @@ function loadDraft(): Draft {
   return newDraft();
 }
 
+/** Создание спутника: уровень не выше героя − 1; черновик — из предложения мастера. */
+export interface CompanionMode {
+  maxLevel: number;
+  request: RecruitRequest | null;
+}
+
 interface CreationWizardProps {
   onClose: () => void;
   /** Подтверждение: лист уже собран; ошибку (например, отказ движка) мастер покажет. */
   onConfirm: (draft: Draft, spec: HeroSpec) => Promise<void>;
+  /** Новый член отряда вместо нового героя. */
+  companion?: CompanionMode;
 }
 
-export default function CreationWizard({ onClose, onConfirm }: CreationWizardProps) {
-  const [draft, setDraft] = useState<Draft>(loadDraft);
+/** Черновик спутника по предложению мастера: что мастер назвал — уже выбрано. */
+function companionDraft(mode: CompanionMode): Draft {
+  const d = newDraft();
+  const r = mode.request;
+  const level = Math.max(1, Math.min(mode.maxLevel, r?.level || mode.maxLevel));
+  d.level = level;
+  d.tier = TIERS.find((t) => (t.levels as readonly number[]).includes(level))?.id ?? 3;
+  if (!r) return d;
+  d.name = r.name;
+  if (SPECIES.some((x) => x.id === r.species)) d.speciesId = r.species;
+  if (CLASSES.some((x) => x.id === r.class)) d.classId = r.class;
+  if (r.subclass) d.picks["class.subclass"] = [r.subclass];
+  if (r.background) d.backgroundId = r.background;
+  if (r.gender === "f" || r.gender === "m") d.gender = r.gender;
+  d.alignment = r.alignment;
+  d.appearance = [r.appearance, r.note].filter(Boolean).join(" ");
+  return d;
+}
+
+export default function CreationWizard({ onClose, onConfirm, companion }: CreationWizardProps) {
+  const [draft, setDraft] = useState<Draft>(() => (companion ? companionDraft(companion) : loadDraft()));
   const [step, setStep] = useState<StepId>("species");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quick, setQuick] = useState(false);
 
   useEffect(() => {
+    if (companion) return;
     try {
       window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch {
@@ -60,7 +88,7 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
 
   const index = STEPS.findIndex((s) => s.id === step);
   const issues = useMemo(() => stepIssues(draft, step), [draft, step]);
-  const spec = useMemo(() => (step === "sheet" ? buildSpec(draft) : null), [draft, step]);
+  const spec = useMemo(() => (step === "sheet" ? buildSpec(draft, companion ? "companion" : "player") : null), [draft, step, companion]);
   const go = (i: number) => {
     const next = STEPS[Math.max(0, Math.min(STEPS.length - 1, i))];
     if (next) {
@@ -72,11 +100,15 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
 
   async function confirm() {
     if (!spec) return;
+    if (companion && draft.level > companion.maxLevel) {
+      setError(`Уровень спутника — не выше ${companion.maxLevel} (уровень героя − 1).`);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       await onConfirm(draft, spec);
-      window.localStorage.removeItem(DRAFT_KEY);
+      if (!companion) window.localStorage.removeItem(DRAFT_KEY);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -125,7 +157,9 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
       <img src={worldMap} alt="" aria-hidden="true" className="pointer-events-none fixed inset-0 h-full w-full object-cover opacity-15" />
       <header className="relative border-b border-edge bg-ink/90 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
         <div className="flex items-center justify-between gap-2 px-3 py-2">
-          <h2 className="font-serif text-lg text-gold sm:text-xl">Новый герой</h2>
+          <h2 className="font-serif text-lg text-gold sm:text-xl">
+            {companion ? `Новый член отряда · до ${companion.maxLevel} ур.` : "Новый герой"}
+          </h2>
           <div className="flex items-center gap-1">
             <label className="cursor-pointer rounded-md border border-edge px-2 py-1 text-xs hover:border-gold" title="Лист героя из файла JSON (экспорт листа)">
               Импорт листа
@@ -183,7 +217,7 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
 
       <main id="creation-body" className="relative flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl space-y-4 px-3 py-4 sm:px-5">
-          {quick && <QuickStart onPick={chooseQuick} />}
+          {quick && <QuickStart onPick={chooseQuick} maxLevel={companion?.maxLevel} />}
           {!quick && step === "species" && <StepSpecies draft={draft} update={update} />}
           {!quick && step === "background" && <StepBackground draft={draft} update={update} />}
           {!quick && step === "class" && <StepClass draft={draft} update={update} />}
@@ -230,7 +264,7 @@ export default function CreationWizard({ onClose, onConfirm }: CreationWizardPro
 }
 
 /** Готовые герои: по 4 на ступени «Уровни 1–3» и «Уровни 4–6». */
-function QuickStart({ onPick }: { onPick: (h: QuickHero) => void }) {
+function QuickStart({ onPick, maxLevel }: { onPick: (h: QuickHero) => void; maxLevel?: number }) {
   const tiers: { tier: 1 | 2; title: string }[] = [
     { tier: 1, title: "Ступень 1 · 3 уровень" },
     { tier: 2, title: "Ступень 2 · 5 уровень" },
@@ -240,11 +274,13 @@ function QuickStart({ onPick }: { onPick: (h: QuickHero) => void }) {
       <p className="text-sm text-parchment/80">
         Готовые герои: выберите — откроется итоговый лист. Можно сразу начать приключение или вернуться к любому шагу и поправить.
       </p>
-      {tiers.map((t) => (
+      {tiers
+        .filter((t) => !maxLevel || QUICK_HEROES.some((h) => h.tier === t.tier && h.level <= maxLevel))
+        .map((t) => (
         <div key={t.tier} className="space-y-2">
           <h3 className="font-serif text-gold">{t.title}</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            {QUICK_HEROES.filter((h) => h.tier === t.tier).map((h) => {
+            {QUICK_HEROES.filter((h) => h.tier === t.tier && (!maxLevel || h.level <= maxLevel)).map((h) => {
               const species = SPECIES.find((s) => s.id === h.speciesId);
               const cls = CLASSES.find((c) => c.id === h.classId);
               const img = portraitUrl(portraitKey(h.speciesId, h.gender));

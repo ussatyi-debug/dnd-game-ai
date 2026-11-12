@@ -1014,3 +1014,46 @@ export function canExitApp(): boolean {
 export function exitApp(): Promise<void> {
   return invoke<void>("exit_app", {});
 }
+
+// ───────────────────────────── новые члены отряда ─────────────────────────────
+
+export interface RecruitInfo {
+  allowed: boolean;
+  reason: string;
+  hero_level: number;
+  max_level: number;
+  companions: number;
+  max_companions: number;
+}
+
+/** Предложение мастера принять персонажа в отряд (лист собирает игрок). */
+export interface RecruitRequest {
+  id: number;
+  name: string;
+  species: string;
+  class: string;
+  subclass: string;
+  background: string;
+  level: number;
+  gender: string;
+  alignment: string;
+  appearance: string;
+  note: string;
+}
+
+export function recruitInfo(): Promise<RecruitInfo> {
+  return call<RecruitInfo>("recruit_info");
+}
+
+export function recruitRequests(): Promise<RecruitRequest[]> {
+  return call<RecruitRequest[]>("recruit_requests");
+}
+
+/** Принять спутника по листу; возвращает его ID. */
+export function addMember(spec: HeroSpec, request: number | null): Promise<string> {
+  return call<string>("add_member", { spec, request });
+}
+
+export function dismissRecruit(id: number): Promise<boolean> {
+  return call<boolean>("dismiss_recruit", { id });
+}

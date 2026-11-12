@@ -35,6 +35,12 @@ import {
   masterUndoInfo,
   masterNotes,
   customCards,
+  recruitInfo,
+  recruitRequests,
+  addMember,
+  dismissRecruit,
+  type RecruitInfo,
+  type RecruitRequest,
   resolveProposal,
   sheetProposals,
   type SheetProposal,
@@ -102,7 +108,7 @@ import {
 } from "./lib/campaigns";
 import { CURRENT_DAY, equipment, TIERS, type Draft } from "./lib/creation.ts";
 import type { HeroSpec } from "./lib/heroSpec";
-import CreationWizard from "./components/creation/CreationWizard.tsx";
+import CreationWizard, { type CompanionMode } from "./components/creation/CreationWizard.tsx";
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { webAiGenerate } from "./lib/browserAi";
 import { promptSize, recentTurns, twoStepFor, UPDATE_TIMEOUT_MS } from "./lib/masterPrefs";
@@ -221,6 +227,9 @@ export default function App() {
   const [campaignId, setCampaignId] = useState<string>(initialCampaign);
   const [campaigns, setCampaigns] = useState<CampaignInfo[]>([]);
   const [kbFresh, setKbFresh] = useState(0);
+  const [recruit, setRecruit] = useState<RecruitInfo | null>(null);
+  const [recruits, setRecruits] = useState<RecruitRequest[]>([]);
+  const [companionMode, setCompanionMode] = useState<CompanionMode | null>(null);
   const [creating, setCreating] = useState(false);
   /** Новая игра началась — мастер должен открыть её вступлением. */
   const [opening, setOpening] = useState(false);
@@ -317,6 +326,12 @@ export default function App() {
     setProposals(nextProposals);
     Promise.all([masterNotes(), customCards()])
       .then(([n, c]) => setKbFresh(kbFreshCount(n, c)))
+      .catch(() => undefined);
+    Promise.all([recruitInfo(), recruitRequests()])
+      .then(([info, list]) => {
+        setRecruit(info);
+        setRecruits(list);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -1013,6 +1028,26 @@ export default function App() {
   }
 
   /** Новая кампания с созданным героем: движок проверяет лист и собирает мир. */
+  /** Новый член отряда: движок проверяет правила и лист, мастер описывает появление спутника. */
+  async function confirmCompanion(_draft: Draft, spec: HeroSpec) {
+    const id = await addMember(spec, companionMode?.request?.id ?? null);
+    setCompanionMode(null);
+    await refresh();
+    addMessage("system", `${spec.name} вступает в отряд.`);
+    setActiveId(id);
+    if (masterReady && masterKnown) {
+      const message: ChatMessage = {
+        id: nextId.current++,
+        author: "player",
+        text: `[Новый член отряда] В отряд вступил(а) ${spec.name}. Опиши появление спутника в новой сцене, опираясь на предыдущую.`,
+        time: now(),
+        hidden: true,
+      };
+      setMessages((prev) => [...prev, message]);
+      request(message);
+    }
+  }
+
   /** «Эльф · Волшебник 3» по описанию героя (подходит и для импортированного листа). */
   function specSummary(spec: HeroSpec): string {
     const cls = spec.classes.map((c) => `${c.name} ${c.level}`).join(" / ");
@@ -1147,6 +1182,10 @@ export default function App() {
             activeId={activeId}
             onSelect={setActiveId}
             onOpenTreasury={() => setOpenWindow("treasury")}
+            recruit={recruit}
+            recruits={recruits}
+            onAddMember={(req) => recruit && setCompanionMode({ maxLevel: recruit.max_level, request: req })}
+            onDismissRecruit={(id) => void dismissRecruit(id).then(() => refresh())}
           />
         </div>
 
@@ -1335,6 +1374,9 @@ export default function App() {
         />
       )}
       {creating && <CreationWizard onClose={() => setCreating(false)} onConfirm={startNewCampaign} />}
+      {companionMode && (
+        <CreationWizard onClose={() => setCompanionMode(null)} onConfirm={confirmCompanion} companion={companionMode} />
+      )}
       {openWindow === "reference" && <ReferenceWindow onClose={() => setOpenWindow(null)} />}
       {openWindow === "log" && <LogWindow onClose={() => setOpenWindow(null)} />}
       {home && (

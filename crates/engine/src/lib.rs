@@ -33,6 +33,7 @@ pub mod knowledge;
 pub mod master_ops;
 pub mod notation;
 pub mod profile;
+pub mod recruit;
 pub mod resource;
 pub mod rng;
 pub mod savegame;
@@ -70,6 +71,7 @@ pub use profile::{
     Attack, AttackLine, Attunement, Bonus, Feature, HitDice, Proficiency, ProficiencyLine, Profile,
     SaveLine, SheetDetails, Skill, SkillEntry, SkillLine, CONDITIONS,
 };
+pub use recruit::{RecruitInfo, RecruitRequest, MAX_COMPANIONS, RECRUIT_FROM_LEVEL};
 pub use resource::{Recovery, ResourcePool, RestKind};
 pub use rng::{DiceRng, Xoshiro256};
 pub use savegame::{LoadReport, SaveData, SavedCharacter};

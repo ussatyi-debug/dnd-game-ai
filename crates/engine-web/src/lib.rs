@@ -155,6 +155,18 @@ pub enum Request {
     },
     /// Предложения мастера изменить лист.
     SheetProposals,
+    /// Можно ли принять спутника и какого уровня.
+    RecruitInfo,
+    /// Предложения мастера принять персонажа в отряд.
+    RecruitRequests,
+    /// Принять спутника по листу (необязательно — по предложению мастера).
+    AddMember {
+        spec: Value,
+        request: Option<u64>,
+    },
+    DismissRecruit {
+        id: u64,
+    },
     ResolveProposal {
         id: u64,
         accept: bool,
@@ -339,6 +351,14 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(true)
         }
         Request::SheetProposals => to_value(session.sheet_proposals()),
+        Request::RecruitInfo => to_value(session.recruit_info()),
+        Request::RecruitRequests => to_value(session.recruit_requests()),
+        Request::AddMember { spec, request } => {
+            let spec: HeroSpec =
+                serde_json::from_value(spec).map_err(|e| format!("Лист героя не прочитан: {e}"))?;
+            session.add_member(spec, request).map_err(|e| e.to_string()).and_then(to_value)
+        }
+        Request::DismissRecruit { id } => to_value(session.dismiss_recruit(id)),
         Request::ResolveProposal { id, accept } => {
             session.resolve_proposal(id, accept).map_err(|e| e.to_string())?;
             to_value(true)

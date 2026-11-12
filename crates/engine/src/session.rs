@@ -200,6 +200,9 @@ pub struct Session {
     pub(crate) chronicle_from: u32,
     /// Ходов мастера подряд без обновления пересказа текущего дня.
     pub(crate) turns_since_chronicle: u32,
+    /// Предложения мастера принять персонажа в отряд (ждут листа; в сохранение не попадают).
+    pub(crate) recruits: Vec<crate::recruit::RecruitRequest>,
+    pub(crate) next_recruit_id: u64,
 }
 
 /// Снимок сцены, который мастер получает неизменным до смены сцены, и состояние на момент
@@ -239,6 +242,8 @@ impl Session {
             rests: 0,
             chronicle_from: day,
             turns_since_chronicle: 0,
+            recruits: Vec::new(),
+            next_recruit_id: 0,
         }
     }
 

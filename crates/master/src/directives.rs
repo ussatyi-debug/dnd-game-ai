@@ -14,8 +14,8 @@
 
 use dnd_engine::{
     all_spells, AssetKind, CardDraft, CardFact, CastMethod, CastRequest, Character, GoalEdit,
-    HpChange, Mood, NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SceneChange, Session,
-    SheetEdit, SlotRef,
+    HpChange, Mood, NewNote, NoteEdit, NoteKind, NoteLayer, RecruitRequest, RestKind, SceneChange,
+    Session, SheetEdit, SlotRef,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -500,6 +500,24 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             } else {
                 engine(session.update_card(text_field(cmd, "card")?, draft))?;
             }
+            Ok(last_log(session))
+        })(),
+        "recruit" => (|| -> Result<String, String> {
+            let text = |key: &str| opt_text(cmd, key).unwrap_or("").to_string();
+            let level = int_field(cmd, "level").and_then(|l| u32::try_from(l).ok()).unwrap_or(0);
+            engine(session.request_recruit(RecruitRequest {
+                id: 0,
+                name: text("name"),
+                species: text("species"),
+                class: text("class"),
+                subclass: text("subclass"),
+                background: text("background"),
+                level,
+                gender: text("gender"),
+                alignment: text("alignment"),
+                appearance: text("appearance"),
+                note: text("note"),
+            }))?;
             Ok(last_log(session))
         })(),
         "goal" => (|| -> Result<String, String> {
