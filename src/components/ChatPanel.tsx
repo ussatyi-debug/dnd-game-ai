@@ -48,6 +48,8 @@ interface ChatPanelProps {
   /** Последний ход мастера, изменивший состояние, — его можно отменить. */
   undo: UndoInfo | null;
   onUndo: () => void;
+  /** Повторить последний ход мастера: отменяет его действия и шлёт заявку заново. */
+  onRetryTurn?: () => void;
   /** Озвучить ответ мастера. */
   onSpeak: (message: ChatMessage) => void;
   /** Заявка, на которую мастер не ответил из-за сбоя, — под ней кнопка повтора. */
@@ -117,6 +119,7 @@ export default function ChatPanel({
   onOpenDice,
   undo,
   onUndo,
+  onRetryTurn,
   onSpeak,
   failedId,
   onRetry,
@@ -424,13 +427,25 @@ export default function ChatPanel({
           <span className="min-w-0 truncate text-arcane" title={undo.actions.join("\n")}>
             ⚙ Мастер изменил состояние: действий — {undo.actions.length}
           </span>
-          <button
-            type="button"
-            onClick={onUndo}
-            className="shrink-0 rounded-md border border-arcane/60 px-2 py-1 text-arcane hover:bg-arcane/10"
-          >
-            Отменить действия мастера
-          </button>
+          <span className="flex shrink-0 gap-2">
+            {onRetryTurn && (
+              <button
+                type="button"
+                onClick={onRetryTurn}
+                title="Отменить действия мастера и переспросить его по той же заявке"
+                className="rounded-md border border-gold/60 px-2 py-1 text-gold hover:bg-gold/10"
+              >
+                Повторить ход
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onUndo}
+              className="rounded-md border border-arcane/60 px-2 py-1 text-arcane hover:bg-arcane/10"
+            >
+              Отменить действия мастера
+            </button>
+          </span>
         </div>
       )}
 

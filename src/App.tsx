@@ -711,6 +711,15 @@ export default function App() {
     const prose: string[] = [];
     let carried = "";
     const showWith = (text: string) => show([...prose, text].filter(Boolean).join("\n\n"));
+    /** Итог хода: пустой рассказ (мастер прислал только команды) заменяется подсказкой. */
+    const finish = (text: string) => {
+      if (text.trim()) {
+        show(text);
+        return;
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== reply.id));
+      addMessage("system", "Мастер прислал ход без рассказа. Нажмите «Повторить ход», чтобы переспросить.");
+    };
     const history = historyWith(playerMessage);
     let system = "";
     const withRolls = async (req: MasterRequest) => {
@@ -753,14 +762,14 @@ export default function App() {
       .then(({ narration, turn }) => {
         const size = logPromptSize(null, system.length + history.reduce((n, m) => n + m.text.length, 0));
         if (turn) {
-          show(turn.text);
+          finish(turn.text);
           logMasterRolls(rolled);
           recordTurn(reply.id, { ...turn, rolls: rolled, raw, model: `${tierName} · ${size}` });
           afterMasterTurn();
           return;
         }
         if (!narration) return;
-        show(narration.text);
+        finish(narration.text);
         logMasterRolls(rolled);
         recordTurn(reply.id, { actions: [], fabricated: [], rolls: rolled, raw, model: `${tierName} · ${size}` });
         const written = `${carried}${narration.written}`.trim();
@@ -864,6 +873,26 @@ export default function App() {
       })
       .catch((e: unknown) => addMessage("system", `Отдых не удался: ${errorText(e)}`))
       .finally(() => setBusy(false));
+  }
+
+  /** Повтор хода: отменяет действия мастера и шлёт последнюю заявку игрока заново.
+   *  Нужен, когда мастер прислал пустой или оборванный рассказ. */
+  function retryTurn() {
+    const last = [...messages].reverse().find((m) => m.author === "player" && !m.hidden);
+    if (!last) return;
+    undoMasterTurn()
+      .then(async (actions) => {
+        if (actions.length > 0) {
+          addMessage("engine", `Отменены действия мастера (${actions.length}) — спрашиваю заново`);
+        }
+        await refresh();
+        setMessages((prev) => prev.filter((m) => m.author !== "master" || m.id < last.id));
+        request(last);
+      })
+      .catch((e: unknown) => {
+        addMessage("system", errorText(e));
+        refresh().catch(() => undefined);
+      });
   }
 
   function undoMaster() {
@@ -1266,6 +1295,7 @@ export default function App() {
             }}
             undo={undo}
             onUndo={undoMaster}
+            onRetryTurn={retryTurn}
             onSpeak={speak}
             failedId={failed?.playerId ?? null}
             onRetry={retry}

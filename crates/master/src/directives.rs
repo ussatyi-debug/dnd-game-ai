@@ -177,11 +177,32 @@ fn is_cjk(c: char) -> bool {
 pub(crate) fn clean_reply(text: &str) -> String {
     text.lines()
         .filter(|l| !l.trim_start().starts_with("[ДВИЖОК]"))
+        .filter(|l| !is_service_line(l))
         .map(|l| l.chars().filter(|c| !is_cjk(*c)).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n")
         .trim()
         .to_string()
+}
+
+/// Служебная строка: мастер рассуждает вслух и показывает игроку внутренние имена движка
+/// («feat.mi.wizard.spell», «pc.hero», «slots.1»). В рассказе таких строк быть не должно.
+fn is_service_line(line: &str) -> bool {
+    let text = line.trim();
+    if text.is_empty() {
+        return false;
+    }
+    let id_like = |word: &str| {
+        let word = word.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.' && c != '_');
+        word.contains('.')
+            && word.len() >= 5
+            && word
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '_')
+            && word.split('.').filter(|p| !p.is_empty()).count() >= 2
+            && !word.ends_with('.')
+    };
+    text.split_whitespace().any(id_like)
 }
 
 /// Текст без блоков команд (для показа ответа, пока он печатается).
