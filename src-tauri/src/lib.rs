@@ -663,17 +663,44 @@ fn tts_share_status(state: State<'_, TtsState>) -> Result<serde_json::Value, Str
     #[cfg(windows)]
     {
         let share = lock(&state.share)?;
-        Ok(match share.as_ref() {
+        let mut status = match share.as_ref() {
             Some(s) => serde_json::to_value(s.status()).map_err(|e| e.to_string())?,
             None => {
                 serde_json::json!({ "running": false, "port": tts::share::DEFAULT_PORT, "address": null })
             }
-        })
+        };
+        let port = status["port"].as_u64().unwrap_or(u64::from(tts::share::DEFAULT_PORT)) as u16;
+        // Телефон может быть в другой сети, чем основной маршрут, — показываем все адреса ПК.
+        status["addresses"] = serde_json::json!(tts::share::lan_addresses()
+            .into_iter()
+            .map(|ip| format!("http://{ip}:{port}"))
+            .collect::<Vec<_>>());
+        status["firewall"] = serde_json::json!(tts::share::firewall_allowed(port));
+        Ok(status)
     }
     #[cfg(not(windows))]
     {
         let _ = state;
-        Ok(serde_json::json!({ "running": false, "port": 5150, "address": null }))
+        Ok(
+            serde_json::json!({ "running": false, "port": 5150, "address": null, "addresses": [], "firewall": true }),
+        )
+    }
+}
+
+/// Разрешает порт раздачи озвучки в брандмауэре Windows (игрок подтверждает запрос прав).
+#[tauri::command]
+fn tts_share_firewall(state: State<'_, TtsState>) -> Result<bool, String> {
+    #[cfg(windows)]
+    {
+        let port =
+            lock(&state.share)?.as_ref().map_or(tts::share::DEFAULT_PORT, |s| s.status().port);
+        tts::share::firewall_allow(port)?;
+        Ok(true)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = state;
+        Err("Брандмауэр настраивается только в версии для Windows".into())
     }
 }
 
@@ -1064,6 +1091,7 @@ pub fn run() {
             tts_silero_voices,
             tts_silero_synth,
             tts_share_status,
+            tts_share_firewall,
             tts_share_start,
             tts_share_stop,
             tts_cloud_models,

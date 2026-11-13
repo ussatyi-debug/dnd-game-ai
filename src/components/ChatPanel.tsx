@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { stripEngineBlocks, type SheetProposal, type UndoInfo } from "../lib/engine";
+import { enterSends } from "../lib/masterPrefs";
 import { isTaggedSpeech, stripSpeakerTag } from "../lib/tts";
 import CopyButton from "./CopyButton";
 
@@ -476,12 +477,13 @@ export default function ChatPanel({
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
           onKeyDown={(e) => {
-            // Enter — новая строка. Отправка — кнопкой или Ctrl+Enter на ПК.
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              const text = draft.trim();
-              if (text && !thinking && !updating) onSend(text);
-            }
+            // Отправка — кнопкой, Ctrl+Enter, а при включённой настройке — простым Enter.
+            if (e.key !== "Enter") return;
+            const send = e.ctrlKey || e.metaKey || (enterSends() && !e.shiftKey);
+            if (!send) return;
+            e.preventDefault();
+            const text = draft.trim();
+            if (text && !thinking && !updating) onSend(text);
           }}
           rows={2}
           placeholder="Заявка мастеру…"

@@ -14,6 +14,7 @@ import {
   PIPER_VOICES,
   serverVoices,
   shareStart,
+  shareFirewall,
   shareStatus,
   shareStop,
   sileroAvailable,
@@ -255,11 +256,42 @@ function SileroTab({ voices, setVoice }: VoiceProps) {
           />
         </label>
         {share?.running && (
-          <p className="text-xs">
-            На телефоне: Настройки → Озвучка → «Свой сервер», адрес{" "}
-            <span className="font-mono text-gold">{share.address ?? `http://<IP этого ПК>:${share.port}`}</span>. Телефон и ПК — в одной сети;
-            Windows может спросить разрешение брандмауэра.
-          </p>
+          <div className="space-y-1 text-xs">
+            <p>На телефоне: Настройки → Озвучка → «Свой сервер». Адрес этого ПК:</p>
+            <ul className="space-y-1">
+              {(share.addresses?.length ? share.addresses : [share.address ?? `http://<IP этого ПК>:${share.port}`]).map(
+                (address, i) => (
+                  <li key={address} className="flex items-center gap-2">
+                    <span className="font-mono text-gold">{address}</span>
+                    {i === 0 && share.addresses && share.addresses.length > 1 && (
+                      <span className="text-muted">— скорее всего, этот</span>
+                    )}
+                  </li>
+                ),
+              )}
+            </ul>
+            {share.addresses && share.addresses.length > 1 && (
+              <p className="text-muted">Если первый адрес не открывается на телефоне, попробуйте следующий.</p>
+            )}
+            {share.firewall === false && (
+              <div className="rounded border border-gold/60 bg-gold/5 p-2">
+                <p>Порт {share.port} закрыт брандмауэром Windows — телефон не достучится.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    void shareFirewall()
+                      .then(async () => setShare(await shareStatus()))
+                      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+                  }}
+                  className="mt-1 rounded-md border border-gold px-2 py-1 text-gold hover:bg-gold/10"
+                >
+                  Разрешить в брандмауэре
+                </button>
+                <p className="mt-1 text-muted">Windows спросит права администратора. Правило — только для этого порта и домашней сети.</p>
+              </div>
+            )}
+          </div>
         )}
       </div>
       {error && <p className="text-xs text-fumble">{error}</p>}

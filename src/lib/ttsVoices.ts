@@ -341,6 +341,15 @@ export interface ShareStatus {
   running: boolean;
   port: number;
   address: string | null;
+  /** Все адреса ПК в домашних сетях: телефон может быть в другой сети, чем основной маршрут. */
+  addresses?: string[];
+  /** Порт разрешён в брандмауэре Windows. */
+  firewall?: boolean;
+}
+
+/** Разрешает порт раздачи в брандмауэре Windows: игрок подтверждает запрос прав. */
+export function shareFirewall(): Promise<boolean> {
+  return invoke<boolean>("tts_share_firewall");
 }
 
 export function shareStatus(): Promise<ShareStatus> {

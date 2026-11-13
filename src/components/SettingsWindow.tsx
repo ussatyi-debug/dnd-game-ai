@@ -1,5 +1,6 @@
 // Окно «Настройки»: озвучка и ИИ-мастер.
 
+import { enterSends, setEnterSends } from "../lib/masterPrefs";
 import { useEffect, useState } from "react";
 import { DEFAULT_CHARACTERS, DEFAULT_PRONUNCIATIONS, saveTtsSettings, type Gender, type TtsSettings } from "../lib/tts";
 import TtsEnginePanel from "./TtsEnginePanel";
@@ -184,10 +185,24 @@ function TtsSettingsPanel({ tts, onChange }: { tts: TtsSettings; onChange: (s: T
       </section>
 
       <section className="space-y-2">
+        <label className="mb-3 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            defaultChecked={enterSends()}
+            onChange={(e) => setEnterSends(e.target.checked)}
+          />
+          <span>
+            Enter отправляет заявку
+            <span className="block text-xs text-muted">
+              Перенос строки — Shift+Enter. Без галочки Enter делает новую строку, а отправка — кнопкой или
+              Ctrl+Enter.
+            </span>
+          </span>
+        </label>
         <h3 className="font-serif text-gold">Произношение</h3>
         <p className="text-xs text-muted">
-          Как читать слово: ударение ставится знаком ́ после ударной гласной (Ни́кис) или слово пишется, как
-          слышится.
+          Как читать слово: поставьте «+» после ударной гласной (Ни+кис) или напишите слово так, как оно
+          слышится. Старые записи со знаком ударения тоже работают.
         </p>
         <ul className="space-y-1">
           {tts.pronunciations.map((p, i) => (

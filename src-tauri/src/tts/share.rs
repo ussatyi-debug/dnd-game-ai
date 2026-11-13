@@ -89,6 +89,92 @@ pub fn lan_ip() -> Option<String> {
     Some(socket.local_addr().ok()?.ip().to_string())
 }
 
+/// Все адреса этого ПК в домашних сетях — телефон может быть в другой сети, чем основной
+/// маршрут. Служебные адреса (127.*, 169.254.*) отбрасываются; первым идёт адрес маршрута.
+pub fn lan_addresses() -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    if let Some(main) = lan_ip() {
+        found.push(main);
+    }
+    let output = std::process::Command::new("ipconfig").output();
+    if let Ok(out) = output {
+        // ipconfig печатает в кодировке консоли; нужны только цифры и точки.
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            let Some((_, value)) = line.rsplit_once(':') else { continue };
+            let value = value.trim();
+            if value.split('.').count() != 4 {
+                continue;
+            }
+            if !value.split('.').all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
+                continue;
+            }
+            // Маска подсети и шлюз пропускаются: нужен только сам адрес карты.
+            let lower = line.to_lowercase();
+            if lower.contains("mask")
+                || lower.contains("маск")
+                || lower.contains("шлюз")
+                || lower.contains("gateway")
+            {
+                continue;
+            }
+            if value.starts_with("127.")
+                || value.starts_with("169.254.")
+                || value.starts_with("255.")
+            {
+                continue;
+            }
+            if !found.iter().any(|a| a == value) {
+                found.push(value.to_string());
+            }
+        }
+    }
+    found
+}
+
+/// Имя правила брандмауэра Windows для раздачи озвучки.
+pub const FIREWALL_RULE: &str = "DnD Game AI — озвучка в домашней сети";
+
+/// Есть ли правило брандмауэра для порта раздачи.
+pub fn firewall_allowed(port: u16) -> bool {
+    let Ok(out) = std::process::Command::new("netsh")
+        .args(["advfirewall", "firewall", "show", "rule", &format!("name={FIREWALL_RULE}")])
+        .output()
+    else {
+        return false;
+    };
+    if !out.status.success() {
+        return false;
+    }
+    String::from_utf8_lossy(&out.stdout).contains(&port.to_string())
+}
+
+/// Просит Windows разрешить порт в домашней (частной) сети: игрок подтверждает запрос прав.
+pub fn firewall_allow(port: u16) -> Result<(), String> {
+    let command = format!(
+        "netsh advfirewall firewall delete rule name='{FIREWALL_RULE}' | Out-Null; \
+netsh advfirewall firewall add rule name='{FIREWALL_RULE}' dir=in action=allow protocol=TCP \
+localport={port} profile=private"
+    );
+    let status = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!("Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-Command','{command}'"),
+        ])
+        .status()
+        .map_err(|e| format!("Не удалось вызвать брандмауэр Windows: {e}"))?;
+    if !status.success() {
+        return Err("Windows не подтвердил разрешение порта".into());
+    }
+    if !firewall_allowed(port) {
+        return Err(
+            "Правило брандмауэра не появилось — добавьте его вручную (инструкция в README)".into(),
+        );
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 struct TtsRequest {
     text: String,

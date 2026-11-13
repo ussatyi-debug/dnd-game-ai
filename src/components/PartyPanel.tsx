@@ -211,6 +211,26 @@ export default function PartyPanel({
         })}
       </ul>
 
+      {xp && xp.notes.length > 0 && (
+        <details className="shrink-0 border-t border-edge px-4 py-2 text-xs">
+          <summary className="cursor-pointer text-gold/80">
+            Журнал опыта · {xp.notes.length}
+            {xp.pending > 0 && ` · ${xp.pending.toLocaleString("ru-RU")} каждому`}
+          </summary>
+          <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto text-muted">
+            {xp.notes.map((n, i) => (
+              <li key={i}>
+                День {n.day}: {n.text}
+                {n.xp > 0 && <span className="text-parchment/80"> · {n.xp}</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[11px] text-muted">
+            Мастер начислит опыт в конце дня, на отдыхе или по вашей просьбе — тогда журнал очистится.
+          </p>
+        </details>
+      )}
+
       {recruit && recruit.reason !== "в кампании «Дом Стрэндж» отряд уже собран" && (
         <div className="shrink-0 border-t border-edge px-4 py-2">
           <button

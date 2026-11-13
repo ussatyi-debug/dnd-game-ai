@@ -37,6 +37,7 @@ export const UPDATE_TIMEOUT_MS = 60_000;
 const TWO_STEP_KEY = "dnd.twoStep";
 const HISTORY_KEY = "dnd.historyTurns";
 const SKIP_UPDATE_KEY = "dnd.skipEmptyUpdate";
+const ENTER_SENDS_KEY = "dnd.enterSends";
 const SHORT_SHEET_KEY = "dnd.shortSheet";
 
 function read<T>(key: string, fallback: T): T {
@@ -76,6 +77,15 @@ export function historyTurns(): number {
 
 export function setHistoryTurns(n: number) {
   write(HISTORY_KEY, Math.min(HISTORY_TURNS_MAX, Math.max(HISTORY_TURNS_MIN, Math.round(n))));
+}
+
+/** Enter отправляет заявку (перенос строки — Shift+Enter). По умолчанию выключено. */
+export function enterSends(): boolean {
+  return read<boolean>(ENTER_SENDS_KEY, false);
+}
+
+export function setEnterSends(on: boolean) {
+  write(ENTER_SENDS_KEY, on);
 }
 
 /**

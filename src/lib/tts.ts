@@ -61,17 +61,22 @@ export function voiceFor(settings: TtsSettings, gender: Gender): string {
   return chosen || DEFAULT_VOICES[settings.engine][gender];
 }
 
-/** Ударения в именах кампании (знак ударения U+0301 после ударной гласной). */
+/** Ударения в именах кампании: «+» после ударной гласной — его легко набрать на любой клавиатуре. */
 export const DEFAULT_PRONUNCIATIONS: Pronunciation[] = [
-  { from: "Никис", to: "Ни́кис" },
-  { from: "Альт-Варден", to: "Альт-Ва́рден" },
-  { from: "Стрэндж", to: "Стрэ́ндж" },
-  { from: "Кроу-Рок", to: "Кро́у-Ро́к" },
-  { from: "Корвус", to: "Ко́рвус" },
-  { from: "Юссач", to: "Юсса́ч" },
-  { from: "Вейденбург", to: "Ве́йденбург" },
-  { from: "Черноводье", to: "Черново́дье" },
+  { from: "Никис", to: "Ни+кис" },
+  { from: "Альт-Варден", to: "Альт-Ва+рден" },
+  { from: "Стрэндж", to: "Стрэ+ндж" },
+  { from: "Кроу-Рок", to: "Кро+у-Ро+к" },
+  { from: "Корвус", to: "Ко+рвус" },
+  { from: "Юссач", to: "Юсса+ч" },
+  { from: "Вейденбург", to: "Ве+йденбург" },
+  { from: "Черноводье", to: "Черново+дье" },
 ];
+
+/** Ударение «+» переводится в знак U+0301, который понимают движки озвучки. */
+export function stressMarks(text: string): string {
+  return text.replace(/([аеёиоуыэюяАЕЁИОУЫЭЮЯ])\+/g, "$1\u0301");
+}
 
 export const DEFAULT_CHARACTERS: CharacterVoice[] = [
   { name: "Никис", gender: "m" },
@@ -156,7 +161,7 @@ function applyPronunciations(text: string, list: Pronunciation[]): string {
   for (const p of list) {
     if (!p.from.trim()) continue;
     const escaped = p.from.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    out = out.replace(new RegExp(`(?<![\\p{L}])${escaped}`, "giu"), p.to);
+    out = out.replace(new RegExp(`(?<![\\p{L}])${escaped}`, "giu"), stressMarks(p.to));
   }
   return out;
 }
