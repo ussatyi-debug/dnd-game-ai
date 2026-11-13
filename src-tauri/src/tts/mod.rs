@@ -187,8 +187,8 @@ pub async fn cloud_models(
         }
         // У SpeechKit одна модель синтеза; голоса выбираются отдельно.
         Provider::Yandex => vec!["speechkit".into()],
-        Provider::Local => {
-            return Err("У локальной модели нет озвучки — выберите Piper или свой сервер".into())
+        Provider::Anthropic | Provider::Local => {
+            return Err("У этого провайдера нет озвучки — выберите Piper, свой сервер, OpenAI, Gemini или Яндекс".into())
         }
     };
     models.sort();
@@ -289,7 +289,7 @@ pub async fn cloud_synth(
             }
             Ok(r.bytes().await.map_err(|e| network_error("Яндекс", e))?.to_vec())
         }
-        Provider::Local => Err("У локальной модели нет озвучки".into()),
+        Provider::Anthropic | Provider::Local => Err("У этого провайдера нет озвучки".into()),
     }
 }
 
