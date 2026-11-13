@@ -119,11 +119,17 @@ pub struct Generated {
 /// Размер запроса в токенах из ответа провайдера: OpenAI (Responses и Chat Completions),
 /// Gemini, Ollama.
 pub(crate) fn prompt_tokens(body: &serde_json::Value) -> Option<u64> {
-    body["usage"]["input_tokens"]
+    let usage = &body["usage"];
+    let base = usage["input_tokens"]
         .as_u64()
-        .or_else(|| body["usage"]["prompt_tokens"].as_u64())
+        .or_else(|| usage["prompt_tokens"].as_u64())
         .or_else(|| body["usageMetadata"]["promptTokenCount"].as_u64())
-        .or_else(|| body["prompt_eval_count"].as_u64())
+        .or_else(|| body["prompt_eval_count"].as_u64())?;
+    // У Claude кэшированная часть считается отдельно от `input_tokens`; у остальных
+    // провайдеров она уже внутри, и эти поля пустые.
+    let cached = usage["cache_read_input_tokens"].as_u64().unwrap_or(0)
+        + usage["cache_creation_input_tokens"].as_u64().unwrap_or(0);
+    Some(base + cached)
 }
 
 /// Кэшированная часть запроса: провайдер не считает её заново и берёт дешевле.
@@ -357,6 +363,22 @@ pub async fn chat(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claude_cache_counts_into_request_size() {
+        // Claude: input_tokens — только свежая часть, кэш и запись кэша считаются отдельно.
+        let claude = serde_json::json!({
+            "usage": { "input_tokens": 7_594, "cache_read_input_tokens": 19_772, "cache_creation_input_tokens": 0 }
+        });
+        assert_eq!(prompt_tokens(&claude), Some(27_366));
+        assert_eq!(cached_tokens(&claude), Some(19_772));
+        // OpenAI: кэш уже внутри prompt_tokens.
+        let openai = serde_json::json!({
+            "usage": { "prompt_tokens": 12_076, "prompt_tokens_details": { "cached_tokens": 10_000 } }
+        });
+        assert_eq!(prompt_tokens(&openai), Some(12_076));
+        assert_eq!(cached_tokens(&openai), Some(10_000));
+    }
 
     #[test]
     fn view_hides_key() {
