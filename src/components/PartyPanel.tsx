@@ -96,7 +96,16 @@ export default function PartyPanel({
                   <span className="truncate font-medium">{m.name}</span>
                   <span className="shrink-0 font-mono text-xs text-muted">КД {m.armor_class}</span>
                 </div>
-                {m.race && m.race !== m.summary && <div className="text-xs text-parchment/80">{m.race}</div>}
+                {m.race && m.race !== m.summary && (
+                  <div className="text-xs text-parchment/80">
+                    {m.race}
+                    {m.gender && (
+                      <span className="ml-1 text-muted" title={m.gender === "f" ? "женский пол" : "мужской пол"}>
+                        {m.gender === "f" ? "♀" : "♂"}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="text-xs text-muted">{m.summary}</div>
                 <div className="mt-2 flex items-center gap-2">
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink">

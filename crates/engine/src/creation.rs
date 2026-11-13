@@ -100,6 +100,9 @@ pub struct HeroSpec {
     /// Портрет: ключ из набора портретов интерфейса.
     #[cfg_attr(feature = "serde", serde(default))]
     pub portrait: String,
+    /// Пол: «m» или «f». Пусто в листах до 0.9.8 — тогда берётся из ключа портрета.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub gender: String,
     pub classes: Vec<SpecClass>,
     pub abilities: AbilityScores,
     pub hp: SpecHp,
@@ -358,6 +361,16 @@ fn validate_caster(c: &Caster, spec: &HeroSpec, err: &mut impl FnMut(String)) {
     }
 }
 
+/// Пол героя: из листа, а для листов до 0.9.9 — из ключа портрета («elf_f» — женский).
+fn gender_of(spec: &HeroSpec) -> String {
+    match spec.gender.as_str() {
+        "m" | "f" => spec.gender.clone(),
+        _ if spec.portrait.ends_with("_f") || spec.portrait.ends_with("-f") => "f".into(),
+        _ if spec.portrait.ends_with("_m") || spec.portrait.ends_with("-m") => "m".into(),
+        _ => String::new(),
+    }
+}
+
 /// Собирает персонажа из проверенного листа.
 pub fn build_hero(spec: &HeroSpec, location: &str) -> Result<Character, EngineError> {
     let errors = validate_hero(spec);
@@ -412,6 +425,7 @@ pub fn build_hero(spec: &HeroSpec, location: &str) -> Result<Character, EngineEr
 
     let next = XP_THRESHOLDS.get(level as usize).copied();
     let profile = Profile {
+        gender: gender_of(spec),
         background: spec.background.clone(),
         alignment: spec.alignment.clone(),
         xp: Some(spec.xp),
@@ -573,6 +587,7 @@ pub(crate) mod tests {
             alignment: "Нейтральный добрый".into(),
             appearance: String::new(),
             portrait: "elf_f".into(),
+            gender: "f".into(),
             classes: vec![SpecClass {
                 id: "wizard".into(),
                 name: "Волшебник".into(),

@@ -127,6 +127,8 @@ pub struct PartyMember {
     pub summary: String,
     /// Вид (раса): строка между именем и классом на карточке.
     pub race: String,
+    /// Пол: «m», «f» или пусто.
+    pub gender: String,
     pub level: u32,
     pub hit_points: HitPoints,
     pub armor_class: i32,
@@ -211,6 +213,9 @@ pub struct Session {
     pub(crate) xp_log: Vec<crate::experience::XpNote>,
     /// Кому открыто повышение уровня (порог пройден и был длительный отдых).
     pub(crate) level_up_open: Vec<String>,
+    /// Команды мастера, уже выполненные в текущем ходу (канонический JSON) — чтобы при
+    /// исправлении отказов не выполнить то же самое второй раз. В сохранение не идёт.
+    pub(crate) turn_commands: Vec<String>,
 }
 
 /// Снимок сцены, который мастер получает неизменным до смены сцены, и состояние на момент
@@ -254,6 +259,7 @@ impl Session {
             next_recruit_id: 0,
             xp_log: Vec::new(),
             level_up_open: Vec::new(),
+            turn_commands: Vec::new(),
         }
     }
 
@@ -339,6 +345,21 @@ impl Session {
             .iter_mut()
             .find(|c| c.id == id)
             .ok_or_else(|| EngineError::CharacterNotFound(id.to_string()))
+    }
+
+    /// Начало нового хода мастера: список выполненных команд пуст.
+    pub fn begin_turn_commands(&mut self) {
+        self.turn_commands.clear();
+    }
+
+    /// Такая команда уже выполнена в этом ходу.
+    pub fn turn_command_done(&self, key: &str) -> bool {
+        self.turn_commands.iter().any(|c| c == key)
+    }
+
+    /// Запоминает выполненную команду хода.
+    pub fn record_turn_command(&mut self, key: String) {
+        self.turn_commands.push(key);
     }
 
     /// Журнал движка (последние записи, старые — первыми).
@@ -506,6 +527,7 @@ impl Session {
                         .join(" / ")
                 },
                 race: c.race.clone(),
+                gender: c.profile.gender.clone(),
                 level: c.level(),
                 hit_points: c.hit_points,
                 armor_class: c.armor_class,

@@ -1651,6 +1651,7 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
       .filter((m) => m.attunement)
       .map((m) => ({ name: m.name, effect: m.text })),
     notes: [],
+    gender: d.gender,
     draft: JSON.stringify(d),
   };
 }

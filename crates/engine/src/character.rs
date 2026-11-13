@@ -161,6 +161,8 @@ pub struct CharacterSheet {
     pub name: String,
     pub title: String,
     pub race: String,
+    /// Пол: «m», «f» или пусто.
+    pub gender: String,
     pub location: String,
     pub classes: Vec<ClassLevel>,
     pub level: u32,
@@ -242,6 +244,7 @@ impl Character {
             name: self.name.clone(),
             title: self.title.clone(),
             race: self.race.clone(),
+            gender: self.profile.gender.clone(),
             location: self.location.clone(),
             classes: self.classes.clone(),
             level: self.level(),

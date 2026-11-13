@@ -61,6 +61,13 @@ function SpellsSummary({ book }: { book: SpellbookView }) {
   );
 }
 
+/** Пол в строке листа: «, женщина» / «, мужчина»; пусто — если пол не указан. */
+function genderLabel(gender: string): string {
+  if (gender === "f") return ", женщина";
+  if (gender === "m") return ", мужчина";
+  return "";
+}
+
 export function FullSheet({
   id,
   onBack,
@@ -121,6 +128,7 @@ export function FullSheet({
             </p>
             <p className="text-xs text-muted">
               {data.sheet.race}
+              {genderLabel(data.sheet.gender)}
               {data.sheet.level > 0 ? ` · Уровень ${data.sheet.level}` : ""} · Мастерство{" "}
               {signed(data.sheet.proficiency_bonus)} · 📍 {data.sheet.location}
             </p>

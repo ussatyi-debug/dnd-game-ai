@@ -64,6 +64,8 @@ export interface CharacterSheet {
   name: string;
   title: string;
   race: string;
+  /** Пол: «m», «f» или пусто. */
+  gender: string;
   location: string;
   classes: ClassLevel[];
   level: number;
@@ -105,6 +107,8 @@ export interface PartyMember {
   summary: string;
   /** Вид (раса). У фамильяра совпадает с summary. */
   race: string;
+  /** Пол: «m», «f» или пусто. */
+  gender: string;
   level: number;
   hit_points: HitPoints;
   armor_class: number;

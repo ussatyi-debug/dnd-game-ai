@@ -103,6 +103,7 @@ const NOT_IN_SHEET: &str = "В листе не указано";
 pub(crate) fn nikis_profile() -> Profile {
     use Proficiency::{Expertise, Proficient};
     Profile {
+        gender: "m".into(),
         background: "Беспризорник Черноводья: в детстве — Грим, лучший карманник и шпион на \
 побегушках у криминального лорда, мастер обмана и притворства."
             .into(),
@@ -614,6 +615,7 @@ fn companion_profile(alignment: &str) -> Profile {
 
 pub(crate) fn corvus_profile() -> Profile {
     Profile {
+        gender: "m".into(),
         save_proficiencies: vec![Ability::Strength, Ability::Dexterity],
         armor_class_breakdown: vec![
             Bonus::new("Защита без доспехов (10 + ЛОВ 3 + МДР 3)", 16),
@@ -727,6 +729,7 @@ pub(crate) fn corvus_inventory() -> Inventory {
 pub(crate) fn gunther_profile() -> Profile {
     use Proficiency::Proficient;
     Profile {
+        gender: "m".into(),
         save_proficiencies: vec![Ability::Wisdom, Ability::Charisma],
         save_bonuses: vec![Bonus::new("Аура Защиты", 2)],
         save_notes: vec!["Аура Защиты: +2 ко всем спасброскам союзников в 10 фт.".into()],
@@ -855,6 +858,7 @@ pub(crate) fn valeria_profile() -> Profile {
             )
         };
     Profile {
+        gender: "f".into(),
         save_proficiencies: vec![Ability::Wisdom, Ability::Charisma],
         skills_listed: true,
         skills: vec![
@@ -989,6 +993,7 @@ pub(crate) fn valeria_inventory() -> Inventory {
 pub(crate) fn brokk_profile() -> Profile {
     use Proficiency::Proficient;
     Profile {
+        gender: "m".into(),
         save_proficiencies: vec![Ability::Strength, Ability::Constitution],
         save_notes: vec![
             "Дварфийская стойкость: преимущество на спасброски от яда.".into(),
@@ -1108,6 +1113,7 @@ pub(crate) fn brokk_inventory() -> Inventory {
 
 pub(crate) fn yussach_profile() -> Profile {
     Profile {
+        gender: "m".into(),
         features: vec![feature(
             "Квазит",
             "Фамильяр Договора Цепи",

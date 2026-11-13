@@ -91,6 +91,8 @@ export interface HeroSpec {
   alignment: string;
   appearance: string;
   portrait: string;
+  /** Пол героя: «m» или «f». */
+  gender?: "m" | "f";
   classes: { id: string; name: string; subclass: string | null; level: number; hit_die: number }[];
   abilities: Record<AbilityId, number>;
   hp: { rolls: number[]; per_level: number; flat: number };

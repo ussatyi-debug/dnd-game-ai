@@ -677,17 +677,51 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
 pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     let (text, blocks) = split(reply);
     let before = session.checkpoint();
-    let actions = run_blocks(session, &blocks);
+    session.begin_turn_commands();
+    let actions = run_blocks(session, &blocks, false);
     let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
     session.commit_master_turn(before, summaries);
     MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
 }
 
-fn run_blocks(session: &mut Session, blocks: &[String]) -> Vec<MasterAction> {
+/// Канонический вид команды: ключи JSON отсортированы, поэтому одинаковые команды дают
+/// одинаковую строку.
+fn command_key(cmd: &Value) -> String {
+    cmd.to_string()
+}
+
+/// Имя команды для пропуска-повтора; без `cmd` — «без имени».
+fn command_name(cmd: &Value) -> String {
+    cmd.get("cmd").and_then(Value::as_str).unwrap_or("без имени").to_string()
+}
+
+/// Выполняет команды блоков. `skip_repeats` — пропускать команды, уже выполненные в этом ходу
+/// (исправление отказов: мастер часто присылает весь ход заново, и движок выполнял его дважды).
+fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> Vec<MasterAction> {
     let mut actions = Vec::new();
     for block in blocks {
         for cmd in commands(block) {
+            if skip_repeats {
+                if let Ok(cmd) = &cmd {
+                    let key = command_key(cmd);
+                    if session.turn_command_done(&key) {
+                        let name = command_name(cmd);
+                        session.log(format!("Повтор пропущен: «{name}» уже выполнена в этом ходу"));
+                        actions.push(MasterAction {
+                            ok: true,
+                            summary: format!("повтор пропущен: «{name}»"),
+                        });
+                        continue;
+                    }
+                }
+            }
+            let key = cmd.as_ref().ok().map(command_key);
             let result = cmd.and_then(|cmd| run(session, &cmd));
+            if result.is_ok() {
+                if let Some(key) = key {
+                    session.record_turn_command(key);
+                }
+            }
             actions.push(match result {
                 Ok(summary) => MasterAction { ok: true, summary },
                 Err(reason) => {
@@ -715,7 +749,8 @@ pub fn repair_request(actions: &[MasterAction]) -> Option<String> {
         text.push_str(&format!("- {}\n", a.summary));
     }
     text.push_str(
-        "Пришли ТОЛЬКО исправленные команды в одном блоке ```engine, без рассказа. Формат — по \
+        "Пришли ТОЛЬКО исправленные команды в одном блоке ```engine, без рассказа. Остальные \
+команды этого хода уже выполнены — не присылай их снова (движок их пропустит). Формат — по \
 кодексу: временные хиты — {\"cmd\":\"hp\",\"character\":\"…\",\"temp\":N}, id ресурсов — из «листы». \
 Если команда не нужна — ответь пустым блоком ```engine```.",
     );
@@ -727,7 +762,7 @@ pub fn repair_request(actions: &[MasterAction]) -> Option<String> {
 pub fn apply_repair(session: &mut Session, reply: &str) -> Vec<MasterAction> {
     let (_, blocks) = split(reply);
     let before = session.checkpoint();
-    let actions = run_blocks(session, &blocks);
+    let actions = run_blocks(session, &blocks, true);
     let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
     session.extend_master_turn(before, summaries);
     actions
@@ -788,6 +823,25 @@ mod tests {
         s.undo_master_turn().unwrap();
         assert_eq!(s.character("pc.nikis").unwrap().hit_points.current, hp);
         assert!(repair_request(&fixed).is_none());
+    }
+
+    #[test]
+    fn repair_does_not_run_commands_twice() {
+        let mut s = session();
+        let before = s.character("npc.gunther").unwrap().resource("slots.1").unwrap().current();
+        let reply = "Бой.\n```engine\n{\"cmd\":\"slot\",\"character\":\"gunther\",\"level\":1}\n{\"cmd\":\"resource\",\"character\":\"pc.nikis\",\"resource\":\"temp_hp\",\"delta\":-8}\n```";
+        let turn = apply_directives(&mut s, reply);
+        let spent = s.character("npc.gunther").unwrap().resource("slots.1").unwrap().current();
+        assert_eq!(spent, before - 1);
+        // Мастер прислал весь ход заново: выполненную ячейку движок пропускает.
+        let fixed = apply_repair(&mut s, reply);
+        assert!(fixed.iter().any(|a| a.summary.contains("повтор пропущен")), "{fixed:?}");
+        assert_eq!(
+            s.character("npc.gunther").unwrap().resource("slots.1").unwrap().current(),
+            spent,
+            "ячейка потрачена дважды"
+        );
+        assert!(repair_request(&turn.actions).is_some());
     }
 
     #[test]

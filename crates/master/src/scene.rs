@@ -309,6 +309,7 @@ fn snapshot(session: &Session) -> Value {
             "id": m.id,
             "имя": m.name,
             "вид": m.race,
+            "пол": crate::gender_word(&m.gender),
             "кто": m.summary,
             "хиты": format!("{}/{}", m.hit_points.current, m.hit_points.max),
             "кд": m.armor_class,

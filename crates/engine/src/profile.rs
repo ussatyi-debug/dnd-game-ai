@@ -228,6 +228,9 @@ pub const CONDITIONS: [&str; 14] = [
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Profile {
+    /// Пол: «m», «f» или пусто (неизвестен) — нужен мастеру для обращения к герою.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub gender: String,
     pub background: String,
     pub alignment: String,
     pub xp: Option<u32>,
