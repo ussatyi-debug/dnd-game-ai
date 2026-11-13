@@ -94,6 +94,8 @@ export interface Scene {
   location: string;
   /** Обстановка: что было накануне и что запланировано. */
   situation: string;
+  /** Живая сводка «что сейчас»: мастер обновляет её каждый ход, игрок может поправить. */
+  now: string;
   /** Настроение сцены — по нему выбирается фоновая музыка. */
   mood: Mood;
 }
@@ -874,6 +876,11 @@ export interface StartScene {
   location: string;
   situation: string;
   mood: Mood;
+}
+
+/** Живая сводка «что сейчас» для мастера: правка игроком. */
+export function setSceneNow(text: string): Promise<PartyView> {
+  return call<PartyView>("set_scene_now", { text });
 }
 
 /** Новая своя кампания вместо текущей игры. */

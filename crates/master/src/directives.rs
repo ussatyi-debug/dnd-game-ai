@@ -210,6 +210,40 @@ pub fn strip_directives(text: &str) -> String {
     split(text).0
 }
 
+/// Отделяет живую сводку «СЕЙЧАС» от рассказа: мастер пишет её в конце ответа, игрок видит
+/// сводку в «Обстановке», а не в чате. Возвращает (рассказ, сводка).
+pub(crate) fn split_now(text: &str) -> (String, String) {
+    let is_header = |line: &str| {
+        let line = line.trim().trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
+        line == "сейчас"
+    };
+    let mut prose: Vec<&str> = Vec::new();
+    let mut now: Vec<&str> = Vec::new();
+    let mut in_now = false;
+    for line in text.lines() {
+        if is_header(line) {
+            in_now = true;
+            continue;
+        }
+        if in_now {
+            now.push(line);
+        } else {
+            prose.push(line);
+        }
+    }
+    let now: Vec<&str> = now
+        .iter()
+        .map(|l| l.trim().trim_start_matches(['-', '*', '•']).trim())
+        .filter(|l| !l.is_empty())
+        .collect();
+    (prose.join("\n").trim().to_string(), now.join("\n"))
+}
+
+/// Живая сводка «СЕЙЧАС» из ответа мастера (двухшаговый ход: её сохраняет вызывающий код).
+pub fn scene_now(text: &str) -> String {
+    split_now(&split(text).0).1
+}
+
 /// Пометка мастера «ход ничего не изменил»: второй шаг можно не делать.
 fn no_changes_line(line: &str) -> bool {
     let line = line.trim().trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
@@ -220,6 +254,7 @@ fn no_changes_line(line: &str) -> bool {
 /// (подсказка второму шагу; броски и запросы отброшены), и пометка «без изменений».
 pub fn narration_parts(text: &str) -> (String, String, bool) {
     let (prose, blocks) = split(text);
+    let (prose, _) = split_now(&prose);
     let no_changes = prose.lines().any(no_changes_line);
     let prose: String =
         prose.lines().filter(|l| !no_changes_line(l)).collect::<Vec<_>>().join("\n");
@@ -713,8 +748,12 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
 /// Перед командами снимается точка отмены: весь ход мастера можно откатить одной кнопкой.
 pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     let (text, blocks) = split(reply);
+    let (text, now) = split_now(&text);
     let before = session.checkpoint();
     session.begin_turn_commands();
+    if !now.is_empty() {
+        session.set_scene_now(&now);
+    }
     let actions = run_blocks(session, &blocks, false);
     let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
     session.commit_master_turn(before, summaries);

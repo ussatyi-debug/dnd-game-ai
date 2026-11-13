@@ -162,6 +162,10 @@ pub enum Request {
     RecruitInfo,
     /// Опыт отряда и журнал опыта.
     XpStatus,
+    /// Живая сводка «что сейчас»: правка игроком.
+    SetSceneNow {
+        text: String,
+    },
     /// Повышение уровня по листу нового уровня.
     LevelUp {
         spec: Value,
@@ -290,6 +294,10 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(dnd_master::master_request(session, &query, &kb_extra, two_step, short_sheet))
         }
         Request::MasterNarration { text } => {
+            let now = dnd_master::scene_now(&text);
+            if !now.is_empty() {
+                session.set_scene_now(&now);
+            }
             let (text, written, no_changes) = dnd_master::narration_parts(&text);
             Ok(json!({ "text": text, "written": written, "no_changes": no_changes }))
         }
@@ -362,6 +370,10 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::SheetProposals => to_value(session.sheet_proposals()),
         Request::RecruitInfo => to_value(session.recruit_info()),
         Request::XpStatus => to_value(session.xp_status()),
+        Request::SetSceneNow { text } => {
+            session.set_scene_now(&text);
+            to_value(session.party_view())
+        }
         Request::LevelUp { spec } => {
             let spec: HeroSpec =
                 serde_json::from_value(spec).map_err(|e| format!("Лист героя не прочитан: {e}"))?;

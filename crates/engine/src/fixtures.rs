@@ -89,6 +89,7 @@ pub fn demo_scene() -> Scene {
         time: Some("утро".into()),
         location: SCENE_LOCATION.into(),
         situation: SCENE_SITUATION.into(),
+        now: String::new(),
         mood: Mood::Calm,
     }
 }

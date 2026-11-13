@@ -41,6 +41,7 @@ import {
   addMember,
   dismissRecruit,
   levelUp,
+  setSceneNow,
   xpStatus,
   type XpStatus,
   type RecruitInfo,
@@ -1274,6 +1275,7 @@ export default function App() {
             onDismissRecruit={(id) => void dismissRecruit(id).then(() => refresh())}
             xp={xp}
             onLevelUp={(id) => void openLevelUp(id)}
+            onSceneNow={(text) => void setSceneNow(text).then(setParty).catch(() => undefined)}
           />
         </div>
 

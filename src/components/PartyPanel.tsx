@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatGold, type PartyView, type RecruitInfo, type RecruitRequest, type XpStatus } from "../lib/engine";
 
 interface PartyPanelProps {
@@ -13,7 +14,63 @@ interface PartyPanelProps {
   onDismissRecruit?: (id: number) => void;
   /** Опыт отряда. */
   xp?: XpStatus | null;
+  /** Правка живой сводки «что сейчас». */
+  onSceneNow?: (text: string) => void;
   onLevelUp?: (id: string) => void;
+}
+
+/** Живая сводка «что сейчас»: мастер пишет её каждый ход, игрок может поправить. */
+function SceneNow({ now, onSave }: { now: string; onSave?: (text: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  if (!now && !onSave) return null;
+  if (draft === null) {
+    return (
+      <div className="mt-1 rounded-md border border-gold/40 bg-gold/5 p-2">
+        <div className="flex items-start justify-between gap-2">
+          <p className="whitespace-pre-line leading-relaxed text-parchment/90">{now || "Сводки пока нет."}</p>
+          {onSave && (
+            <button
+              type="button"
+              onClick={() => setDraft(now)}
+              title="Поправить сводку, которую видит мастер"
+              className="shrink-0 rounded border border-edge px-1.5 py-0.5 text-[11px] text-muted hover:text-gold"
+            >
+              Править
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1 space-y-1 rounded-md border border-gold/40 bg-gold/5 p-2">
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        rows={4}
+        className="w-full rounded border border-edge bg-ink p-1 text-xs text-parchment"
+      />
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setDraft(null)}
+          className="rounded px-2 py-0.5 text-[11px] text-muted hover:text-parchment"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onSave?.(draft);
+            setDraft(null);
+          }}
+          className="rounded border border-gold px-2 py-0.5 text-[11px] text-gold hover:bg-gold/10"
+        >
+          Сохранить
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function PartyPanel({
@@ -27,6 +84,7 @@ export default function PartyPanel({
   onDismissRecruit,
   xp,
   onLevelUp,
+  onSceneNow,
 }: PartyPanelProps) {
   if (!party) {
     return (
@@ -48,10 +106,13 @@ export default function PartyPanel({
           {party.scene.time ? `, ${party.scene.time}` : ""}
         </p>
         <p className="text-xs text-muted">{party.scene.location}</p>
-        {party.scene.situation && (
+        {(party.scene.now || party.scene.situation) && (
           <details className="mt-1 text-xs">
             <summary className="cursor-pointer text-gold/80">Обстановка и планы</summary>
-            <p className="mt-1 max-h-48 overflow-y-auto leading-relaxed text-muted">{party.scene.situation}</p>
+            <SceneNow now={party.scene.now} onSave={onSceneNow} />
+            {party.scene.situation && (
+              <p className="mt-1 max-h-48 overflow-y-auto leading-relaxed text-muted">{party.scene.situation}</p>
+            )}
           </details>
         )}
       </header>

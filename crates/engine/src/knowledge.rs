@@ -1377,6 +1377,7 @@ mod tests {
             time: None,
             location: "Нойштадт".into(),
             situation: String::new(),
+            now: String::new(),
             mood: crate::session::Mood::Calm,
         };
         let mut s = Session::new_campaign(Xoshiro256::from_seed(2), campaign, scene, 10).unwrap();

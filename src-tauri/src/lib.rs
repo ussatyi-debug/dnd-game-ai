@@ -302,6 +302,14 @@ fn level_up(spec: serde_json::Value, state: State<'_, SessionState>) -> Result<S
     lock(&state)?.level_up(spec).map_err(|e| e.to_string())
 }
 
+/// Живая сводка «что сейчас»: правка игроком.
+#[tauri::command]
+fn set_scene_now(text: String, state: State<'_, SessionState>) -> Result<PartyView, String> {
+    let mut session = lock(&state)?;
+    session.set_scene_now(&text);
+    Ok(session.party_view())
+}
+
 /// Можно ли принять спутника и какого уровня.
 #[tauri::command]
 fn recruit_info(state: State<'_, SessionState>) -> Result<dnd_engine::RecruitInfo, String> {
@@ -878,6 +886,10 @@ async fn ai_chat(
     reply.rolls = rolls;
     reply.raw = raw;
     if two_step {
+        let now = dnd_master::scene_now(&full);
+        if !now.is_empty() {
+            lock(&session)?.set_scene_now(&now);
+        }
         let (text, written, no_changes) = dnd_master::narration_parts(&full);
         reply.fabricated = dnd_master::fabricated_rolls(
             &text,
@@ -1020,6 +1032,7 @@ pub fn run() {
             sheet_proposals,
             xp_status,
             level_up,
+            set_scene_now,
             recruit_info,
             recruit_requests,
             add_member,

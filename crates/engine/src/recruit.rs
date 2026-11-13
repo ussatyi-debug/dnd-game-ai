@@ -213,6 +213,7 @@ pub(crate) mod tests {
             time: None,
             location: "Нойштадт".into(),
             situation: String::new(),
+            now: String::new(),
             mood: Mood::Calm,
         };
         Session::new_campaign(Xoshiro256::from_seed(9), campaign, scene, 10).unwrap()

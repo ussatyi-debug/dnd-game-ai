@@ -593,6 +593,10 @@ fn turn_message(
         }
         out.push('\n');
     }
+    // Живая сводка — у самого конца запроса: модель держит в голове последнее лучше всего.
+    if !session.scene().now.trim().is_empty() {
+        out.push_str(&format!("[СЕЙЧАС]\n{}\n\n", session.scene().now.trim()));
+    }
     out.push_str("[ЗАЯВКА ИГРОКА]\n");
     out.push_str(player_text);
     out

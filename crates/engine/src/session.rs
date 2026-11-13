@@ -84,6 +84,10 @@ pub struct Scene {
     /// начинал сцену с фактов кампании, а не придумывал её заново.
     #[cfg_attr(feature = "serde", serde(default))]
     pub situation: String,
+    /// Живая сводка: 2–4 строки «что сейчас» — мастер обновляет её каждый ход, движок ставит
+    /// её в конец запроса. Игрок видит сводку в «Обстановке» и может поправить.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub now: String,
     /// Настроение сцены (музыка).
     #[cfg_attr(feature = "serde", serde(default))]
     pub mood: Mood,

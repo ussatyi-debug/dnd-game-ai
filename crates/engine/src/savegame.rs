@@ -650,6 +650,7 @@ mod tests {
             time: None,
             location: "Перекрёсток".into(),
             situation: String::new(),
+            now: String::new(),
             mood: crate::session::Mood::Calm,
         };
         let mut s = Session::new_campaign(Xoshiro256::from_seed(4), campaign, scene, 30).unwrap();
