@@ -283,7 +283,7 @@ fn changes(session: &Session, memo: &MasterMemo) -> Vec<String> {
 }
 
 /// Снимок сцены: кто в сцене — с полными листами и магией, остальные — строкой.
-fn snapshot(session: &Session) -> Value {
+fn snapshot(session: &Session, short: bool) -> Value {
     let party = session.party_view();
     let here = |id: &str| party.members.iter().any(|m| m.id == id && m.in_scene);
     let player =
@@ -317,7 +317,7 @@ fn snapshot(session: &Session) -> Value {
             "в_сцене": m.in_scene,
         })).collect::<Vec<_>>(),
         "персонаж_игрока": player,
-        "листы": session.party().iter().filter(|c| here(&c.id)).map(|c| (c.id.clone(), sheet_context(c))).collect::<serde_json::Map<_, _>>(),
+        "листы": session.party().iter().filter(|c| here(&c.id)).map(|c| (c.id.clone(), sheet_context(c, short))).collect::<serde_json::Map<_, _>>(),
         "магия": session.party().iter().filter(|c| here(&c.id)).filter_map(|c| {
             let book = c.spellbook()?;
             Some((c.id.clone(), magic_context(&book)))
@@ -400,12 +400,12 @@ fn codex(session: &Session) -> String {
 }
 
 /// Системный текст на текущую сцену: собирается при смене сцены, иначе берётся готовый.
-fn scene_system(session: &mut Session) -> MasterMemo {
-    let key = scene_key(session);
+fn scene_system(session: &mut Session, short: bool) -> MasterMemo {
+    let key = format!("{}{}", scene_key(session), if short { "|короткий лист" } else { "" });
     if let Some(memo) = session.master_memo().filter(|m| m.key == key) {
         return memo.clone();
     }
-    let snapshot = serde_json::to_string(&snapshot(session)).unwrap_or_default();
+    let snapshot = serde_json::to_string(&snapshot(session, short)).unwrap_or_default();
     let system = format!(
         "{}\nСНИМОК СЦЕНЫ (JSON):\n{snapshot}\n\nХРОНИКА:\n{}",
         codex(session),
@@ -478,12 +478,16 @@ pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
 }
 
 /// Последняя реплика игрока: изменения, напоминания, карточки по заявке, шпаргалка, заявка.
+/// Сколько готовых бросков d20 движок кладёт в каждый ход.
+pub const RESERVE_ROLLS: usize = 6;
+
 fn turn_message(
     session: &Session,
     memo: &MasterMemo,
     player_text: &str,
     kb_extra: &str,
     two_step: bool,
+    reserve: &[u32],
 ) -> String {
     let mut out = String::new();
     let block = |out: &mut String, title: &str, lines: &[String]| {
@@ -568,8 +572,18 @@ fn turn_message(
         out.push_str(
             "[ДВУХШАГОВЫЙ ХОД]\nВ рассказе пиши только команды roll и query. Изменения состояния и записи \
 движок соберёт по твоему рассказу отдельным шагом — поэтому называй в рассказе всё явно: урон и лечение \
-числами, потраченное и полученное, кто куда ушёл, что герой узнал.\n\n",
+числами, потраченное и полученное, кто куда ушёл, что герой узнал. Если ход ничего не изменил (чистый \
+разговор, осмотр без находок), закончи ответ отдельной строкой «БЕЗ ИЗМЕНЕНИЙ» — игрок её не увидит, а \
+движок пропустит второй шаг. Если изменилось хоть что-то, строку не пиши.\n\n",
         );
+    }
+    if !reserve.is_empty() {
+        let numbers: Vec<String> = reserve.iter().map(u32::to_string).collect();
+        out.push_str(&format!(
+            "[ЗАПАС БРОСКОВ d20]\n{}\nБери числа по порядку для тайных проверок и бросков за NPC — \
+отдельный запрос roll для них не нужен. Броски героя и спутников игрока по-прежнему через roll.\n\n",
+            numbers.join(", ")
+        ));
     }
     let hints = turn_hint(player_text);
     if !hints.is_empty() {
@@ -618,9 +632,11 @@ pub fn master_request(
     player_text: &str,
     kb_extra: &str,
     two_step: bool,
+    short_sheet: bool,
 ) -> MasterRequest {
-    let memo = scene_system(session);
-    let turn = turn_message(session, &memo, player_text, kb_extra, two_step);
+    let memo = scene_system(session, short_sheet);
+    let reserve = session.roll_reserve(RESERVE_ROLLS);
+    let turn = turn_message(session, &memo, player_text, kb_extra, two_step, &reserve);
     MasterRequest { system: memo.system, turn }
 }
 
@@ -633,7 +649,7 @@ pub fn answer_query(session: &Session, cmd: &Value) -> Result<String, String> {
             let id = crate::directives::find_character(session, text_of("id"))?;
             let c = session.character(&id).map_err(|e| e.to_string())?;
             let value = if what == "sheet" {
-                json!({ "кто": c.name, "лист": sheet_context(c), "хиты": format!("{}/{}", c.hit_points.current, c.hit_points.max), "кд": c.armor_class })
+                json!({ "кто": c.name, "лист": sheet_context(c, false), "хиты": format!("{}/{}", c.hit_points.current, c.hit_points.max), "кд": c.armor_class })
             } else {
                 let book =
                     c.spellbook().ok_or_else(|| format!("у {} нет книги заклинаний", c.name))?;

@@ -5,7 +5,7 @@
 
 use serde_json::{json, Value};
 
-use super::{prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
+use super::{cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
 
 const BASE_URL: &str = "https://ai.api.cloud.yandex.net/v1";
 
@@ -156,7 +156,11 @@ pub async fn generate(
     }
     // Режим JSON поддерживают не все модели каталога: ответ проверяет движок.
     let _ = json_mode;
-    Ok(Generated { text: parse_reply(&body)?, prompt_tokens: prompt_tokens(&body) })
+    Ok(Generated {
+        text: parse_reply(&body)?,
+        prompt_tokens: prompt_tokens(&body),
+        cached_tokens: cached_tokens(&body),
+    })
 }
 
 /// Лимит длины ответа: с запасом на размышления модели и длинную сцену.

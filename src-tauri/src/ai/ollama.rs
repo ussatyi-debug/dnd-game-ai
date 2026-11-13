@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::{prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
+use super::{cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
 
 /// Адрес Ollama по умолчанию.
 pub const DEFAULT_URL: &str = "http://localhost:11434";
@@ -188,7 +188,11 @@ pub async fn generate(
         body
     };
     let done = |body: &Value| -> Result<Generated, String> {
-        Ok(Generated { text: parse_reply(body)?, prompt_tokens: prompt_tokens(body) })
+        Ok(Generated {
+            text: parse_reply(body)?,
+            prompt_tokens: prompt_tokens(body),
+            cached_tokens: cached_tokens(body),
+        })
     };
     let (status, body) = post(client, base, &body_for(false)).await?;
     if (200..300).contains(&status) {

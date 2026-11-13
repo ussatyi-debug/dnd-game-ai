@@ -86,12 +86,16 @@ pub struct MasterReply {
     pub raw: Vec<String>,
     /// Размер самого большого запроса хода в токенах — как посчитал провайдер.
     pub prompt_tokens: Option<u64>,
+    /// Сколько из них провайдер взял из кэша (повтор неизменного начала запроса).
+    pub cached_tokens: Option<u64>,
     /// Размер того же запроса в символах (если провайдер токены не вернул).
     pub prompt_chars: usize,
     /// Двухшаговый ход: рассказ готов, данные ещё обновляются (`ai_update`).
     pub pending_update: bool,
     /// Команды движка, которые мастер написал в рассказе (двухшаговый ход): подсказка второму шагу.
     pub written_commands: String,
+    /// Мастер пометил ход как разговор без изменений: второй шаг можно пропустить.
+    pub no_changes: bool,
 }
 
 /// Ответ модели: текст и размер запроса в токенах, если провайдер его вернул.
@@ -99,6 +103,8 @@ pub struct MasterReply {
 pub struct Generated {
     pub text: String,
     pub prompt_tokens: Option<u64>,
+    /// Кэшированная часть запроса в токенах (OpenAI, Anthropic, Gemini).
+    pub cached_tokens: Option<u64>,
 }
 
 /// Размер запроса в токенах из ответа провайдера: OpenAI (Responses и Chat Completions),
@@ -109,6 +115,16 @@ pub(crate) fn prompt_tokens(body: &serde_json::Value) -> Option<u64> {
         .or_else(|| body["usage"]["prompt_tokens"].as_u64())
         .or_else(|| body["usageMetadata"]["promptTokenCount"].as_u64())
         .or_else(|| body["prompt_eval_count"].as_u64())
+}
+
+/// Кэшированная часть запроса: провайдер не считает её заново и берёт дешевле.
+/// OpenAI — `cached_tokens`, Anthropic — `cache_read_input_tokens`, Gemini — `cachedContentTokenCount`.
+pub(crate) fn cached_tokens(body: &serde_json::Value) -> Option<u64> {
+    body["usage"]["prompt_tokens_details"]["cached_tokens"]
+        .as_u64()
+        .or_else(|| body["usage"]["input_tokens_details"]["cached_tokens"].as_u64())
+        .or_else(|| body["usage"]["cache_read_input_tokens"].as_u64())
+        .or_else(|| body["usageMetadata"]["cachedContentTokenCount"].as_u64())
 }
 
 /// Настройки ИИ. Хранятся в папке настроек приложения на ПК.
@@ -312,9 +328,11 @@ pub async fn chat(
         fabricated: Vec::new(),
         raw: Vec::new(),
         prompt_tokens: out.prompt_tokens,
+        cached_tokens: out.cached_tokens,
         prompt_chars,
         pending_update: false,
         written_commands: String::new(),
+        no_changes: false,
     })
 }
 

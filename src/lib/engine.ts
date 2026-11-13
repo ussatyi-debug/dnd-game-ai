@@ -254,13 +254,18 @@ export interface MasterRequest {
   turn: string;
 }
 
-export function masterContext(query: string, kbExtra: string, twoStep = false): Promise<MasterRequest> {
-  return call<MasterRequest>("master_context", { query, kbExtra, twoStep });
+export function masterContext(
+  query: string,
+  kbExtra: string,
+  twoStep = false,
+  shortSheet = false,
+): Promise<MasterRequest> {
+  return call<MasterRequest>("master_context", { query, kbExtra, twoStep, shortSheet });
 }
 
 /** Двухшаговый ход: рассказ для игрока и команды, которые мастер всё же написал в нём. */
-export function masterNarration(text: string): Promise<{ text: string; written: string }> {
-  return call<{ text: string; written: string }>("master_narration", { text });
+export function masterNarration(text: string): Promise<{ text: string; written: string; no_changes: boolean }> {
+  return call<{ text: string; written: string; no_changes: boolean }>("master_narration", { text });
 }
 
 /** Двухшаговый ход, второй шаг: запрос «рассказ → команды движка». */
@@ -956,12 +961,16 @@ export interface MasterReply {
   raw: string[];
   /** Размер самого большого запроса хода в токенах (если провайдер вернул). */
   prompt_tokens: number | null;
+  /** Сколько из них провайдер взял из кэша (повтор неизменного начала запроса). */
+  cached_tokens: number | null;
   /** Размер того же запроса в символах. */
   prompt_chars: number;
   /** Двухшаговый ход: рассказ готов, данные обновит aiUpdate. */
   pending_update: boolean;
   /** Команды, которые мастер написал в рассказе (подсказка второму шагу). */
   written_commands: string;
+  /** Мастер пометил ход как разговор без изменений: второй шаг можно пропустить. */
+  no_changes: boolean;
 }
 
 /** Доступен ли ИИ-мастер (только в приложении). */
@@ -993,8 +1002,9 @@ export function aiChat(
   history: { role: ChatRole; text: string }[],
   kbExtra: string,
   twoStep = false,
+  shortSheet = false,
 ): Promise<MasterReply> {
-  return invoke<MasterReply>("ai_chat", { history, kbExtra, twoStep });
+  return invoke<MasterReply>("ai_chat", { history, kbExtra, twoStep, shortSheet });
 }
 
 /** Второй шаг двухшагового хода: команды движка по рассказу мастера. */

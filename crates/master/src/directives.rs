@@ -210,10 +210,19 @@ pub fn strip_directives(text: &str) -> String {
     split(text).0
 }
 
-/// Двухшаговый ход: рассказ для игрока и команды, которые мастер всё же написал в нём,
-/// одним блоком ```engine (подсказка второму шагу; броски и запросы отброшены).
-pub fn narration_parts(text: &str) -> (String, String) {
+/// Пометка мастера «ход ничего не изменил»: второй шаг можно не делать.
+fn no_changes_line(line: &str) -> bool {
+    let line = line.trim().trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
+    line == "без изменений"
+}
+
+/// Двухшаговый ход: рассказ для игрока, команды, которые мастер написал в рассказе
+/// (подсказка второму шагу; броски и запросы отброшены), и пометка «без изменений».
+pub fn narration_parts(text: &str) -> (String, String, bool) {
     let (prose, blocks) = split(text);
+    let no_changes = prose.lines().any(no_changes_line);
+    let prose: String =
+        prose.lines().filter(|l| !no_changes_line(l)).collect::<Vec<_>>().join("\n");
     let lines: Vec<String> = blocks
         .iter()
         .flat_map(|b| commands(b))
@@ -226,7 +235,7 @@ pub fn narration_parts(text: &str) -> (String, String) {
     } else {
         format!("```engine\n{}\n```", lines.join("\n"))
     };
-    (clean_reply(&prose), written)
+    (clean_reply(&prose), written, no_changes && lines.is_empty())
 }
 
 /// Команды блока: JSON-объект на строку или JSON-массив целиком.
@@ -712,6 +721,16 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
 }
 
+/// Отказ, после которого ничего делать не нужно: ячейки уже свободны, количество нулевое.
+/// Такие команды мастер часто шлёт после отдыха; просить за них исправление — пустая трата
+/// запроса к модели, поэтому движок отвечает «ничего не изменилось».
+fn nothing_to_do(reason: &str) -> bool {
+    let reason = reason.to_lowercase();
+    ["и так свободны", "уже полон", "уже восстановлен", "больше нуля"]
+        .iter()
+        .any(|mark| reason.contains(mark))
+}
+
 /// Канонический вид команды: ключи JSON отсортированы, поэтому одинаковые команды дают
 /// одинаковую строку.
 fn command_key(cmd: &Value) -> String {
@@ -752,6 +771,12 @@ fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> V
             }
             actions.push(match result {
                 Ok(summary) => MasterAction { ok: true, summary },
+                Err(reason) if nothing_to_do(&reason) => {
+                    session.log(format!("Ничего не изменилось: {reason}"));
+                    MasterAction {
+                        ok: true, summary: format!("ничего не изменилось: {reason}")
+                    }
+                }
                 Err(reason) => {
                     // Ошибки самого движка уже записаны в журнал; ошибки формата — нет.
                     if session.engine_log().last().is_none_or(|l| !l.contains(&reason)) {

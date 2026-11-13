@@ -46,6 +46,7 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
 - Преимущество и помеху игрок заявляет сам или согласует с тобой.
 
 КУБЫ МАСТЕРА
+- В каждом ходу движок присылает «ЗАПАС БРОСКОВ d20» — готовые числа. Для тайной проверки или броска за NPC бери их по порядку (первое неиспользованное) и прямо пиши, какое взял: «скрытность стражника: 12 из запаса». Отдельный запрос roll для них не нужен. Выдумывать свои числа запрещено.
 - Кубы за противников, NPC и спутников бросает движок. Ты НИКОГДА не придумываешь числа на кубах.
 - Нужен бросок — допиши в конце рассказа (или вместо него) блок ```engine с запросами и остановись: {"cmd":"roll","who":"Стражник","what":"атака по Никису","dice":"1d20+5","vs":"ac:18"}. "vs": "ac:N" — против КД, "dc:N" — против КС; "adv":true — преимущество, "dis":true — помеха; "hidden":true — тайный бросок (Скрытность врага, проверки, о которых герой не знает). Запрашивай сразу все броски, которые нужны (все атаки противников за раунд, урон — после попадания).
 - Броски спутников (и героя, если игрок попросил бросить за него) — через лист, модификатор подставит движок: {"cmd":"roll","character":"npc.valeria","check":"initiative"}; "check": навык ("perception", "stealth" или «Внимательность»), спасбросок ("save:dex"), атака ("attack:Кадило"). Урон спутника — "dice" с его бонусом из «листы».
@@ -234,7 +235,7 @@ pub(crate) fn gender_word(gender: &str) -> &'static str {
     }
 }
 
-fn sheet_context(c: &Character) -> Value {
+fn sheet_context(c: &Character, short: bool) -> Value {
     let d = c.details();
     let saves: Vec<String> = d
         .saves
@@ -244,6 +245,7 @@ fn sheet_context(c: &Character) -> Value {
     let skills: Vec<String> = d
         .skills
         .iter()
+        .filter(|s| !short || s.proficiency != Proficiency::None)
         .filter(|s| d.skills_listed || s.proficiency != Proficiency::None)
         .map(|s| {
             let mut line = format!("{} {}", s.name, signed(s.total));
@@ -280,7 +282,7 @@ fn sheet_context(c: &Character) -> Value {
         "состояния": d.conditions,
         "истощение": d.exhaustion,
         "кости_хитов": hit_dice,
-        "владения": d.proficiencies.iter().map(|l| format!("{}: {}", l.kind, l.text)).collect::<Vec<_>>(),
+        "владения": if short { json!("спроси командой query, если понадобятся") } else { json!(d.proficiencies.iter().map(|l| format!("{}: {}", l.kind, l.text)).collect::<Vec<_>>()) },
         "умения": d.features.iter().map(|f| format!("{} ({})", f.name, f.source)).collect::<Vec<_>>(),
         "настройка": d.attunement.iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
         "ресурсы": c.resources().iter().map(|r| format!("{} [{}] {}/{}", r.name(), r.id(), r.current(), r.max())).collect::<Vec<_>>(),
@@ -404,7 +406,7 @@ pub fn turn_context(session: &mut Session, query: &str, kb_extra: &str) -> Value
             "в_сцене": m.in_scene,
         })).collect::<Vec<_>>(),
         "персонаж_игрока": player,
-        "листы": session.party().iter().map(|c| (c.id.clone(), sheet_context(c))).collect::<serde_json::Map<_, _>>(),
+        "листы": session.party().iter().map(|c| (c.id.clone(), sheet_context(c, false))).collect::<serde_json::Map<_, _>>(),
         "записи_базы_знаний": notes_context(session, query),
         "предложения_листа_ждут_игрока": session.sheet_proposals().iter().map(|p| format!("{} — {} ({})", p.character_name, p.summary, p.reason)).collect::<Vec<_>>(),
         "сработавшие_таймеры": session.due_notes().iter().map(|n| note_json(session, n)).collect::<Vec<_>>(),

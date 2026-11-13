@@ -43,6 +43,9 @@ pub enum Request {
         kb_extra: String,
         #[serde(default)]
         two_step: bool,
+        /// Короткий лист в снимке: навыки без владения и владения не уходят мастеру.
+        #[serde(default)]
+        short_sheet: bool,
     },
     /// Двухшаговый ход: рассказ для игрока и команды, которые мастер написал в нём.
     MasterNarration {
@@ -283,12 +286,12 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::Party => to_value(session.party_view()),
         Request::Treasury => to_value(session.treasury_view()),
         Request::SaveState => to_value(session.save_state()),
-        Request::MasterContext { query, kb_extra, two_step } => {
-            to_value(dnd_master::master_request(session, &query, &kb_extra, two_step))
+        Request::MasterContext { query, kb_extra, two_step, short_sheet } => {
+            to_value(dnd_master::master_request(session, &query, &kb_extra, two_step, short_sheet))
         }
         Request::MasterNarration { text } => {
-            let (text, written) = dnd_master::narration_parts(&text);
-            Ok(json!({ "text": text, "written": written }))
+            let (text, written, no_changes) = dnd_master::narration_parts(&text);
+            Ok(json!({ "text": text, "written": written, "no_changes": no_changes }))
         }
         Request::MasterUpdateRequest { player, narration, written } => {
             to_value(dnd_master::update_request(session, &player, &narration, &written))

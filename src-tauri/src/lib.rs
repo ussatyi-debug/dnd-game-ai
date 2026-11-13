@@ -809,6 +809,7 @@ async fn ai_chat(
     history: Vec<ChatMessage>,
     kb_extra: Option<String>,
     two_step: Option<bool>,
+    short_sheet: Option<bool>,
     ai: State<'_, AiState>,
     session: State<'_, SessionState>,
 ) -> Result<MasterReply, String> {
@@ -825,6 +826,7 @@ async fn ai_chat(
         &player_text,
         kb_extra.as_deref().unwrap_or(""),
         two_step,
+        short_sheet.unwrap_or(false),
     );
     let system = request.system;
     let mut history = history;
@@ -836,11 +838,13 @@ async fn ai_chat(
     let mut prose: Vec<String> = Vec::new();
     let mut carried = String::new();
     let mut prompt_tokens = None;
+    let mut cached_tokens = None;
     let mut prompt_chars = 0;
     let mut round = 0;
     let mut reply = loop {
         let reply = ai::chat(&ai.client, &settings, &system, &history, false).await?;
         prompt_tokens = prompt_tokens.max(reply.prompt_tokens);
+        cached_tokens = cached_tokens.max(reply.cached_tokens);
         prompt_chars = prompt_chars.max(reply.prompt_chars);
         raw.push(reply.text.clone());
         // Запросы бросков и сведений: движок отвечает, мастер продолжает ход с места остановки.
@@ -869,11 +873,12 @@ async fn ai_chat(
     }
     full.push_str(&reply.text);
     reply.prompt_tokens = prompt_tokens;
+    reply.cached_tokens = cached_tokens;
     reply.prompt_chars = prompt_chars;
     reply.rolls = rolls;
     reply.raw = raw;
     if two_step {
-        let (text, written) = dnd_master::narration_parts(&full);
+        let (text, written, no_changes) = dnd_master::narration_parts(&full);
         reply.fabricated = dnd_master::fabricated_rolls(
             &text,
             &dnd_master::rolled_faces(&reply.rolls),
@@ -881,6 +886,7 @@ async fn ai_chat(
         );
         reply.text = text;
         reply.written_commands = format!("{carried}{written}").trim().to_string();
+        reply.no_changes = no_changes && carried.trim().is_empty();
         reply.pending_update = true;
         return Ok(reply);
     }

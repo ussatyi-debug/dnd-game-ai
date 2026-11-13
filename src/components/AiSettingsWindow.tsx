@@ -19,6 +19,10 @@ import {
   historyTurns,
   MASTER_ENGINE_LABEL,
   setHistoryTurns,
+  setShortSheet,
+  setSkipEmptyUpdate,
+  shortSheet,
+  skipEmptyUpdate,
   setTwoStep,
   twoStepFor,
   type MasterEngine,
@@ -380,7 +384,42 @@ function TurnSettings({ engine }: { engine: MasterEngine | null }) {
         />
         <span className="block text-xs text-muted">
           Раньше идущий диалог мастеру заменяет хроника по дням. Меньше — быстрее и надёжнее для моделей с маленьким
-          окном; в чате ничего не пропадает.
+          окном; в чате ничего не пропадает. Последние четыре хода уходят целиком, более ранние ответы мастера —
+          первыми фразами.
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={skipEmptyUpdate()}
+          onChange={(e) => {
+            setSkipEmptyUpdate(e.target.checked);
+            rerender((n) => n + 1);
+          }}
+        />
+        <span>
+          Пропускать второй шаг без изменений <span className="text-gold">(для сильных моделей)</span>
+          <span className="block text-xs text-muted">
+            Если мастер пометил ход как разговор без изменений, движок не делает второй запрос — ход дешевле и быстрее.
+            Слабая модель может поставить пометку по ошибке, и тогда изменения хода потеряются.
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={shortSheet()}
+          onChange={(e) => {
+            setShortSheet(e.target.checked);
+            rerender((n) => n + 1);
+          }}
+        />
+        <span>
+          Короткий лист в снимке <span className="text-gold">(для сильных моделей)</span>
+          <span className="block text-xs text-muted">
+            Описания умений и заклинаний уходят мастеру только для того, что названо в заявке; остальное — одними
+            названиями. Запрос короче, но за подробностями мастер должен сам обращаться к движку.
+          </span>
         </span>
       </label>
     </section>

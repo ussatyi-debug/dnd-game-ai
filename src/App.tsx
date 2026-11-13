@@ -116,7 +116,15 @@ import CreationWizard, { type CompanionMode } from "./components/creation/Creati
 import { heroSpec } from "./lib/sheetExport";
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { webAiGenerate } from "./lib/browserAi";
-import { promptSize, recentTurns, twoStepFor, UPDATE_TIMEOUT_MS } from "./lib/masterPrefs";
+import {
+  compressHistory,
+  promptSize,
+  recentTurns,
+  shortSheet,
+  skipEmptyUpdate,
+  twoStepFor,
+  UPDATE_TIMEOUT_MS,
+} from "./lib/masterPrefs";
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
 import type { RollResult, TrayRoll } from "./lib/rolls";
@@ -553,10 +561,11 @@ export default function App() {
     // Только сообщения до заявки: оборванный ответ после неё при повторе не уходит мастеру.
     // Последние заявки с ответами — раннюю часть диалога мастеру заменяет хроника.
     const prior = messages.filter((m) => m.id < playerMessage.id && (m.author === "player" || m.author === "master"));
-    return recentTurns(prior, playerMessage).map((m) => ({
+    const turns = recentTurns(prior, playerMessage).map((m) => ({
       role: m.author === "player" ? ("player" as const) : ("master" as const),
       text: m.text,
     }));
+    return compressHistory(turns);
   }
 
   /** Двухшаговый ход для того, кто сейчас ведёт мастера. */
@@ -565,9 +574,9 @@ export default function App() {
   }
 
   /** Размер запроса мастеру — в «Логирование»; переполнение окна — предупреждением. */
-  function logPromptSize(tokens: number | null, chars: number) {
+  function logPromptSize(tokens: number | null, chars: number, cached: number | null = null) {
     const limit = models.find((m) => m.id === ai?.model)?.input_token_limit ?? null;
-    const size = promptSize(tokens, chars, limit);
+    const size = promptSize(tokens, chars, limit, cached);
     if (size.overflow) devLog.add("warning", `Запрос мастеру почти заполнил окно модели: ${size.text}`);
     return size.text;
   }
@@ -607,17 +616,19 @@ export default function App() {
     abortRef.current = controller;
     setThinking(true);
     const twoStep = twoStepNow();
-    aiChat(historyWith(playerMessage), kbExtraFor(playerMessage.text), twoStep)
+    aiChat(historyWith(playerMessage), kbExtraFor(playerMessage.text), twoStep, shortSheet())
       .then((reply) => {
         if (controller.signal.aborted) {
           setFailed({ playerId: playerMessage.id, partialId: null });
           return;
         }
-        const size = logPromptSize(reply.prompt_tokens, reply.prompt_chars);
+        const size = logPromptSize(reply.prompt_tokens, reply.prompt_chars, reply.cached_tokens);
         const message = addMessage("master", reply.text, reply.model);
         logMasterRolls(reply.rolls);
         recordTurn(message.id, { ...reply, model: `${reply.model} · ${size}` });
-        if (!reply.pending_update) {
+        // Экономия: мастер пометил ход как разговор без изменений — второй запрос не нужен.
+        if (!reply.pending_update || (reply.no_changes && skipEmptyUpdate())) {
+          if (reply.no_changes) devLog.add("engine", "Ход без изменений — второй шаг пропущен");
           afterMasterTurn();
           return;
         }
@@ -737,7 +748,7 @@ export default function App() {
         history.push({ role: "master", text }, { role: "player", text: r.feedback });
       }
     };
-    masterContext(playerMessage.text, kbExtraFor(playerMessage.text), twoStep)
+    masterContext(playerMessage.text, kbExtraFor(playerMessage.text), twoStep, shortSheet())
       .then(withRolls)
       .then(async (text) => {
         const full = [...prose, text].filter(Boolean).join("\n\n");
@@ -773,6 +784,12 @@ export default function App() {
         logMasterRolls(rolled);
         recordTurn(reply.id, { actions: [], fabricated: [], rolls: rolled, raw, model: `${tierName} · ${size}` });
         const written = `${carried}${narration.written}`.trim();
+        // Экономия: ход-разговор без изменений — второй запрос не отправляется.
+        if (narration.no_changes && !written && skipEmptyUpdate()) {
+          devLog.add("engine", "Ход без изменений — второй шаг пропущен");
+          afterMasterTurn();
+          return;
+        }
         runUpdate(
           reply.id,
           async () => {

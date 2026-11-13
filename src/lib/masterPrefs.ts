@@ -34,6 +34,8 @@ export const UPDATE_TIMEOUT_MS = 60_000;
 
 const TWO_STEP_KEY = "dnd.twoStep";
 const HISTORY_KEY = "dnd.historyTurns";
+const SKIP_UPDATE_KEY = "dnd.skipEmptyUpdate";
+const SHORT_SHEET_KEY = "dnd.shortSheet";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -75,6 +77,31 @@ export function setHistoryTurns(n: number) {
 }
 
 /**
+ * Экономия: пропуск второго шага, когда мастер сам пометил ход как «без изменений».
+ * Для сильных моделей — меньше запросов; слабая может пометить ход ошибочно, и изменения
+ * потеряются, поэтому по умолчанию выключено.
+ */
+export function skipEmptyUpdate(): boolean {
+  return read<boolean>(SKIP_UPDATE_KEY, false);
+}
+
+export function setSkipEmptyUpdate(on: boolean) {
+  write(SKIP_UPDATE_KEY, on);
+}
+
+/**
+ * Экономия: короткий лист в снимке — описания умений и заклинаний только для того, что
+ * названо в заявке. Для сильных моделей; слабая реже спрашивает движок о подробностях.
+ */
+export function shortSheet(): boolean {
+  return read<boolean>(SHORT_SHEET_KEY, false);
+}
+
+export function setShortSheet(on: boolean) {
+  write(SHORT_SHEET_KEY, on);
+}
+
+/**
  * Последние `turns` заявок игрока с ответами мастера; `current` — новая заявка (входит в счёт).
  * Раньше идущая часть диалога мастеру не нужна: её заменяет хроника.
  */
@@ -85,13 +112,43 @@ export function recentTurns<T extends { author: string }>(prior: T[], current: T
   return [...prior.slice(start), current];
 }
 
+/** Сколько последних ходов уходят мастеру целиком; более ранние ответы сжимаются. */
+export const VERBATIM_TURNS = 4;
+
+/**
+ * Сжатие истории: ранние ответы мастера сокращаются до первых фраз — подробности о них
+ * мастер и так видит в хронике, базе знаний и снимке сцены. Заявки игрока не трогаются.
+ */
+export function compressHistory<T extends { role: string; text: string }>(
+  items: T[],
+  verbatim = VERBATIM_TURNS,
+): T[] {
+  const players = items.flatMap((m, i) => (m.role === "player" ? [i] : []));
+  if (players.length <= verbatim) return items;
+  const from = players[players.length - verbatim] ?? 0;
+  return items.map((m, i) => {
+    if (i >= from || m.role !== "master" || m.text.length <= 320) return m;
+    const sentences = m.text.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+/g) ?? [m.text];
+    const short = sentences.slice(0, 2).join(" ").trim().slice(0, 300);
+    return { ...m, text: `${short} […]` };
+  });
+}
+
 /** Размер запроса для «Логирования»: токены от провайдера или оценка по символам. */
-export function promptSize(tokens: number | null, chars: number, limit: number | null): { text: string; overflow: boolean } {
+export function promptSize(
+  tokens: number | null,
+  chars: number,
+  limit: number | null,
+  cached: number | null = null,
+): { text: string; overflow: boolean } {
   const estimated = tokens ?? Math.round(chars / 3);
   const share = limit ? Math.round((estimated / limit) * 100) : null;
   const value = `${tokens === null ? "≈" : ""}${estimated.toLocaleString("ru-RU")} токенов`;
-  return {
-    text: share === null ? `запрос ${value}` : `запрос ${value} (${share}% окна модели)`,
-    overflow: share !== null && share > 80,
-  };
+  const head = share === null ? `запрос ${value}` : `запрос ${value} (${share}% окна модели)`;
+  // Кэш: провайдер не считает неизменное начало запроса заново и берёт за него дешевле.
+  const cache =
+    cached && cached > 0
+      ? `, из них в кэше ${cached.toLocaleString("ru-RU")}${estimated > 0 ? ` (${Math.round((cached / estimated) * 100)}%)` : ""}`
+      : "";
+  return { text: `${head}${cache}`, overflow: share !== null && share > 80 };
 }
