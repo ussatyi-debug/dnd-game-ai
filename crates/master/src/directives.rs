@@ -1009,13 +1009,16 @@ mod tests {
             "{\"cmd\":\"move\",\"character\":\"valeria\",\"location\":\"Серебряный Шпиль\"}\n",
             "{\"cmd\":\"note\",\"layer\":\"player\",\"title\":\"Пароль гати\",\"text\":\"Серый рассвет\"}\n",
             "{\"cmd\":\"hp\",\"character\":\"nikis\",\"damage\":0}\n",
+            "{\"cmd\":\"hp\",\"character\":\"никого-нет\",\"damage\":5}\n",
             "```"
         );
         let turn = apply_directives(&mut s, reply);
         assert_eq!(turn.text, "Удар.");
         let ok: Vec<_> = turn.actions.iter().filter(|a| a.ok).collect();
-        assert_eq!(ok.len(), 9, "{:?}", turn.actions);
-        assert!(!turn.actions[9].ok);
+        // Урон 0 менять нечего — движок не просит исправление; неизвестный персонаж — отказ.
+        assert_eq!(ok.len(), 10, "{:?}", turn.actions);
+        assert!(turn.actions[9].summary.contains("ничего не изменилось"));
+        assert!(!turn.actions[10].ok);
         let nikis = s.character("pc.nikis").unwrap();
         assert_eq!(nikis.hit_points.current, 56);
         assert_eq!(nikis.hit_points.temporary, 0);
