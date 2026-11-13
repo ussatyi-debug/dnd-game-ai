@@ -97,6 +97,8 @@ pub struct MasterReply {
     pub prompt_tokens: Option<u64>,
     /// Сколько из них провайдер взял из кэша (повтор неизменного начала запроса).
     pub cached_tokens: Option<u64>,
+    /// Сколько из них записано в кэш (первый ход сцены или после долгой паузы).
+    pub cache_write_tokens: Option<u64>,
     /// Размер того же запроса в символах (если провайдер токены не вернул).
     pub prompt_chars: usize,
     /// Двухшаговый ход: рассказ готов, данные ещё обновляются (`ai_update`).
@@ -114,6 +116,8 @@ pub struct Generated {
     pub prompt_tokens: Option<u64>,
     /// Кэшированная часть запроса в токенах (OpenAI, Anthropic, Gemini).
     pub cached_tokens: Option<u64>,
+    /// Записанная в кэш часть запроса (Anthropic).
+    pub cache_write_tokens: Option<u64>,
 }
 
 /// Размер запроса в токенах из ответа провайдера: OpenAI (Responses и Chat Completions),
@@ -130,6 +134,12 @@ pub(crate) fn prompt_tokens(body: &serde_json::Value) -> Option<u64> {
     let cached = usage["cache_read_input_tokens"].as_u64().unwrap_or(0)
         + usage["cache_creation_input_tokens"].as_u64().unwrap_or(0);
     Some(base + cached)
+}
+
+/// Записанная в кэш часть запроса: за неё платят дороже обычного входа, зато ходы в пределах
+/// срока жизни кэша идут по цене чтения.
+pub(crate) fn cache_write_tokens(body: &serde_json::Value) -> Option<u64> {
+    body["usage"]["cache_creation_input_tokens"].as_u64().filter(|n| *n > 0)
 }
 
 /// Кэшированная часть запроса: провайдер не считает её заново и берёт дешевле.
@@ -353,6 +363,7 @@ pub async fn chat(
         raw: Vec::new(),
         prompt_tokens: out.prompt_tokens,
         cached_tokens: out.cached_tokens,
+        cache_write_tokens: out.cache_write_tokens,
         prompt_chars,
         pending_update: false,
         written_commands: String::new(),

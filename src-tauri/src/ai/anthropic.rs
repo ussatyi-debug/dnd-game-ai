@@ -5,10 +5,14 @@
 
 use serde_json::{json, Value};
 
-use super::{cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
+use super::{
+    cache_write_tokens, cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role,
+};
 
 const BASE_URL: &str = "https://api.anthropic.com/v1";
 const API_VERSION: &str = "2023-06-01";
+/// Часовой срок жизни кэша — отдельная возможность API; заголовок не мешает, если она уже общая.
+const CACHE_BETA: &str = "extended-cache-ttl-2025-04-11";
 /// Больше ответа мастеру не нужно; без лимита Messages API запрос не принимает.
 const MAX_TOKENS: u32 = 8_192;
 
@@ -42,6 +46,7 @@ pub async fn generate(
         .post(format!("{BASE_URL}/messages"))
         .header("x-api-key", key)
         .header("anthropic-version", API_VERSION)
+        .header("anthropic-beta", CACHE_BETA)
         .json(&request_body(model, system, history, json_mode))
         .send()
         .await
@@ -57,6 +62,7 @@ pub async fn generate(
         text: if json_mode { format!("{{{}", text.trim_start()) } else { text },
         prompt_tokens: prompt_tokens(&body),
         cached_tokens: cached_tokens(&body),
+        cache_write_tokens: cache_write_tokens(&body),
     })
 }
 
@@ -113,7 +119,9 @@ pub(crate) fn request_body(
         "system": [{
             "type": "text",
             "text": system,
-            "cache_control": { "type": "ephemeral" },
+            // Час, а не пять минут по умолчанию: между ходами игрок думает дольше пяти минут,
+            // и кэш на пять минут успевает истечь — тогда за запись платим, а скидки не получаем.
+            "cache_control": { "type": "ephemeral", "ttl": "1h" },
         }],
         "messages": messages,
     })
@@ -166,6 +174,7 @@ mod tests {
         let history = [msg(Role::Master, "Вступление"), msg(Role::Player, "Осматриваюсь")];
         let body = request_body("claude-sonnet-4", "КОДЕКС", &history, false);
         assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
+        assert_eq!(body["system"][0]["cache_control"]["ttl"], "1h");
         assert_eq!(body["messages"].as_array().unwrap().len(), 1);
         assert_eq!(body["messages"][0]["role"], "user");
     }

@@ -4,7 +4,9 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::{cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
+use super::{
+    cache_write_tokens, cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role,
+};
 
 /// Адрес Ollama по умолчанию.
 pub const DEFAULT_URL: &str = "http://localhost:11434";
@@ -192,6 +194,7 @@ pub async fn generate(
             text: parse_reply(body)?,
             prompt_tokens: prompt_tokens(body),
             cached_tokens: cached_tokens(body),
+            cache_write_tokens: cache_write_tokens(body),
         })
     };
     let (status, body) = post(client, base, &body_for(false)).await?;

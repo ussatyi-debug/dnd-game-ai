@@ -970,6 +970,8 @@ export interface MasterReply {
   prompt_tokens: number | null;
   /** Сколько из них провайдер взял из кэша (повтор неизменного начала запроса). */
   cached_tokens: number | null;
+  /** Сколько из них записано в кэш (первый ход сцены или после долгой паузы). */
+  cache_write_tokens: number | null;
   /** Размер того же запроса в символах. */
   prompt_chars: number;
   /** Двухшаговый ход: рассказ готов, данные обновит aiUpdate. */

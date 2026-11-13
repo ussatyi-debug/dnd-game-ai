@@ -152,6 +152,7 @@ export function promptSize(
   chars: number,
   limit: number | null,
   cached: number | null = null,
+  cacheWrite: number | null = null,
 ): { text: string; overflow: boolean } {
   const estimated = tokens ?? Math.round(chars / 3);
   const share = limit ? Math.round((estimated / limit) * 100) : null;
@@ -161,6 +162,8 @@ export function promptSize(
   const cache =
     cached && cached > 0
       ? `, из них в кэше ${cached.toLocaleString("ru-RU")}${estimated > 0 ? ` (${Math.round((cached / estimated) * 100)}%)` : ""}`
-      : "";
+      : cacheWrite && cacheWrite > 0
+        ? `, кэш записан (${cacheWrite.toLocaleString("ru-RU")})`
+        : "";
   return { text: `${head}${cache}`, overflow: share !== null && share > 80 };
 }

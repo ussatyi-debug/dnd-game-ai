@@ -874,12 +874,14 @@ async fn ai_chat(
     let mut carried = String::new();
     let mut prompt_tokens = None;
     let mut cached_tokens = None;
+    let mut cache_write_tokens = None;
     let mut prompt_chars = 0;
     let mut round = 0;
     let mut reply = loop {
         let reply = ai::chat(&ai.client, &settings, &system, &history, false).await?;
         prompt_tokens = prompt_tokens.max(reply.prompt_tokens);
         cached_tokens = cached_tokens.max(reply.cached_tokens);
+        cache_write_tokens = cache_write_tokens.max(reply.cache_write_tokens);
         prompt_chars = prompt_chars.max(reply.prompt_chars);
         raw.push(reply.text.clone());
         // Запросы бросков и сведений: движок отвечает, мастер продолжает ход с места остановки.
@@ -909,6 +911,7 @@ async fn ai_chat(
     full.push_str(&reply.text);
     reply.prompt_tokens = prompt_tokens;
     reply.cached_tokens = cached_tokens;
+    reply.cache_write_tokens = cache_write_tokens;
     reply.prompt_chars = prompt_chars;
     reply.rolls = rolls;
     reply.raw = raw;

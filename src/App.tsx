@@ -575,9 +575,14 @@ export default function App() {
   }
 
   /** Размер запроса мастеру — в «Логирование»; переполнение окна — предупреждением. */
-  function logPromptSize(tokens: number | null, chars: number, cached: number | null = null) {
+  function logPromptSize(
+    tokens: number | null,
+    chars: number,
+    cached: number | null = null,
+    cacheWrite: number | null = null,
+  ) {
     const limit = models.find((m) => m.id === ai?.model)?.input_token_limit ?? null;
-    const size = promptSize(tokens, chars, limit, cached);
+    const size = promptSize(tokens, chars, limit, cached, cacheWrite);
     if (size.overflow) devLog.add("warning", `Запрос мастеру почти заполнил окно модели: ${size.text}`);
     return size.text;
   }
@@ -623,7 +628,12 @@ export default function App() {
           setFailed({ playerId: playerMessage.id, partialId: null });
           return;
         }
-        const size = logPromptSize(reply.prompt_tokens, reply.prompt_chars, reply.cached_tokens);
+        const size = logPromptSize(
+          reply.prompt_tokens,
+          reply.prompt_chars,
+          reply.cached_tokens,
+          reply.cache_write_tokens,
+        );
         const message = addMessage("master", reply.text, reply.model);
         logMasterRolls(reply.rolls);
         recordTurn(message.id, { ...reply, model: `${reply.model} · ${size}` });

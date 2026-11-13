@@ -5,7 +5,9 @@
 
 use serde_json::{json, Value};
 
-use super::{cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role};
+use super::{
+    cache_write_tokens, cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role,
+};
 
 const BASE_URL: &str = "https://ai.api.cloud.yandex.net/v1";
 
@@ -160,6 +162,7 @@ pub async fn generate(
         text: parse_reply(&body)?,
         prompt_tokens: prompt_tokens(&body),
         cached_tokens: cached_tokens(&body),
+        cache_write_tokens: cache_write_tokens(&body),
     })
 }
 
