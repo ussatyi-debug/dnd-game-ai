@@ -479,12 +479,14 @@ impl Session {
                 return Err(EngineError::TimerWithoutDay);
             }
             // Защита от дублей: мастер повторил запись за тот же день — обновляется прежняя.
+            // Слой при сравнении не учитывается: мастер часто пишет одно и то же и в журнал,
+            // и в записи для игрока. Если повтор пришёл для игрока, прежняя запись
+            // переносится в его раздел — игрок должен её увидеть.
             if !new.by_player {
                 let (t, x) = (fold(title), fold(text));
                 let today = self.scene.day;
                 if let Some(old) = self.notes.iter_mut().find(|n| {
                     !n.by_player
-                        && n.layer == layer
                         && n.day == today
                         && n.kind == new.kind
                         && ((!t.is_empty() && fold(&n.title) == t)
@@ -496,7 +498,18 @@ impl Session {
                     if old.card.is_none() {
                         old.card = card;
                     }
-                    return Ok((old.id, old.title.clone(), new.kind, new.due_day, unlinked, true));
+                    if layer == NoteLayer::Player {
+                        old.layer = NoteLayer::Player;
+                    }
+                    let kept = old.layer;
+                    return Ok((
+                        old.id,
+                        old.title.clone(),
+                        new.kind,
+                        new.due_day,
+                        unlinked,
+                        Some(kept),
+                    ));
                 }
             }
             let id = self.next_note_id;
@@ -517,15 +530,15 @@ impl Session {
                 done: false,
                 due_turns: 0,
             });
-            Ok((id, title, new.kind, new.due_day, unlinked, false))
+            Ok((id, title, new.kind, new.due_day, unlinked, None))
         })();
         self.logged(
             result,
             |(id, title, kind, due, unlinked, existing)| {
-                if *existing {
+                if let Some(kept) = existing {
                     return format!(
                         "База знаний ({}): запись «{title}» уже есть — обновлена [запись {id}]",
-                        layer.section()
+                        kept.section()
                     );
                 }
                 let extra = match (kind, due) {
@@ -1288,6 +1301,19 @@ mod tests {
         s.update_goal(&id, GoalEdit { status: Some("done".into()), ..GoalEdit::default() })
             .unwrap();
         assert!(s.active_goals().is_empty());
+    }
+
+    #[test]
+    fn same_note_in_both_sections_is_not_doubled() {
+        let mut s = session();
+        let id =
+            s.add_note(NoteLayer::Master, "Вода возвращена", "Ведро отдано владельцу").unwrap();
+        // Та же запись для игрока: прежняя переносится в его раздел, второй копии нет.
+        let again =
+            s.add_note(NoteLayer::Player, "Вода возвращена", "Ведро отдано владельцу").unwrap();
+        assert_eq!(id, again);
+        assert_eq!(s.notes().iter().filter(|n| n.title == "Вода возвращена").count(), 1);
+        assert_eq!(s.notes().iter().find(|n| n.id == id).unwrap().layer, NoteLayer::Player);
     }
 
     #[test]

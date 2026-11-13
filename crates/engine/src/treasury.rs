@@ -53,6 +53,99 @@ pub struct Asset {
     pub unit_value: Copper,
 }
 
+/// Монета правил: ID, название, стоимость в медяках и то, как её называют мастер и игрок.
+pub struct Coin {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub unit_value: Copper,
+    pub aliases: &'static [&'static str],
+}
+
+/// Монеты D&D от крупной к мелкой. Синонимы — русские сокращения, слова и латинские коды.
+pub const COINS: [Coin; 5] = [
+    Coin {
+        id: "pp",
+        name: "Платиновые монеты",
+        unit_value: 1_000,
+        aliases: &["pp", "пм", "платина", "платиновая", "платиновые"],
+    },
+    Coin {
+        id: "gp",
+        name: "Золотые монеты",
+        unit_value: 100,
+        aliases: &["gp", "зм", "зол", "золото", "золотая", "золотые"],
+    },
+    Coin {
+        id: "ep",
+        name: "Электрумовые монеты",
+        unit_value: 50,
+        aliases: &["ep", "эм", "электрум", "электрумовая", "электрумовые"],
+    },
+    Coin {
+        id: "sp",
+        name: "Серебряные монеты",
+        unit_value: 10,
+        aliases: &["sp", "см", "ср", "сер", "серебро", "серебряная", "серебряные"],
+    },
+    Coin {
+        id: "cp",
+        name: "Медные монеты",
+        unit_value: 1,
+        aliases: &["cp", "мм", "мед", "медь", "медная", "медные"],
+    },
+];
+
+/// Монета по ID, названию или сокращению: «sp», «см», «серебряные монеты».
+pub fn coin_by_query(query: &str) -> Option<&'static Coin> {
+    let q = normalize(query);
+    let q = q.trim_end_matches('.');
+    COINS.iter().find(|c| {
+        c.id == q
+            || normalize(c.name) == q
+            || c.aliases.contains(&q)
+            || q == format!("{} монет", c.aliases[1])
+    })
+}
+
+/// Цена в медяках: «1 зм», «5 см», «2 зм 5 см», «10 gp». `None` — непонятная запись.
+pub fn parse_price(text: &str) -> Option<Copper> {
+    let text = normalize(text);
+    let mut total: Copper = 0;
+    let mut number: Option<Copper> = None;
+    let mut parsed = false;
+    for word in text.split(|c: char| c.is_whitespace() || c == ',' || c == '+') {
+        let word = word.trim();
+        if word.is_empty() {
+            continue;
+        }
+        if let Ok(n) = word.parse::<Copper>() {
+            if let Some(prev) = number.take() {
+                // Два числа подряд: «1 2 зм» — непонятно.
+                let _ = prev;
+                return None;
+            }
+            number = Some(n);
+            continue;
+        }
+        // Число и монета слитно: «5зм».
+        let digits: String = word.chars().take_while(char::is_ascii_digit).collect();
+        let (n, rest) = if digits.is_empty() {
+            (number.take()?, word)
+        } else {
+            (digits.parse::<Copper>().ok()?, &word[digits.len()..])
+        };
+        let coin = coin_by_query(rest)?;
+        total = total.checked_add(n.checked_mul(coin.unit_value)?)?;
+        parsed = true;
+    }
+    // Голое число без монеты — золотые (так пишет мастер чаще всего).
+    if let Some(n) = number {
+        total = total.checked_add(n.checked_mul(100)?)?;
+        parsed = true;
+    }
+    (parsed && total > 0).then_some(total)
+}
+
 /// Место хранения.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,6 +341,43 @@ impl Treasury {
     pub fn find_location(&self, query: &str) -> Result<&Location, EngineError> {
         find_named(&self.locations, query, |l| (&l.id, &l.name))
             .ok_or_else(|| EngineError::UnknownLocation(query.to_string()))
+    }
+
+    /// Монета по запросу; если такой монеты в казне ещё нет — заводит её.
+    /// Мастер часто платит серебром или медью там, где их не было: это не ошибка.
+    pub fn ensure_coin(&mut self, query: &str) -> Result<&Asset, EngineError> {
+        if let Some(coin) = coin_by_query(query) {
+            if !self.assets.iter().any(|a| a.id == coin.id) {
+                self.assets.push(Asset {
+                    id: coin.id.to_string(),
+                    name: coin.name.to_string(),
+                    kind: AssetKind::Coin,
+                    unit_value: coin.unit_value,
+                });
+            }
+            let id = coin.id;
+            return self
+                .assets
+                .iter()
+                .find(|a| a.id == id)
+                .ok_or_else(|| EngineError::UnknownAsset(query.to_string()));
+        }
+        self.find_asset(query)
+    }
+
+    /// Монеты места хранения: (ID, название, стоимость, остаток), от мелких к крупным.
+    pub fn coins_at(&self, location_id: &str) -> Vec<(String, String, Copper, i64)> {
+        let mut coins: Vec<(String, String, Copper, i64)> = self
+            .assets
+            .iter()
+            .filter(|a| a.kind == AssetKind::Coin)
+            .map(|a| {
+                (a.id.clone(), a.name.clone(), a.unit_value, self.quantity(&a.id, location_id))
+            })
+            .filter(|(.., q)| *q > 0)
+            .collect();
+        coins.sort_by_key(|(.., value, _)| *value);
+        coins
     }
 
     /// Новая ценность (например, трофейный самоцвет). ID должен быть уникальным.
@@ -481,6 +611,36 @@ impl Treasury {
 mod tests {
     use super::*;
     use crate::fixtures::demo_treasury;
+
+    #[test]
+    fn coins_are_found_by_short_names() {
+        assert_eq!(coin_by_query("ср").unwrap().id, "sp");
+        assert_eq!(coin_by_query("см").unwrap().id, "sp");
+        assert_eq!(coin_by_query("Серебряные монеты").unwrap().id, "sp");
+        assert_eq!(coin_by_query("GP").unwrap().id, "gp");
+        assert_eq!(coin_by_query("мм").unwrap().id, "cp");
+        assert!(coin_by_query("алмаз").is_none());
+    }
+
+    #[test]
+    fn prices_are_parsed() {
+        assert_eq!(parse_price("1 зм"), Some(100));
+        assert_eq!(parse_price("5 см"), Some(50));
+        assert_eq!(parse_price("2 зм 5 см"), Some(250));
+        assert_eq!(parse_price("10gp"), Some(1_000));
+        assert_eq!(parse_price("7"), Some(700), "голое число — золотые");
+        assert_eq!(parse_price("бесплатно"), None);
+        assert_eq!(parse_price("0 зм"), None);
+    }
+
+    #[test]
+    fn missing_coin_is_created_on_demand() {
+        let mut t = small();
+        assert!(t.find_asset("sp").is_err());
+        assert_eq!(t.ensure_coin("ср").unwrap().id, "sp");
+        assert_eq!(t.ensure_coin("sp").unwrap().name, "Серебряные монеты");
+        assert!(t.find_asset("алмаз").is_err());
+    }
 
     fn small() -> Treasury {
         Treasury::new(

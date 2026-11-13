@@ -10,7 +10,7 @@ use crate::profile::SheetDetails;
 use crate::resource::{ResourcePool, RestKind};
 use crate::session::{Mood, Scene, Session};
 use crate::sheet_edits::SheetProposal;
-use crate::treasury::{Asset, AssetKind, EntrySource, NewEntry, Treasury};
+use crate::treasury::{Asset, AssetKind, Copper, EntrySource, NewEntry, Treasury};
 
 /// Изменение хитов.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -390,7 +390,7 @@ impl Session {
         reason: &str,
     ) -> Result<u64, EngineError> {
         let result = (|| {
-            let asset = self.treasury.find_asset(asset)?.clone();
+            let asset = self.treasury.ensure_coin(asset)?.clone();
             let place = self.treasury.find_location(location)?.clone();
             let id = self.treasury.record(NewEntry {
                 day: self.scene.day,
@@ -412,6 +412,110 @@ impl Session {
             || format!("казна, «{asset}»"),
         )
         .map(|(id, _, _)| id)
+    }
+
+    /// Покупка со сдачей: движок сам подбирает монеты и возвращает сдачу.
+    ///
+    /// Мастер называет вещь, цену («1 см», «2 зм 5 см») и место хранения. Движок списывает
+    /// монеты, начиная с мелких; если мелочи не хватает, платит монетой покрупнее и записывает
+    /// сдачу золотом, серебром и медью.
+    pub fn master_buy(
+        &mut self,
+        what: &str,
+        price: &str,
+        location: &str,
+    ) -> Result<String, EngineError> {
+        let result = (|| {
+            let cost = crate::treasury::parse_price(price)
+                .ok_or_else(|| EngineError::UnknownAsset(format!("цена «{price}»")))?;
+            let place = self.treasury.find_location(location)?.clone();
+            let coins = self.treasury.coins_at(&place.id);
+            let purse: Copper = coins.iter().map(|(.., value, qty)| value * qty).sum();
+            if purse < cost {
+                return Err(EngineError::InsufficientFunds {
+                    asset: "монеты".into(),
+                    location: place.name.clone(),
+                    held: purse,
+                    requested: cost,
+                });
+            }
+            // Платим как в жизни: сначала крупные монеты, мелочь добивает остаток.
+            let mut left = cost;
+            let mut paid: Vec<(String, String, Copper, i64)> = Vec::new();
+            for (id, name, value, qty) in coins.iter().rev() {
+                let take = (left / value).min(*qty);
+                if take > 0 {
+                    paid.push((id.clone(), name.clone(), *value, take));
+                    left -= take * value;
+                }
+            }
+            if left > 0 {
+                // Мелочь кончилась — доплачиваем самой мелкой из оставшихся монет.
+                let spare = coins
+                    .iter()
+                    .find(|(id, _, value, qty)| {
+                        *value > left
+                            && *qty > paid.iter().find(|(p, ..)| p == id).map_or(0, |(.., n)| *n)
+                    })
+                    .ok_or_else(|| EngineError::InsufficientFunds {
+                        asset: "монеты".into(),
+                        location: place.name.clone(),
+                        held: purse,
+                        requested: cost,
+                    })?
+                    .clone();
+                match paid.iter_mut().find(|(id, ..)| *id == spare.0) {
+                    Some((.., count)) => *count += 1,
+                    None => paid.push((spare.0, spare.1, spare.2, 1)),
+                }
+                left -= spare.2;
+            }
+            let change = -left;
+            let reason = format!("Покупка: {}", what.trim());
+            let mut given: Vec<String> = Vec::new();
+            for (id, name, value, count) in &paid {
+                self.treasury.record(NewEntry {
+                    day: self.scene.day,
+                    time: self.scene.time.clone(),
+                    asset_id: id.clone(),
+                    location_id: place.id.clone(),
+                    quantity: -count,
+                    reason: reason.clone(),
+                    source: EntrySource::Master,
+                })?;
+                given.push(format!("{} × {count}", short_coin(name, *value)));
+            }
+            // Сдача — золотом, серебром и медью.
+            let mut back: Vec<String> = Vec::new();
+            let mut rest = change;
+            for id in ["gp", "sp", "cp"] {
+                let coin = crate::treasury::COINS.iter().find(|c| c.id == id).expect("монета");
+                let count = rest / coin.unit_value;
+                if count == 0 {
+                    continue;
+                }
+                rest -= count * coin.unit_value;
+                self.treasury.ensure_coin(id)?;
+                self.treasury.record(NewEntry {
+                    day: self.scene.day,
+                    time: self.scene.time.clone(),
+                    asset_id: id.to_string(),
+                    location_id: place.id.clone(),
+                    quantity: count,
+                    reason: format!("Сдача: {}", what.trim()),
+                    source: EntrySource::Master,
+                })?;
+                back.push(format!("{} × {count}", short_coin(coin.name, coin.unit_value)));
+            }
+            let mut line = format!("{} за {}", what.trim(), price_text(cost));
+            line.push_str(&format!(" — отдано {}", given.join(", ")));
+            if !back.is_empty() {
+                line.push_str(&format!(", сдача {}", back.join(", ")));
+            }
+            line.push_str(&format!(" ({})", place.name));
+            Ok(line)
+        })();
+        self.logged(result, |line| format!("Покупка: {line}"), || format!("покупка «{what}»"))
     }
 
     /// Перемещение ценности между местами хранения.
@@ -566,6 +670,35 @@ impl Session {
     }
 }
 
+/// Короткое название монеты для журнала: «зм», «см», «мм», иначе — полное название.
+fn short_coin(name: &str, value: Copper) -> String {
+    match value {
+        1_000 => "пм".into(),
+        100 => "зм".into(),
+        50 => "эм".into(),
+        10 => "см".into(),
+        1 => "мм".into(),
+        _ => name.to_string(),
+    }
+}
+
+/// Цена словами: «2 зм 5 см».
+fn price_text(mut cost: Copper) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for coin in crate::treasury::COINS.iter() {
+        let count = cost / coin.unit_value;
+        if count > 0 {
+            parts.push(format!("{count} {}", short_coin(coin.name, coin.unit_value)));
+            cost -= count * coin.unit_value;
+        }
+    }
+    if parts.is_empty() {
+        "0 мм".into()
+    } else {
+        parts.join(" ")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -574,6 +707,26 @@ mod tests {
 
     fn session() -> Session {
         Session::demo(Xoshiro256::from_seed(1))
+    }
+
+    #[test]
+    fn buying_gives_change() {
+        let mut s = Session::demo(crate::rng::Xoshiro256::from_seed(7));
+        let gold = s.treasury().quantity("gp", "purse");
+        // Свеча за медяк: в кошеле только золото — движок отдаёт монету и берёт сдачу.
+        let line = s.master_buy("свеча", "1 мм", "purse").unwrap();
+        assert!(line.contains("сдача"), "{line}");
+        assert_eq!(s.treasury().quantity("gp", "purse"), gold - 1);
+        assert_eq!(s.treasury().quantity("sp", "purse"), 9);
+        assert_eq!(s.treasury().quantity("cp", "purse"), 9);
+        // Теперь мелочь есть: серебро уходит без сдачи.
+        let line = s.master_buy("вторая свеча", "1 см", "purse").unwrap();
+        assert!(!line.contains("сдача"), "{line}");
+        assert_eq!(s.treasury().quantity("sp", "purse"), 8);
+        assert_eq!(s.treasury().quantity("gp", "purse"), gold - 1);
+        // Непонятная цена и нехватка денег — отказ.
+        assert!(s.master_buy("замок", "бесплатно", "purse").is_err());
+        assert!(s.master_buy("замок", "1000000 зм", "purse").is_err());
     }
 
     #[test]

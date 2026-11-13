@@ -520,6 +520,13 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             }))?;
             Ok(last_log(session))
         })(),
+        "buy" => (|| -> Result<String, String> {
+            let what = text_field(cmd, "item").or_else(|_| text_field(cmd, "what"))?;
+            let price = text_field(cmd, "price")?;
+            let location = opt_text(cmd, "location").unwrap_or("purse");
+            engine(session.master_buy(what, price, location))?;
+            Ok(last_log(session))
+        })(),
         "xp_note" => (|| -> Result<String, String> {
             let xp = int_field(cmd, "xp").and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
             engine(session.note_xp(text_field(cmd, "text")?, xp))?;
