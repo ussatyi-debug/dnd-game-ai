@@ -381,14 +381,18 @@ mod tests {
         assert_eq!(s.key(), Some("sk-proj-Secret9876"));
         let view = s.view();
         assert_eq!(view.key_hint.as_deref(), Some("…9876"));
-        assert_eq!(view.providers.len(), 4);
-        assert!(view.providers[3].ready);
-        assert_eq!(view.providers[3].key_hint.as_deref(), Some(ollama::DEFAULT_URL));
+        // Порядок провайдеров: Gemini, OpenAI, Claude, Яндекс, локальная модель.
+        assert_eq!(view.providers.len(), 5);
+        assert!(view.providers[4].ready);
+        assert_eq!(view.providers[4].key_hint.as_deref(), Some(ollama::DEFAULT_URL));
         assert!(view.providers[1].has_key);
+        s.set_key(Provider::Anthropic, "sk-ant-Claude1234").unwrap();
+        assert_eq!(s.key_for(Provider::Anthropic), Some("sk-ant-Claude1234"));
+        assert_eq!(s.view().providers[2].key_hint.as_deref(), Some("…1234"));
         assert!(!serde_json::to_string(&view).unwrap().contains("Secret"));
         s.set_key(Provider::Yandex, "b1gfolder42 AQVNyandexSecret7777").unwrap();
         let view = s.view();
-        assert_eq!(view.providers[2].key_hint.as_deref(), Some("b1gfolder42 …7777"));
+        assert_eq!(view.providers[3].key_hint.as_deref(), Some("b1gfolder42 …7777"));
         assert!(!serde_json::to_string(&view).unwrap().contains("yandexSecret"));
         assert!(s.set_key(Provider::Yandex, "только-ключ").is_err());
         s.set_key(Provider::Local, "192.168.1.25:11434").unwrap();
