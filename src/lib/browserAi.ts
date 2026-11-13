@@ -21,9 +21,12 @@ const KEY = "dnd.webai";
 const LABELS: Record<WebProvider, string> = {
   gemini: "Google Gemini",
   openai: "OpenAI (ChatGPT)",
+  anthropic: "Claude (Anthropic)",
   yandex: "YandexGPT (Яндекс)",
 };
-const ORDER: WebProvider[] = ["gemini", "openai", "yandex"];
+const ORDER: WebProvider[] = ["gemini", "openai", "anthropic", "yandex"];
+/** Anthropic отвечает браузеру только с этим заголовком. */
+const CLAUDE_BROWSER = { "anthropic-dangerous-direct-browser-access": "true" };
 
 function load(): Stored {
   try {
@@ -187,6 +190,21 @@ export async function webAiListModels(provider: Provider): Promise<ModelInfo[]> 
       .sort((a, b) => (b.created ?? 0) - (a.created ?? 0))
       .map((m) => ({ id: m.id, name: m.id, description: "Платная модель: расходует кредиты аккаунта OpenAI", input_token_limit: null }));
   }
+  if (provider === "anthropic") {
+    const body = await request(
+      "https://api.anthropic.com/v1/models?limit=100",
+      { headers: { "x-api-key": key, "anthropic-version": "2023-06-01", ...CLAUDE_BROWSER } },
+      "Claude",
+    );
+    const data = (body.data as { id: string; display_name?: string }[]) ?? [];
+    return data.map((m) => ({
+      id: m.id,
+      name: m.display_name ?? m.id,
+      description: "Платная модель: расходует кредиты аккаунта Anthropic",
+      input_token_limit: null,
+    }));
+  }
+
   const [folder] = key.split(" ");
   return [
     "yandexgpt/latest",
@@ -260,6 +278,39 @@ export async function webAiGenerate(
       .join("");
     if (text.trim()) return text;
     throw new Error("OpenAI вернул пустой ответ");
+  }
+
+  if (provider === "anthropic") {
+    const messages = dialog.map((m) => ({
+      role: m.role === "player" ? "user" : "assistant",
+      content: m.text.trim(),
+    }));
+    if (messages.at(-1)?.role === "assistant") messages.push({ role: "user", content: "Продолжай." });
+    const body = await request(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        signal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          ...CLAUDE_BROWSER,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 8192,
+          // Кодекс и снимок сцены не меняются внутри сцены — помечаем их для кэша.
+          system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+          messages,
+        }),
+      },
+      "Claude",
+    );
+    const parts = (body.content as { type: string; text?: string }[]) ?? [];
+    const text = parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("");
+    if (text.trim()) return text;
+    throw new Error("Claude вернул пустой ответ");
   }
 
   const [folder, apiKey] = key.split(" ") as [string, string];

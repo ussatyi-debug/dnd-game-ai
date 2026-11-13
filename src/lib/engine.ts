@@ -926,7 +926,7 @@ export function signed(value: number): string {
 // ИИ-мастер: в приложениях запросы к провайдерам и ключи — на стороне Rust, в веб-версии —
 // в браузере (lib/browserAi.ts).
 
-export type Provider = "gemini" | "openai" | "yandex" | "local";
+export type Provider = "gemini" | "openai" | "anthropic" | "yandex" | "local";
 export type ChatRole = "player" | "master";
 
 export interface AiSettingsView {

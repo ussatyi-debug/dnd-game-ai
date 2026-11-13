@@ -57,6 +57,13 @@ const PROVIDER_INFO: Record<Provider, { short: string; keyPlaceholder: string; k
       "Запросы расходуют кредиты аккаунта OpenAI. Для игры хватит быстрых моделей с «mini» в названии; крупные модели пишут лучше, но дороже.",
     filter: "Фильтр: mini, gpt-5…",
   },
+  anthropic: {
+    short: "Claude",
+    keyPlaceholder: "Ключ sk-ant-… из console.anthropic.com → API keys",
+    keyNote:
+      "Запросы расходуют кредиты аккаунта Anthropic. Кодекс и снимок сцены игра помечает для кэша, поэтому ходы внутри одной сцены считаются дешевле.",
+    filter: "Фильтр: sonnet, haiku…",
+  },
   yandex: {
     short: "YandexGPT",
     keyPlaceholder: "ID каталога и API-ключ через пробел: b1g… AQVN…",

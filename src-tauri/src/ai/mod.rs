@@ -4,6 +4,7 @@
 //! а провайдер и модель читаются из настроек в момент каждого запроса. Поэтому модель
 //! можно сменить посреди сцены — следующий ответ даст новая модель с тем же контекстом.
 
+pub mod anthropic;
 pub mod gemini;
 pub mod ollama;
 pub mod openai;
@@ -22,6 +23,8 @@ pub enum Provider {
     Gemini,
     #[serde(rename = "openai")]
     OpenAi,
+    /// Claude (Anthropic).
+    Anthropic,
     /// Локальная модель через Ollama (на этом ПК или в локальной сети).
     Local,
     /// YandexGPT и другие модели Yandex AI Studio.
@@ -29,13 +32,19 @@ pub enum Provider {
 }
 
 impl Provider {
-    pub const ALL: [Provider; 4] =
-        [Provider::Gemini, Provider::OpenAi, Provider::Yandex, Provider::Local];
+    pub const ALL: [Provider; 5] = [
+        Provider::Gemini,
+        Provider::OpenAi,
+        Provider::Anthropic,
+        Provider::Yandex,
+        Provider::Local,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             Provider::Gemini => "Google Gemini",
             Provider::OpenAi => "OpenAI (ChatGPT)",
+            Provider::Anthropic => "Claude (Anthropic)",
             Provider::Local => "Локальная модель",
             Provider::Yandex => "YandexGPT (Яндекс)",
         }
@@ -141,6 +150,9 @@ pub struct AiSettings {
     /// ID каталога Yandex Cloud и API-ключ через пробел.
     #[serde(default)]
     pub yandex_key: Option<String>,
+    /// Ключ Anthropic (Claude).
+    #[serde(default)]
+    pub anthropic_api_key: Option<String>,
 }
 
 /// Состояние одного провайдера для интерфейса.
@@ -214,6 +226,7 @@ impl AiSettings {
         let key = match provider {
             Provider::Gemini => self.gemini_api_key.as_deref(),
             Provider::OpenAi => self.openai_api_key.as_deref(),
+            Provider::Anthropic => self.anthropic_api_key.as_deref(),
             Provider::Local => Some(self.local_url.as_deref().unwrap_or(ollama::DEFAULT_URL)),
             Provider::Yandex => self.yandex_key.as_deref(),
         };
@@ -231,6 +244,7 @@ impl AiSettings {
         match provider {
             Provider::Gemini => self.gemini_api_key = value,
             Provider::OpenAi => self.openai_api_key = value,
+            Provider::Anthropic => self.anthropic_api_key = value,
             Provider::Local => self.local_url = Some(ollama::normalize_url(key)?),
             Provider::Yandex => {
                 self.yandex_key = match value {
@@ -288,6 +302,7 @@ pub async fn list_models(
     match provider {
         Provider::Gemini => gemini::list_models(client, key).await,
         Provider::OpenAi => openai::list_models(client, key).await,
+        Provider::Anthropic => anthropic::list_models(client, key).await,
         Provider::Local => ollama::list_models(client, key).await,
         Provider::Yandex => yandex::list_models(client, key).await,
     }
@@ -309,6 +324,9 @@ pub async fn chat(
         }
         Provider::OpenAi => {
             openai::generate(client, key, &model, system, history, json_mode).await?
+        }
+        Provider::Anthropic => {
+            anthropic::generate(client, key, &model, system, history, json_mode).await?
         }
         Provider::Local => {
             ollama::generate(client, key, &model, system, history, json_mode).await?

@@ -7,13 +7,14 @@
 // История: мастеру уходят последние N заявок игрока с ответами; раньше — хроника по дням.
 
 /** Кто ведёт мастера: провайдер приложения или Claude внутри Claude. */
-export type MasterEngine = "gemini" | "openai" | "yandex" | "local" | "claude";
+export type MasterEngine = "gemini" | "openai" | "anthropic" | "yandex" | "local" | "claude";
 
 export const MASTER_ENGINE_LABEL: Record<MasterEngine, string> = {
   gemini: "Gemini",
   openai: "ChatGPT",
   yandex: "YandexGPT",
   local: "локальная модель",
+  anthropic: "Claude по API",
   claude: "Claude",
 };
 
@@ -22,6 +23,7 @@ const TWO_STEP_DEFAULT: Record<MasterEngine, boolean> = {
   openai: false,
   yandex: true,
   local: true,
+  anthropic: false,
   claude: false,
 };
 
