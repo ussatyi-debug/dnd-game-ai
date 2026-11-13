@@ -913,13 +913,13 @@ mod tests {
     #[test]
     fn system_text_is_stable_within_a_scene() {
         let mut s = session();
-        let first = master_request(&mut s, "Осматриваюсь", "", false);
+        let first = master_request(&mut s, "Осматриваюсь", "", false, false);
         let id = s.party()[0].id.clone();
         crate::apply_directives(
             &mut s,
             &format!("```engine\n{{\"cmd\":\"hp\",\"character\":\"{id}\",\"damage\":3}}\n```"),
         );
-        let second = master_request(&mut s, "Иду дальше", "", false);
+        let second = master_request(&mut s, "Иду дальше", "", false, false);
         assert_eq!(first.system, second.system);
         assert!(second.turn.contains("ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ"));
         assert!(second.turn.contains("хиты"), "{}", second.turn);
@@ -929,16 +929,16 @@ mod tests {
     #[test]
     fn rest_starts_a_new_scene() {
         let mut s = session();
-        master_request(&mut s, "x", "", false);
+        master_request(&mut s, "x", "", false, false);
         let id = s.party()[0].id.clone();
         crate::apply_directives(
             &mut s,
             &format!("```engine\n{{\"cmd\":\"hp\",\"character\":\"{id}\",\"damage\":2}}\n```"),
         );
-        assert!(!master_request(&mut s, "x", "", false).turn.contains("- нет\n"));
+        assert!(!master_request(&mut s, "x", "", false, false).turn.contains("- нет\n"));
         // Отдых — новая сцена: снимок собирается заново, изменений с её начала нет.
         crate::apply_directives(&mut s, "```engine\n{\"cmd\":\"rest\",\"kind\":\"short\"}\n```");
-        let after = master_request(&mut s, "x", "", false);
+        let after = master_request(&mut s, "x", "", false, false);
         assert!(after.turn.contains("[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]\n- нет"), "{}", after.turn);
     }
 
@@ -955,7 +955,7 @@ mod tests {
             &mut s,
             &format!("```engine\n{{\"cmd\":\"scene\",\"day\":{}}}\n```", today + 2),
         );
-        let req = master_request(&mut s, "x", "", false);
+        let req = master_request(&mut s, "x", "", false, false);
         assert!(req.system.contains("Отряд прибыл в город."));
         assert!(req.turn.contains(&format!("нет пересказа Дня {}", today + 1)));
     }
@@ -972,14 +972,14 @@ mod tests {
     #[test]
     fn new_cards_and_goal_progress_reach_the_master_within_the_scene() {
         let mut s = session();
-        master_request(&mut s, "x", "", false);
+        master_request(&mut s, "x", "", false, false);
         let turn = crate::apply_directives(
             &mut s,
             "```engine\n{\"cmd\":\"new_card\",\"layer\":\"player\",\"section\":\"goals\",\"title\":\"Найти курьера\",\"summary\":\"Пропал у доков\",\"giver\":\"Хольм\",\"steps\":[\"Расспросить докеров\"]}\n```",
         );
         assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
         let id = s.custom_cards()[0].id.clone();
-        let req = master_request(&mut s, "x", "", false);
+        let req = master_request(&mut s, "x", "", false, false);
         assert!(
             req.turn.contains(&format!("Новая карточка: «Найти курьера» [{id}]")),
             "{}",
@@ -990,12 +990,12 @@ mod tests {
             &format!("```engine\n{{\"cmd\":\"goal\",\"card\":\"{id}\",\"step_done\":1,\"log\":\"Докеры видели его\"}}\n```"),
         );
         assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
-        let req = master_request(&mut s, "Что с курьером?", "", false);
+        let req = master_request(&mut s, "Что с курьером?", "", false, false);
         assert!(req.turn.contains("шаги 1/1"), "{}", req.turn);
         assert!(req.turn.contains("[КАРТОЧКИ ИГРЫ ПО ЗАЯВКЕ]"), "{}", req.turn);
         // Новая сцена: цель уже в снимке.
         crate::apply_directives(&mut s, "```engine\n{\"cmd\":\"rest\",\"kind\":\"short\"}\n```");
-        assert!(master_request(&mut s, "x", "", false).system.contains("цели_активные"));
+        assert!(master_request(&mut s, "x", "", false, false).system.contains("цели_активные"));
         let update = update_request(&s, "x", "y", "");
         assert!(update.system.contains("Найти курьера"));
     }
