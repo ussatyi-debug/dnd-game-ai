@@ -11,7 +11,7 @@ mod rolls;
 mod scene;
 
 pub use directives::{
-    apply_directives, apply_repair, narration_parts, repair_request, strip_directives,
+    apply_directives, apply_repair, narration_parts, repair_request, scene_now, strip_directives,
     MasterAction, MasterTurn,
 };
 pub use rolls::{
