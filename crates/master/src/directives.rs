@@ -755,7 +755,12 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
         session.set_scene_now(&now);
     }
     let actions = run_blocks(session, &blocks, false);
-    let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
+    // Пропуски и пустые команды в список «отменить действия мастера» не идут.
+    let summaries = actions
+        .iter()
+        .filter(|a| a.ok && !a.summary.starts_with("ничего не изменилось"))
+        .map(|a| a.summary.clone())
+        .collect();
     session.commit_master_turn(before, summaries);
     MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
 }
@@ -855,7 +860,14 @@ pub fn apply_repair(session: &mut Session, reply: &str) -> Vec<MasterAction> {
     let (_, blocks) = split(reply);
     let before = session.checkpoint();
     let actions = run_blocks(session, &blocks, true);
-    let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
+    let summaries = actions
+        .iter()
+        .filter(|a| {
+            a.ok && !a.summary.starts_with("ничего не изменилось")
+                && !a.summary.starts_with("повтор пропущен")
+        })
+        .map(|a| a.summary.clone())
+        .collect();
     session.extend_master_turn(before, summaries);
     actions
 }
@@ -1017,6 +1029,7 @@ mod tests {
         let ok: Vec<_> = turn.actions.iter().filter(|a| a.ok).collect();
         // Урон 0 менять нечего — движок не просит исправление; неизвестный персонаж — отказ.
         assert_eq!(ok.len(), 10, "{:?}", turn.actions);
+        assert_eq!(turn.actions.len(), 11);
         assert!(turn.actions[9].summary.contains("ничего не изменилось"));
         assert!(!turn.actions[10].ok);
         let nikis = s.character("pc.nikis").unwrap();
