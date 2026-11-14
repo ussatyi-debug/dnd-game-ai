@@ -733,6 +733,10 @@ export default function App() {
     const prose: string[] = [];
     let carried = "";
     const showWith = (text: string) => show([...prose, text].filter(Boolean).join("\n\n"));
+    /** Есть ли в ответе рассказ помимо блоков команд. */
+    const hasProse = (text: string) => text.replace(/```[\s\S]*?```/g, "").trim().length > 0;
+    // Мастер оборвал ход на броске: числа есть, а чем кончилось — не написал.
+    let brokenTail = false;
     /** Итог хода: пустой рассказ (мастер прислал только команды) заменяется подсказкой. */
     const finish = (text: string) => {
       if (text.trim()) {
@@ -741,6 +745,14 @@ export default function App() {
       }
       setMessages((prev) => prev.filter((m) => m.id !== reply.id));
       addMessage("system", "Мастер прислал ход без рассказа. Нажмите «Повторить ход», чтобы переспросить.");
+    };
+    /** Подсказка, если мастер не описал итог бросков. */
+    const warnBrokenTail = () => {
+      if (!brokenTail) return;
+      addMessage(
+        "system",
+        "Мастер не описал, чем кончились броски. Нажмите «Повторить ход», чтобы переспросить.",
+      );
     };
     const history = historyWith(playerMessage);
     let system = "";
@@ -762,6 +774,7 @@ export default function App() {
     masterContext(playerMessage.text, kbExtraFor(playerMessage.text), twoStep, shortSheet())
       .then(withRolls)
       .then(async (text) => {
+        brokenTail = prose.length > 0 && !hasProse(text);
         const full = [...prose, text].filter(Boolean).join("\n\n");
         if (twoStep) return { narration: await masterNarration(full), turn: null };
         // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
@@ -785,6 +798,7 @@ export default function App() {
         const size = logPromptSize(null, system.length + history.reduce((n, m) => n + m.text.length, 0));
         if (turn) {
           finish(turn.text);
+          warnBrokenTail();
           logMasterRolls(rolled);
           recordTurn(reply.id, { ...turn, rolls: rolled, raw, model: `${tierName} · ${size}` });
           afterMasterTurn();
@@ -792,6 +806,7 @@ export default function App() {
         }
         if (!narration) return;
         finish(narration.text);
+        warnBrokenTail();
         logMasterRolls(rolled);
         recordTurn(reply.id, { actions: [], fabricated: [], rolls: rolled, raw, model: `${tierName} · ${size}` });
         const written = `${carried}${narration.written}`.trim();
