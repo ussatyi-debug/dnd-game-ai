@@ -142,6 +142,7 @@ impl Session {
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
+        self.cool_down_battle();
         self.age_due_timers();
         let after = self.checkpoint();
         let today = self.scene.day;
@@ -221,6 +222,10 @@ impl Session {
 
     /// Урон, лечение или временные хиты.
     pub fn change_hp(&mut self, id: &str, change: HpChange) -> Result<HitPoints, EngineError> {
+        if matches!(change, HpChange::Damage(n) if n > 0) {
+            // Пока кто-то получает урон, бой точно идёт.
+            self.turn_damage = true;
+        }
         let c = self.character_mut(id)?;
         let name = c.name.clone();
         let result = (|| {
@@ -637,6 +642,30 @@ impl Session {
         Ok(self.scene.clone())
     }
 
+    /// Бой затих: три хода подряд без урона — музыка боя выключается сама.
+    ///
+    /// Мастер обязан менять настроение командой, но забывает, когда бой кончается не победой:
+    /// герой сбежал, враги отступили, стороны договорились.
+    fn cool_down_battle(&mut self) {
+        const QUIET_TURNS: u8 = 3;
+        if self.scene.mood != Mood::Battle {
+            self.turn_damage = false;
+            self.quiet_battle_turns = 0;
+            return;
+        }
+        if self.turn_damage {
+            self.quiet_battle_turns = 0;
+        } else {
+            self.quiet_battle_turns += 1;
+            if self.quiet_battle_turns >= QUIET_TURNS {
+                self.scene.mood = Mood::Calm;
+                self.quiet_battle_turns = 0;
+                self.log("Бой затих — музыка спокойной сцены");
+            }
+        }
+        self.turn_damage = false;
+    }
+
     fn player_id(&self) -> String {
         self.party
             .iter()
@@ -716,6 +745,25 @@ mod tests {
 
     fn session() -> Session {
         Session::demo(Xoshiro256::from_seed(1))
+    }
+
+    #[test]
+    fn battle_music_stops_when_nobody_is_hurt() {
+        let mut s = session();
+        let id = s.party()[1].id.clone();
+        s.change_scene(SceneChange { mood: Some(Mood::Battle), ..Default::default() }).unwrap();
+        // Пока идёт урон — бой продолжается.
+        for _ in 0..4 {
+            s.change_hp(&id, HpChange::Damage(1)).unwrap();
+            s.commit_master_turn(s.checkpoint(), Vec::new());
+            assert_eq!(s.scene().mood, Mood::Battle);
+        }
+        // Герой сбежал: мастер про музыку забыл, движок гасит её через три тихих хода.
+        s.commit_master_turn(s.checkpoint(), Vec::new());
+        s.commit_master_turn(s.checkpoint(), Vec::new());
+        assert_eq!(s.scene().mood, Mood::Battle);
+        s.commit_master_turn(s.checkpoint(), Vec::new());
+        assert_eq!(s.scene().mood, Mood::Calm);
     }
 
     #[test]
