@@ -848,11 +848,26 @@ const ALIASES: [RegExp, string][] = [
   [/^копь/, "spear"],
 ];
 
+/** Снаряжение пишут как «20 стрел» — в листе предмет должен называться «Стрелы». */
+const PLURALS: [RegExp, string][] = [
+  [/^стрел$/, "Стрелы"],
+  [/^болтов$/, "Болты"],
+  [/^дротиков$/, "Дротики"],
+  [/^камней для пращи$/, "Камни для пращи"],
+  [/^игл$/, "Иглы"],
+  [/^факелов$/, "Факелы"],
+  [/^свечей$/, "Свечи"],
+  [/^дней(?: )?(.*)$/, "Припасы"],
+];
+
 /** «4 ручных топора» → количество и оружие (если это оружие). */
 export function parseItem(text: string): { name: string; quantity: number; weapon?: WeaponData } {
   const m = /^(\d+)\s+(.+)$/.exec(text.trim());
   const quantity = m?.[1] ? parseInt(m[1], 10) : 1;
-  const name = m?.[2] ?? text.trim();
+  const raw = m?.[2] ?? text.trim();
+  // Название в листе — именительный падеж: «20 стрел» → «Стрелы ×20».
+  const plural = m?.[1] ? PLURALS.find(([re]) => re.test(raw.toLowerCase())) : undefined;
+  const name = plural ? plural[1] : raw;
   const lower = name.toLowerCase();
   let weapon = WEAPONS.find((w) => w.name.toLowerCase() === lower);
   if (!weapon && !AMMO.test(lower)) {

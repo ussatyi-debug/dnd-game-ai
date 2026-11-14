@@ -136,6 +136,30 @@ fn normalize(s: &str) -> String {
     s.trim().to_lowercase().replace('ё', "е")
 }
 
+/// Основа слова без русского окончания: «стрелы», «стрел», «стрелами» — одно и то же.
+/// Нужна, потому что мастер пишет предметы в том падеже, в каком они стоят во фразе.
+fn stem(word: &str) -> &str {
+    const ENDINGS: [&str; 14] =
+        ["ами", "ями", "ов", "ев", "ей", "ам", "ям", "ах", "ях", "ы", "и", "а", "я", "у"];
+    let word = word.trim_end_matches(['.', ',']);
+    for ending in ENDINGS {
+        if let Some(base) = word.strip_suffix(ending) {
+            if base.chars().count() >= 4 {
+                return base;
+            }
+        }
+    }
+    word
+}
+
+/// Совпадают ли названия с точностью до падежа и числа: «20 стрел» и «Стрелы».
+fn same_words(a: &str, b: &str) -> bool {
+    let words =
+        |s: &str| -> Vec<String> { s.split_whitespace().map(|w| stem(w).to_string()).collect() };
+    let (a, b) = (words(a), words(b));
+    !a.is_empty() && a == b
+}
+
 impl Inventory {
     pub fn new(containers: Vec<Container>) -> Self {
         Self { containers, items: Vec::new(), next_id: 1 }
@@ -162,6 +186,10 @@ impl Inventory {
     pub fn find_item(&self, query: &str) -> Result<&Item, EngineError> {
         let q = normalize(query);
         if let Some(item) = self.items.iter().find(|i| i.id == query || normalize(&i.name) == q) {
+            return Ok(item);
+        }
+        // Падеж и число: «убери стрелы» про предмет «Стрел ×20».
+        if let Some(item) = self.items.iter().find(|i| same_words(&normalize(&i.name), &q)) {
             return Ok(item);
         }
         let partial: Vec<&Item> =
@@ -428,6 +456,11 @@ mod tests {
         inv.add(new_item("Зелье Большого Исцеления", 1, ON_PERSON)).unwrap();
         inv.add(new_item("Зелье Героизма", 1, ON_PERSON)).unwrap();
         assert!(inv.find_item("героизма").is_ok());
+        // Падеж и число: предмет «Стрел», мастер пишет «стрелы».
+        inv.add(new_item("Стрел", 20, ON_PERSON)).unwrap();
+        assert_eq!(inv.find_item("Стрелы").unwrap().name, "Стрел");
+        assert_eq!(inv.find_item("стрелами").unwrap().name, "Стрел");
+        assert!(inv.find_item("стрелок").is_err());
         assert!(matches!(inv.find_item("зелье"), Err(EngineError::AmbiguousItem { .. })));
         assert_eq!(inv.find_container("при себе").unwrap().id, ON_PERSON);
     }
