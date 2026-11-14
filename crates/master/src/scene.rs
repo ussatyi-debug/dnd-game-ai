@@ -36,6 +36,8 @@ const TURN_JOURNAL_FOUND: usize = 5;
 const CHRONICLE_FULL_DAYS: usize = 7;
 /// Через сколько ходов без обновления пересказа текущего дня мастер получает напоминание.
 pub const CHRONICLE_REMINDER_TURNS: u32 = 10;
+/// Через сколько ходов без смены времени суток мастеру напоминают, что время идёт.
+const TIME_REMINDER_TURNS: u32 = 8;
 
 /// Правила работы со снимком сцены — дополнение к кодексу.
 const PROTOCOL: &str = r#"
@@ -535,6 +537,13 @@ fn turn_message(
         reminders.push(format!(
             "подготовка новой игры не завершена — запиши в этом ходу командами: {}",
             prep.join("; ")
+        ));
+    }
+    if session.turns_since_time() >= TIME_REMINDER_TURNS {
+        reminders.push(format!(
+            "время сцены не менялось {} ходов — если события заняли время (дорога, бой, обыск, разговоры), \
+обнови его командой scene; наступила ночь или новое утро — обнови и день",
+            session.turns_since_time()
         ));
     }
     if session.turns_without_notes() >= dnd_engine::NOTE_REMINDER_TURNS {

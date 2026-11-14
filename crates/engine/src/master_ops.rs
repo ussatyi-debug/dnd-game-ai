@@ -142,6 +142,7 @@ impl Session {
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
+        self.turns_since_time += 1;
         self.cool_down_battle();
         self.age_due_timers();
         let after = self.checkpoint();
@@ -607,10 +608,16 @@ impl Session {
                 self.log(format!("Отказ (сцена): {e}"));
                 return Err(e);
             }
+            if day != self.scene.day {
+                self.turns_since_time = 0;
+            }
             self.scene.day = day;
         }
         if let Some(time) = change.time {
             let time = time.trim().to_string();
+            if self.scene.time.as_deref() != Some(time.as_str()) {
+                self.turns_since_time = 0;
+            }
             self.scene.time = (!time.is_empty()).then_some(time);
         }
         if let Some(location) = change.location {

@@ -210,6 +210,9 @@ pub struct Session {
     pub(crate) chronicle_from: u32,
     /// Ходов мастера подряд без обновления пересказа текущего дня.
     pub(crate) turns_since_chronicle: u32,
+    /// Сколько ходов подряд не менялись время суток и день: мастеру запрещено перематывать
+    /// время, и он иногда держит сцену в одном «утре» всю игру.
+    pub(crate) turns_since_time: u32,
     /// Предложения мастера принять персонажа в отряд (ждут листа; в сохранение не попадают).
     pub(crate) recruits: Vec<crate::recruit::RecruitRequest>,
     pub(crate) next_recruit_id: u64,
@@ -264,6 +267,7 @@ impl Session {
             rests: 0,
             chronicle_from: day,
             turns_since_chronicle: 0,
+            turns_since_time: 0,
             recruits: Vec::new(),
             next_recruit_id: 0,
             xp_log: Vec::new(),
@@ -371,6 +375,11 @@ impl Session {
     /// Запоминает выполненную команду хода.
     pub fn record_turn_command(&mut self, key: String) {
         self.turn_commands.push(key);
+    }
+
+    /// Сколько ходов мастера прошло без смены времени суток или дня.
+    pub fn turns_since_time(&self) -> u32 {
+        self.turns_since_time
     }
 
     /// Журнал движка (последние записи, старые — первыми).
