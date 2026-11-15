@@ -10,13 +10,14 @@ pub mod ollama;
 pub mod openai;
 pub mod yandex;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 /// Провайдер ИИ.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Provider {
     #[default]
@@ -107,6 +108,22 @@ pub struct MasterReply {
     pub written_commands: String,
     /// Мастер пометил ход как разговор без изменений: второй шаг можно пропустить.
     pub no_changes: bool,
+    /// Ответ модели в токенах (сумма за все запросы хода).
+    pub output_tokens: Option<u64>,
+    /// Свежая часть запроса (не из кэша и не записанная в него) — сумма за все запросы хода.
+    pub fresh_tokens: Option<u64>,
+    /// Сколько запросов к модели ушло за ход (броски, query и исправления — отдельные запросы).
+    pub requests: u32,
+    /// Разбивка самого большого запроса хода по блокам, в символах: кодекс, снимок сцены,
+    /// история, сообщение хода.
+    pub blocks: Vec<PromptBlock>,
+}
+
+/// Блок запроса для «Логирования».
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PromptBlock {
+    pub name: String,
+    pub chars: usize,
 }
 
 /// Ответ модели: текст и размер запроса в токенах, если провайдер его вернул.
@@ -118,6 +135,24 @@ pub struct Generated {
     pub cached_tokens: Option<u64>,
     /// Записанная в кэш часть запроса (Anthropic).
     pub cache_write_tokens: Option<u64>,
+    /// Длина ответа модели в токенах.
+    pub output_tokens: Option<u64>,
+}
+
+/// Длина ответа в токенах: Anthropic и OpenAI Responses (`output_tokens`), Chat Completions
+/// (`completion_tokens`), Gemini (`candidatesTokenCount`), Ollama (`eval_count`), Яндекс
+/// (`completionTokens`, числом в строке).
+pub(crate) fn output_tokens(body: &serde_json::Value) -> Option<u64> {
+    let usage = &body["usage"];
+    usage["output_tokens"]
+        .as_u64()
+        .or_else(|| usage["completion_tokens"].as_u64())
+        .or_else(|| body["usageMetadata"]["candidatesTokenCount"].as_u64())
+        .or_else(|| body["eval_count"].as_u64())
+        .or_else(|| {
+            let yandex = &body["result"]["usage"]["completionTokens"];
+            yandex.as_u64().or_else(|| yandex.as_str().and_then(|t| t.parse().ok()))
+        })
 }
 
 /// Размер запроса в токенах из ответа провайдера: OpenAI (Responses и Chat Completions),
@@ -169,6 +204,22 @@ pub struct AiSettings {
     /// Ключ Anthropic (Claude).
     #[serde(default)]
     pub anthropic_api_key: Option<String>,
+    /// Модель второго шага (данные движка) по провайдерам; пустая строка — та же, что у мастера.
+    /// Нет записи — дешёвая модель по умолчанию ([`default_update_model`]).
+    #[serde(default)]
+    pub update_models: BTreeMap<Provider, String>,
+}
+
+/// Дешёвая модель второго шага по умолчанию: шаг только переводит готовый рассказ в команды,
+/// сильная модель ему не нужна. Если модель недоступна, второй шаг повторяется моделью мастера.
+pub fn default_update_model(provider: Provider) -> Option<&'static str> {
+    match provider {
+        Provider::Anthropic => Some("claude-haiku-5-5"),
+        Provider::OpenAi => Some("gpt-6-luna"),
+        Provider::Gemini => Some("gemini-flash-lite-latest"),
+        // Локальная модель и Яндекс: вторая модель — ещё одна загрузка или другой тариф.
+        Provider::Local | Provider::Yandex => None,
+    }
 }
 
 /// Состояние одного провайдера для интерфейса.
@@ -192,6 +243,10 @@ pub struct AiSettingsView {
     pub key_hint: Option<String>,
     /// Все провайдеры: подключён ли, есть ли ключ.
     pub providers: Vec<ProviderView>,
+    /// Модель второго шага активного провайдера (`None` — та же, что у мастера).
+    pub update_model: Option<String>,
+    /// Модель второго шага по умолчанию для активного провайдера.
+    pub update_model_default: Option<&'static str>,
 }
 
 fn hint_for(provider: Provider, key: &str) -> String {
@@ -234,7 +289,24 @@ impl AiSettings {
                     }
                 })
                 .collect(),
+            update_model: self.update_model(),
+            update_model_default: default_update_model(self.provider),
         }
+    }
+
+    /// Модель второго шага активного провайдера: выбранная, иначе дешёвая по умолчанию;
+    /// `None` — та же, что у мастера.
+    pub fn update_model(&self) -> Option<String> {
+        match self.update_models.get(&self.provider) {
+            Some(m) if m.trim().is_empty() => None,
+            Some(m) => Some(m.trim().to_string()),
+            None => default_update_model(self.provider).map(Into::into),
+        }
+    }
+
+    /// Выбрать модель второго шага провайдера; пустая строка — та же, что у мастера.
+    pub fn set_update_model(&mut self, provider: Provider, model: &str) {
+        self.update_models.insert(provider, model.trim().to_string());
     }
 
     /// Ключ провайдера.
@@ -325,15 +397,22 @@ pub async fn list_models(
 }
 
 /// Ответ мастера на историю диалога.
+///
+/// `system` — блоки системного текста (у Claude каждый кэшируется своей меткой, остальные
+/// провайдеры получают их одним текстом); `cache_upto` — последнее сообщение истории перед
+/// текущим ходом: у Claude история до него тоже кэшируется.
 pub async fn chat(
     client: &reqwest::Client,
     settings: &AiSettings,
-    system: &str,
+    system_parts: &[String],
     history: &[ChatMessage],
     json_mode: bool,
+    cache_upto: Option<usize>,
 ) -> Result<MasterReply, String> {
     let model = settings.model.clone().ok_or("Выберите модель в меню «Модели ИИ»")?;
     let key = settings.key().ok_or("Введите API-ключ в меню «Модели ИИ»")?;
+    let joined = system_parts.join("\n");
+    let system = joined.as_str();
     let out = match settings.provider {
         Provider::Gemini => {
             gemini::generate(client, key, &model, system, history, json_mode).await?
@@ -342,7 +421,8 @@ pub async fn chat(
             openai::generate(client, key, &model, system, history, json_mode).await?
         }
         Provider::Anthropic => {
-            anthropic::generate(client, key, &model, system, history, json_mode).await?
+            anthropic::generate(client, key, &model, system_parts, history, json_mode, cache_upto)
+                .await?
         }
         Provider::Local => {
             ollama::generate(client, key, &model, system, history, json_mode).await?
@@ -353,6 +433,13 @@ pub async fn chat(
     };
     let prompt_chars =
         system.chars().count() + history.iter().map(|m| m.text.chars().count()).sum::<usize>();
+    // Свежая часть: у Claude кэш и запись идут отдельно и уже вычтены из `input_tokens`; у
+    // остальных кэш входит в размер запроса.
+    let fresh_tokens = out.prompt_tokens.map(|total| {
+        total
+            .saturating_sub(out.cached_tokens.unwrap_or(0))
+            .saturating_sub(out.cache_write_tokens.unwrap_or(0))
+    });
     Ok(MasterReply {
         text: out.text,
         provider: settings.provider,
@@ -368,6 +455,10 @@ pub async fn chat(
         pending_update: false,
         written_commands: String::new(),
         no_changes: false,
+        output_tokens: out.output_tokens,
+        fresh_tokens,
+        requests: 1,
+        blocks: Vec::new(),
     })
 }
 

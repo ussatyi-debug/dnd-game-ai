@@ -5,7 +5,8 @@ use std::time::Duration;
 use serde_json::{json, Value};
 
 use super::{
-    cache_write_tokens, cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role,
+    cache_write_tokens, cached_tokens, output_tokens, prompt_tokens, ChatMessage, Generated,
+    ModelInfo, Role,
 };
 
 /// Адрес Ollama по умолчанию.
@@ -195,6 +196,7 @@ pub async fn generate(
             prompt_tokens: prompt_tokens(body),
             cached_tokens: cached_tokens(body),
             cache_write_tokens: cache_write_tokens(body),
+            output_tokens: output_tokens(body),
         })
     };
     let (status, body) = post(client, base, &body_for(false)).await?;

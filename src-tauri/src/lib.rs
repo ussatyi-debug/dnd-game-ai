@@ -823,6 +823,30 @@ fn ai_select_model(
     Ok(settings.view())
 }
 
+/// Модель второго шага (данные движка) для провайдера; пустая строка — та же, что у мастера.
+#[tauri::command]
+fn ai_select_update_model(
+    provider: Provider,
+    model: String,
+    ai: State<'_, AiState>,
+) -> Result<AiSettingsView, String> {
+    let mut settings = lock(&ai.settings)?;
+    settings.set_update_model(provider, &model);
+    ai.store.save(&settings)?;
+    Ok(settings.view())
+}
+
+/// Сложить учёт токенов запроса к модели в итог хода.
+fn add_usage(total: &mut MasterReply, part: &MasterReply) {
+    let sum = |a: Option<u64>, b: Option<u64>| match (a, b) {
+        (None, None) => None,
+        (a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)),
+    };
+    total.output_tokens = sum(total.output_tokens, part.output_tokens);
+    total.fresh_tokens = sum(total.fresh_tokens, part.fresh_tokens);
+    total.requests += part.requests;
+}
+
 #[tauri::command]
 async fn ai_list_models(
     provider: Provider,
@@ -863,11 +887,16 @@ async fn ai_chat(
         two_step,
         short_sheet.unwrap_or(false),
     );
-    let system = request.system;
+    let system = request.system_parts;
     let mut history = history;
     if let Some(last) = history.iter_mut().rev().find(|m| m.role == ai::Role::Player) {
         last.text = request.turn;
     }
+    // История до текущего хода не меняется между ходами (интерфейс сдвигает её порциями) —
+    // у Claude она кэшируется; броски и исправления дописываются после метки.
+    let cache_upto = history.len().checked_sub(2);
+    let blocks = prompt_blocks(&system, &history);
+    let mut usage: Option<MasterReply> = None;
     let mut rolls = Vec::new();
     let mut raw = Vec::new();
     let mut prose: Vec<String> = Vec::new();
@@ -878,7 +907,11 @@ async fn ai_chat(
     let mut prompt_chars = 0;
     let mut round = 0;
     let mut reply = loop {
-        let reply = ai::chat(&ai.client, &settings, &system, &history, false).await?;
+        let reply = ai::chat(&ai.client, &settings, &system, &history, false, cache_upto).await?;
+        match usage.as_mut() {
+            Some(total) => add_usage(total, &reply),
+            None => usage = Some(reply.clone()),
+        }
         prompt_tokens = prompt_tokens.max(reply.prompt_tokens);
         cached_tokens = cached_tokens.max(reply.cached_tokens);
         cache_write_tokens = cache_write_tokens.max(reply.cache_write_tokens);
@@ -913,19 +946,33 @@ async fn ai_chat(
     reply.cached_tokens = cached_tokens;
     reply.cache_write_tokens = cache_write_tokens;
     reply.prompt_chars = prompt_chars;
+    if let Some(total) = usage {
+        reply.output_tokens = total.output_tokens;
+        reply.fresh_tokens = total.fresh_tokens;
+        reply.requests = total.requests;
+    }
+    reply.blocks = blocks;
+    // Выражения пула кубов [[1d8+3]]: итог считает движок из кубов хода и подставляет в текст.
+    // В двухшаговом ходе урон по отряду учтёт второй шаг по числам из рассказа.
+    let pooled = dnd_master::resolve_pool(&mut *lock(&session)?, &full, !two_step);
+    full = pooled.text;
+    if !pooled.commands.is_empty() {
+        carried.push_str(&pooled.commands);
+        carried.push('\n');
+    }
+    rolls.extend(pooled.rolls);
     reply.rolls = rolls;
     reply.raw = raw;
+    // Числа пула мастер видел заранее и мог назвать прямо («d20 14 из пула») — это не выдумка.
+    let mut engine_faces = dnd_master::rolled_faces(&reply.rolls);
+    engine_faces.extend(lock(&session)?.dice_pool().faces());
     if two_step {
         let now = dnd_master::scene_now(&full);
         if !now.is_empty() {
             lock(&session)?.set_scene_now(&now);
         }
         let (text, written, no_changes) = dnd_master::narration_parts(&full);
-        reply.fabricated = dnd_master::fabricated_rolls(
-            &text,
-            &dnd_master::rolled_faces(&reply.rolls),
-            &player_text,
-        );
+        reply.fabricated = dnd_master::fabricated_rolls(&text, &engine_faces, &player_text);
         reply.text = text;
         reply.written_commands = format!("{carried}{written}").trim().to_string();
         reply.no_changes = no_changes && carried.trim().is_empty();
@@ -939,7 +986,9 @@ async fn ai_chat(
     if let Some(request) = dnd_master::repair_request(&turn.actions) {
         history.push(ai::ChatMessage { role: ai::Role::Master, text: reply.text.clone() });
         history.push(ai::ChatMessage { role: ai::Role::Player, text: request });
-        if let Ok(fix) = ai::chat(&ai.client, &settings, &system, &history, false).await {
+        if let Ok(fix) = ai::chat(&ai.client, &settings, &system, &history, false, cache_upto).await
+        {
+            add_usage(&mut reply, &fix);
             reply.raw.push(fix.text.clone());
             let fixed = dnd_master::apply_repair(&mut *lock(&session)?, &fix.text);
             turn.actions.extend(fixed.into_iter().map(|mut a| {
@@ -948,11 +997,7 @@ async fn ai_chat(
             }));
         }
     }
-    reply.fabricated = dnd_master::fabricated_rolls(
-        &turn.text,
-        &dnd_master::rolled_faces(&reply.rolls),
-        &player_text,
-    );
+    reply.fabricated = dnd_master::fabricated_rolls(&turn.text, &engine_faces, &player_text);
     reply.text = turn.text;
     reply.actions = turn.actions;
     Ok(reply)
@@ -968,7 +1013,12 @@ async fn ai_update(
     ai: State<'_, AiState>,
     session: State<'_, SessionState>,
 ) -> Result<MasterReply, String> {
-    let settings = lock(&ai.settings)?.clone();
+    let main = lock(&ai.settings)?.clone();
+    // Второй шаг — отдельной, обычно дешёвой моделью: он только переводит рассказ в команды.
+    let mut settings = main.clone();
+    if let Some(model) = main.update_model() {
+        settings.model = Some(model);
+    }
     let request = dnd_master::update_request(
         &*lock(&session)?,
         &player_text,
@@ -976,11 +1026,28 @@ async fn ai_update(
         written.as_deref().unwrap_or(""),
     );
     let mut history = vec![ai::ChatMessage { role: ai::Role::Player, text: request.turn }];
-    let mut reply = ai::chat(&ai.client, &settings, &request.system, &history, true).await?;
+    let blocks = prompt_blocks(&request.system_parts, &history);
+    let first_try =
+        ai::chat(&ai.client, &settings, &request.system_parts, &history, true, None).await;
+    let mut reply = match first_try {
+        Ok(reply) => reply,
+        // Модель второго шага недоступна (нет в аккаунте, неверное имя) — ход не теряется:
+        // шаг повторяется моделью мастера.
+        Err(e) if settings.model != main.model => {
+            settings = main.clone();
+            let mut reply =
+                ai::chat(&ai.client, &settings, &request.system_parts, &history, true, None)
+                    .await?;
+            reply.raw.push(format!("Модель второго шага не ответила ({e}) — взята модель мастера"));
+            reply
+        }
+        Err(e) => return Err(e),
+    };
+    reply.blocks = blocks;
     let first = reply.text.clone();
     let mut turn =
         dnd_master::apply_directives(&mut *lock(&session)?, &dnd_master::update_commands(&first));
-    reply.raw = vec![first.clone()];
+    reply.raw.insert(0, first.clone());
     if let Some(repair) = dnd_master::repair_request(&turn.actions) {
         history.push(ai::ChatMessage { role: ai::Role::Master, text: first });
         history.push(ai::ChatMessage {
@@ -989,7 +1056,10 @@ async fn ai_update(
                 "{repair}\nОтветь JSON {{\"commands\":[...]}} только с исправленными командами."
             ),
         });
-        if let Ok(fix) = ai::chat(&ai.client, &settings, &request.system, &history, true).await {
+        if let Ok(fix) =
+            ai::chat(&ai.client, &settings, &request.system_parts, &history, true, None).await
+        {
+            add_usage(&mut reply, &fix);
             reply.raw.push(fix.text.clone());
             let fixed = dnd_master::apply_repair(
                 &mut *lock(&session)?,
@@ -1004,6 +1074,27 @@ async fn ai_update(
     reply.text = String::new();
     reply.actions = turn.actions;
     Ok(reply)
+}
+
+/// Разбивка запроса по блокам для «Логирования»: кодекс, снимок сцены, история, ход.
+fn prompt_blocks(system: &[String], history: &[ai::ChatMessage]) -> Vec<ai::PromptBlock> {
+    let chars = |s: &str| s.chars().count();
+    let mut out: Vec<ai::PromptBlock> = match system {
+        [codex, snapshot, ..] => vec![
+            ai::PromptBlock { name: "кодекс".into(), chars: chars(codex) },
+            ai::PromptBlock { name: "снимок сцены".into(), chars: chars(snapshot) },
+        ],
+        _ => vec![ai::PromptBlock {
+            name: "системный текст".into(),
+            chars: system.iter().map(|s| s.chars().count()).sum(),
+        }],
+    };
+    let (turn, earlier) = history.split_last().map_or((0, 0), |(last, rest)| {
+        (chars(&last.text), rest.iter().map(|m| chars(&m.text)).sum::<usize>())
+    });
+    out.push(ai::PromptBlock { name: "история".into(), chars: earlier });
+    out.push(ai::PromptBlock { name: "сообщение хода".into(), chars: turn });
+    out
 }
 
 /// «Выход» на главном экране.
@@ -1087,6 +1178,7 @@ pub fn run() {
             ai_settings,
             ai_set_key,
             ai_select_model,
+            ai_select_update_model,
             ai_list_models,
             ai_chat,
             ai_update,

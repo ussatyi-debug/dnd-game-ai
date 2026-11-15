@@ -449,6 +449,18 @@ export function masterRolls(text: string): Promise<RollRound | null> {
   return call<RollRound | null>("master_rolls", { text });
 }
 
+/** Выражения пула кубов в рассказе мастера: итоги подставлены, урон по отряду — командами. */
+export interface PoolTurn {
+  text: string;
+  rolls: MasterRoll[];
+  /** Блок ```engine с уроном по отряду (пусто, если урона нет или его учтёт второй шаг). */
+  commands: string;
+}
+
+export function masterPool(text: string, apply: boolean): Promise<PoolTurn> {
+  return call<PoolTurn>("master_pool", { text, apply });
+}
+
 export function spellbook(id: string): Promise<SpellbookView> {
   return call<SpellbookView>("spellbook", { id });
 }
@@ -803,6 +815,7 @@ export interface KbCardIndex {
   summary?: string;
   /** Полный текст карточки — ответ на запрос мастера «query card». */
   text?: string;
+  parent?: string | null;
 }
 
 export interface LoadReport {
@@ -938,6 +951,10 @@ export interface AiSettingsView {
   providers: ProviderView[];
   /** Веб-версия: мастера ведёт Claude (а не модель со своим ключом). */
   claude?: boolean;
+  /** Модель второго шага (данные движка) активного провайдера; `null` — та же, что у мастера. */
+  update_model?: string | null;
+  /** Дешёвая модель второго шага по умолчанию для активного провайдера. */
+  update_model_default?: string | null;
 }
 
 export interface ProviderView {
@@ -980,6 +997,20 @@ export interface MasterReply {
   written_commands: string;
   /** Мастер пометил ход как разговор без изменений: второй шаг можно пропустить. */
   no_changes: boolean;
+  /** Ответ модели в токенах (сумма за все запросы хода). */
+  output_tokens?: number | null;
+  /** Свежая часть запросов хода (не из кэша и не записанная в кэш), в токенах. */
+  fresh_tokens?: number | null;
+  /** Сколько запросов к модели ушло за ход. */
+  requests?: number;
+  /** Разбивка самого большого запроса по блокам, в символах. */
+  blocks?: PromptBlock[];
+}
+
+/** Блок запроса мастеру для «Логирования». */
+export interface PromptBlock {
+  name: string;
+  chars: number;
 }
 
 /** Доступен ли ИИ-мастер (только в приложении). */
@@ -1000,6 +1031,12 @@ export async function aiSetKey(provider: Provider, key: string): Promise<AiSetti
 export async function aiSelectModel(provider: Provider, model: string): Promise<AiSettingsView> {
   if (!isTauri()) return webAiSelectModel(provider, model);
   return invoke<AiSettingsView>("ai_select_model", { provider, model });
+}
+
+/** Модель второго шага; пустая строка — та же, что у мастера. Только в приложениях. */
+export async function aiSelectUpdateModel(provider: Provider, model: string): Promise<AiSettingsView> {
+  if (!isTauri()) return webAiSettings();
+  return invoke<AiSettingsView>("ai_select_update_model", { provider, model });
 }
 
 export function aiListModels(provider: Provider): Promise<ModelInfo[]> {

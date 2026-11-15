@@ -76,7 +76,15 @@ export function matchesQuery(entry: KbEntry, query: string): boolean {
 }
 
 /** Указатель карточек для движка: мастер видит оглавление базы и ссылается на карточки. */
-export function kbIndex(): { id: string; title: string; layer: string; status: string | null; summary: string; text: string }[] {
+export function kbIndex(): {
+  id: string;
+  title: string;
+  layer: string;
+  status: string | null;
+  summary: string;
+  text: string;
+  parent: string | null;
+}[] {
   // Полный текст — для ответа движка на запрос мастера «query card».
   return kbEntries().map((e) => ({
     id: e.id,
@@ -85,6 +93,8 @@ export function kbIndex(): { id: string; title: string; layer: string; status: s
     status: e.status ?? null,
     summary: e.summary,
     text: entryText(e),
+    // Место внутри локации: переход между соседними местами не меняет сцену мастера.
+    parent: e.parent ?? null,
   }));
 }
 

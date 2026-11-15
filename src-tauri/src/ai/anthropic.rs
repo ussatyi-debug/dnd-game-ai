@@ -6,7 +6,8 @@
 use serde_json::{json, Value};
 
 use super::{
-    cache_write_tokens, cached_tokens, prompt_tokens, ChatMessage, Generated, ModelInfo, Role,
+    cache_write_tokens, cached_tokens, output_tokens, prompt_tokens, ChatMessage, Generated,
+    ModelInfo, Role,
 };
 
 const BASE_URL: &str = "https://api.anthropic.com/v1";
@@ -38,16 +39,17 @@ pub async fn generate(
     client: &reqwest::Client,
     key: &str,
     model: &str,
-    system: &str,
+    system: &[String],
     history: &[ChatMessage],
     json_mode: bool,
+    cache_upto: Option<usize>,
 ) -> Result<Generated, String> {
     let response = client
         .post(format!("{BASE_URL}/messages"))
         .header("x-api-key", key)
         .header("anthropic-version", API_VERSION)
         .header("anthropic-beta", CACHE_BETA)
-        .json(&request_body(model, system, history, json_mode))
+        .json(&request_body(model, system, history, json_mode, cache_upto))
         .send()
         .await
         .map_err(network_error)?;
@@ -63,6 +65,7 @@ pub async fn generate(
         prompt_tokens: prompt_tokens(&body),
         cached_tokens: cached_tokens(&body),
         cache_write_tokens: cache_write_tokens(&body),
+        output_tokens: output_tokens(&body),
     })
 }
 
@@ -84,25 +87,44 @@ pub(crate) fn parse_models(body: &Value) -> Vec<ModelInfo> {
         .collect()
 }
 
+/// Метка кэша на час, а не на пять минут по умолчанию: между ходами игрок думает дольше пяти
+/// минут, и короткий кэш успевает истечь — тогда за запись платим, а скидки не получаем.
+fn cache_mark() -> Value {
+    json!({ "type": "ephemeral", "ttl": "1h" })
+}
+
 /// Тело запроса Messages API.
 ///
-/// Кодекс и снимок сцены уходят в `system` с пометкой кэша: внутри сцены они не меняются,
-/// и повторные ходы Claude считает по цене кэша. Строгий JSON задаётся началом ответа.
+/// Каждый блок `system` — со своей меткой кэша: кодекс не меняется всю игру, снимок сцены —
+/// до смены сцены, и при смене сцены перезаписывается только снимок. `cache_upto` — номер
+/// сообщения истории, до которого включительно история тоже кэшируется (последнее перед
+/// текущим ходом). Меток не больше четырёх: два блока и история. Строгий JSON задаётся
+/// началом ответа.
 pub(crate) fn request_body(
     model: &str,
-    system: &str,
+    system: &[String],
     history: &[ChatMessage],
     json_mode: bool,
+    cache_upto: Option<usize>,
 ) -> Value {
     let mut messages: Vec<Value> = history
         .iter()
-        .filter(|m| !m.text.trim().is_empty())
-        .skip_while(|m| m.role == Role::Master)
-        .map(|m| {
-            json!({
-                "role": match m.role { Role::Player => "user", Role::Master => "assistant" },
-                "content": m.text.trim(),
-            })
+        .enumerate()
+        .filter(|(_, m)| !m.text.trim().is_empty())
+        .skip_while(|(_, m)| m.role == Role::Master)
+        .map(|(i, m)| {
+            let role = match m.role {
+                Role::Player => "user",
+                Role::Master => "assistant",
+            };
+            if Some(i) == cache_upto {
+                json!({
+                    "role": role,
+                    "content": [{ "type": "text", "text": m.text.trim(), "cache_control": cache_mark() }],
+                })
+            } else {
+                json!({ "role": role, "content": m.text.trim() })
+            }
         })
         .collect();
     // Messages API требует, чтобы последним было слово игрока.
@@ -116,13 +138,11 @@ pub(crate) fn request_body(
     json!({
         "model": model,
         "max_tokens": MAX_TOKENS,
-        "system": [{
-            "type": "text",
-            "text": system,
-            // Час, а не пять минут по умолчанию: между ходами игрок думает дольше пяти минут,
-            // и кэш на пять минут успевает истечь — тогда за запись платим, а скидки не получаем.
-            "cache_control": { "type": "ephemeral", "ttl": "1h" },
-        }],
+        "system": system
+            .iter()
+            .filter(|part| !part.trim().is_empty())
+            .map(|part| json!({ "type": "text", "text": part, "cache_control": cache_mark() }))
+            .collect::<Vec<_>>(),
         "messages": messages,
     })
 }
@@ -172,7 +192,7 @@ mod tests {
     #[test]
     fn system_is_cached_and_history_starts_with_player() {
         let history = [msg(Role::Master, "Вступление"), msg(Role::Player, "Осматриваюсь")];
-        let body = request_body("claude-sonnet-4", "КОДЕКС", &history, false);
+        let body = request_body("claude-sonnet-4", &["КОДЕКС".into()], &history, false, None);
         assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
         assert_eq!(body["system"][0]["cache_control"]["ttl"], "1h");
         assert_eq!(body["messages"].as_array().unwrap().len(), 1);
@@ -180,9 +200,27 @@ mod tests {
     }
 
     #[test]
+    fn codex_snapshot_and_history_get_their_own_cache_marks() {
+        let history = [
+            msg(Role::Player, "Иду в порт"),
+            msg(Role::Master, "Порт шумит."),
+            msg(Role::Player, "Ищу корабль"),
+        ];
+        let system = ["КОДЕКС".to_string(), "СНИМОК".to_string()];
+        let body = request_body("claude-sonnet-4", &system, &history, false, Some(1));
+        assert_eq!(body["system"].as_array().unwrap().len(), 2);
+        assert_eq!(body["system"][1]["text"], "СНИМОК");
+        assert_eq!(body["system"][1]["cache_control"]["ttl"], "1h");
+        let messages = body["messages"].as_array().unwrap();
+        assert_eq!(messages[1]["content"][0]["cache_control"]["ttl"], "1h");
+        assert_eq!(messages[1]["content"][0]["text"], "Порт шумит.");
+        assert_eq!(messages[2]["content"], "Ищу корабль");
+    }
+
+    #[test]
     fn json_mode_starts_the_answer_with_brace() {
         let history = [msg(Role::Player, "Что в сумке?")];
-        let body = request_body("claude-sonnet-4", "КОДЕКС", &history, true);
+        let body = request_body("claude-sonnet-4", &["КОДЕКС".into()], &history, true, None);
         let messages = body["messages"].as_array().unwrap();
         assert_eq!(messages.last().unwrap()["role"], "assistant");
         assert_eq!(messages.last().unwrap()["content"], "{");
