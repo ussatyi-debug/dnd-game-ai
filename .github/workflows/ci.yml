@@ -83,11 +83,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p src/generated
-          # wasm2js не умеет невыровненные чтения и записи (их порождает компилятор Rust,
-          # например при слиянии соседних записей) — сначала переводим их в выровненные.
+          # wasm2js не умеет невыровненные чтения и записи (их порождают оптимизации, сливающие
+          # соседние записи). Поэтому оптимизирует wasm-opt, последним проходом переводит записи
+          # в выровненные, а wasm2js переводит в JavaScript без своей оптимизации.
           FEATURES="--enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
             --enable-mutable-globals --enable-multivalue --enable-reference-types"
-          if ! out=$(npx --no-install wasm-opt $FEATURES --alignment-lowering \
+          if ! out=$(npx --no-install wasm-opt $FEATURES -O2 --alignment-lowering \
               target/wasm32-unknown-unknown/release/dnd_engine_web.wasm \
               -o target/dnd_engine_web.aligned.wasm 2>&1); then
             echo "$out" | head -n 20
@@ -98,7 +99,7 @@ jobs:
               target/dnd_engine_web.aligned.wasm \
               --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
               --enable-mutable-globals --enable-multivalue --enable-reference-types \
-              -O2 -o src/generated/engine-web.js 2>&1); then
+              -o src/generated/engine-web.js 2>&1); then
             echo "$out" | head -n 20
             echo "::error title=wasm2js::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
             exit 1
