@@ -347,16 +347,19 @@ fn snapshot(session: &Session, short: bool) -> Value {
         .filter(|n| n.kind == NoteKind::Timer && !n.done)
         .map(|n| format!("День {}: {} [запись {}]", n.due_day.unwrap_or(0), n.title, n.id))
         .collect();
+    // Отдельно от большого json! ниже: вложенный объект внутри него делает выражение слишком
+    // глубоким для wasm2js (веб-версия). Ключи — как в кодексе («situation»); место — на
+    // начало сцены.
+    let scene = json!({
+        "day": party.scene.day,
+        "location": party.scene.location,
+        "situation": party.scene.situation,
+    });
     json!({
         "своя_кампания": session.campaign().map(|c| c.title.clone()),
         // Время, место сейчас, сводка «СЕЙЧАС» и хиты — в блоке [СЦЕНА] каждого хода: здесь они
         // устаревали бы, а снимок кэшируется до смены сцены.
-        // Ключи — как в кодексе («situation»); место — на начало сцены.
-        "сцена": {
-            "day": party.scene.day,
-            "location": party.scene.location,
-            "situation": party.scene.situation,
-        },
+        "сцена": scene,
         "отряд": party.members.iter().map(|m| json!({
             "id": m.id,
             "имя": m.name,
