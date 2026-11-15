@@ -91,6 +91,7 @@ jobs:
               --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
               --enable-mutable-globals --enable-multivalue --enable-reference-types \
               -O2 -o src/generated/engine-web.js 2>&1); then
+            echo "$out" | head -n 20
             echo "::error title=wasm2js::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
             exit 1
           fi
