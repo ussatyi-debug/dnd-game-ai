@@ -98,7 +98,9 @@ plant — растение, undead — нежить."""
 RULES_COMMON = """ПРАВИЛА ОТВЕТА:
 - Ответ — только JSON той же структуры, что и вход: те же ключи, тот же порядок, та же длина списков.
 - Поле "id" не переводить и не менять.
-- Формулы кубов (1d8, 8d6, 2d4 + 2, d12) — латиницей и без изменений. Все числа — те же и столько же.
+- Формулы кубов (1d8, 8d6, 2d4 + 2, d12) — латиницей и без изменений. Все числа — те же и столько же,
+  цифрами («2-го», «10 минут»), не словами.
+- Каждый элемент списка переводи отдельным элементом: абзацы не объединяй и не дели.
 - Писать только по-русски, кириллицей; никаких китайских иероглифов и английских слов (кроме формул кубов).
 - Обращение к игроку — на «вы» со строчной. Единицы — футы (фт.), не метры."""
 
@@ -180,6 +182,50 @@ def shape(v):
     return type(v).__name__
 
 
+def coerce(source, answer):
+    """Мелкие расхождения формы, не меняющие смысла: лишние ключи убираются, строка на месте
+    списка из одной строки оборачивается, список строк на месте строки склеивается."""
+    if isinstance(source, dict) and isinstance(answer, dict):
+        return {k: coerce(v, answer[k]) if k in answer else answer.get(k) for k, v in source.items()
+                if k in answer}
+    if isinstance(source, list) and isinstance(answer, str) and len(source) == 1:
+        return [answer]
+    if isinstance(source, list) and isinstance(answer, list):
+        if all(isinstance(x, str) for x in source) and all(isinstance(x, str) for x in answer) \
+                and len(source) == 1 and len(answer) > 1:
+            return [" ".join(answer)]
+        return [coerce(s, a) for s, a in zip(source, answer)] + answer[len(source):]
+    if isinstance(source, str) and isinstance(answer, list) and all(isinstance(x, str) for x in answer):
+        return " ".join(answer)
+    return answer
+
+
+def shape_errors(source, answer, path="") -> list:
+    """Где именно форма ответа не совпала со входом — для замечания модели."""
+    where = path or "запись"
+    if isinstance(source, dict):
+        if not isinstance(answer, dict):
+            return [f"{where}: нужен объект"]
+        out = [f"{path + '.' if path else ''}{k}: поле пропущено" for k in source if k not in answer]
+        for k in source:
+            if k in answer:
+                out += shape_errors(source[k], answer[k], f"{path + '.' if path else ''}{k}")
+        return out
+    if isinstance(source, list):
+        if not isinstance(answer, list):
+            return [f"{where}: нужен список"]
+        if len(source) != len(answer):
+            return [f"{where}: в списке должно быть {len(source)} элемент(а), а не {len(answer)} — "
+                    "абзацы не объединяй и не дели"]
+        out = []
+        for i, (s, a) in enumerate(zip(source, answer)):
+            out += shape_errors(s, a, f"{where}[{i}]")
+        return out
+    if not isinstance(answer, str):
+        return [f"{where}: нужна строка"]
+    return []
+
+
 def strings(v):
     if isinstance(v, str):
         yield v
@@ -218,7 +264,7 @@ def check(source: dict, answer, mode: str) -> list:
     if answer.get("id") != source.get("id"):
         errors.append(f"id изменён: «{answer.get('id')}» вместо «{source.get('id')}»")
     if shape(answer) != shape(source):
-        errors.append("структура не совпадает: нужны те же ключи и та же длина списков, что во входе")
+        errors += shape_errors(source, answer)[:4] or ["структура не совпадает со входом"]
         return errors
     src_texts = list(strings(source))
     out_texts = list(strings(answer))
@@ -226,6 +272,8 @@ def check(source: dict, answer, mode: str) -> list:
         errors.append(f"формулы кубов изменены: было {sorted(dice_of(src_texts).elements())}, "
                       f"стало {sorted(dice_of(out_texts).elements())}")
     src_n, out_n = numbers_of(src_texts), numbers_of(out_texts)
+    # «1 mile» → «миля», «1 minute» → «минута»: по-русски единица часто уходит в слово.
+    src_n["1"] = min(src_n["1"], out_n["1"])
     if src_n != out_n:
         lost = sorted((src_n - out_n).elements(), key=int)
         extra = sorted((out_n - src_n).elements(), key=int)
@@ -330,7 +378,7 @@ def translate_part(args, system: str, shots: list, part: dict, mode: str):
     for attempt in range(RETRIES + 1):
         try:
             last = ollama(args.host, args.model, messages)
-            answer = json.loads(last)
+            answer = coerce(part, json.loads(last))
         except json.JSONDecodeError:
             answer, errors = None, ["ответ — не валидный JSON"]
         else:
