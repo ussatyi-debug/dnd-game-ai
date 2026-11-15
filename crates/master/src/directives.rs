@@ -1069,6 +1069,7 @@ mod tests {
             status: Some("progress".into()),
             summary: String::new(),
             text: String::new(),
+            parent: None,
         }]);
         let turn = apply_directives(
             &mut s,

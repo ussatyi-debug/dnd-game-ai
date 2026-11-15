@@ -229,6 +229,13 @@ pub enum Request {
     MasterRolls {
         text: String,
     },
+    /// Выражения пула кубов `[[1d8+3]]` в рассказе мастера: итоги подставляются в текст;
+    /// `apply` — урон по отряду (`[[… > id]]`) возвращается командами для этого же хода.
+    MasterPool {
+        text: String,
+        #[serde(default)]
+        apply: bool,
+    },
     /// Исправленные мастером команды после отказов движка — в тот же ход.
     MasterRepair {
         text: String,
@@ -442,6 +449,9 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(turn)
         }
         Request::MasterRolls { text } => to_value(dnd_master::run_rolls(session, &text)),
+        Request::MasterPool { text, apply } => {
+            to_value(dnd_master::resolve_pool(session, &text, apply))
+        }
         Request::MasterRepair { text } => to_value(dnd_master::apply_repair(session, &text)),
     }
 }

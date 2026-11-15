@@ -228,6 +228,58 @@ pub struct Session {
     /// Сколько ходов подряд в бою никто не получал урона: мастер мог забыть сменить музыку,
     /// когда бой кончился не победой (герой сбежал, враги разошлись).
     pub(crate) quiet_battle_turns: u8,
+    /// Пул кубов хода: движок бросает его заранее и показывает мастеру; выражения мастера
+    /// `[[1d8+3]]` считаются из него по порядку (в сохранение не попадает).
+    pub(crate) dice_pool: DicePool,
+}
+
+/// Кубы пула хода: d20, d12, d10, d8, d6, d4.
+pub const POOL_SIDES: [u32; 6] = [20, 12, 10, 8, 6, 4];
+
+/// Заранее брошенные кубы хода. Значения берутся по порядку; израсходованные не возвращаются.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DicePool {
+    /// Куб → оставшиеся значения (в порядке выдачи).
+    pub dice: Vec<(u32, Vec<u32>)>,
+    /// Сколько значений каждого куба уже взято: (куб, взято).
+    pub used: Vec<(u32, usize)>,
+}
+
+impl DicePool {
+    /// Значения куба, ещё не взятые.
+    pub fn remaining(&self, sides: u32) -> &[u32] {
+        let used = self.used.iter().find(|(s, _)| *s == sides).map_or(0, |(_, n)| *n);
+        self.dice
+            .iter()
+            .find(|(s, _)| *s == sides)
+            .map_or(&[][..], |(_, v)| v.get(used..).unwrap_or(&[]))
+    }
+
+    /// Все значения пула (для проверки «чисел не от движка»).
+    pub fn faces(&self) -> Vec<u32> {
+        self.dice.iter().flat_map(|(_, v)| v.iter().copied()).collect()
+    }
+
+    fn take(&mut self, sides: u32) -> Option<u32> {
+        let value = self.remaining(sides).first().copied()?;
+        match self.used.iter_mut().find(|(s, _)| *s == sides) {
+            Some((_, n)) => *n += 1,
+            None => self.used.push((sides, 1)),
+        }
+        Some(value)
+    }
+}
+
+/// Кубы из пула хода, а когда пул кончился — от генератора сессии.
+struct PoolRng<'a> {
+    pool: &'a mut DicePool,
+    rng: &'a mut Xoshiro256,
+}
+
+impl DiceRng for PoolRng<'_> {
+    fn roll_die(&mut self, sides: u32) -> u32 {
+        self.pool.take(sides).unwrap_or_else(|| self.rng.roll_die(sides))
+    }
 }
 
 /// Снимок сцены, который мастер получает неизменным до смены сцены, и состояние на момент
@@ -275,6 +327,7 @@ impl Session {
             turn_commands: Vec::new(),
             turn_damage: false,
             quiet_battle_turns: 0,
+            dice_pool: DicePool::default(),
         }
     }
 
@@ -597,11 +650,26 @@ impl Session {
         Ok(self.treasury.view())
     }
 
-    /// Запас бросков d20 на ход: мастер берёт числа по порядку для тайных проверок и
-    /// бросков за NPC, не запрашивая каждый бросок отдельно (это экономит запросы к модели).
-    /// Числа бросает движок, поэтому подменить их мастер не может.
-    pub fn roll_reserve(&mut self, count: usize) -> Vec<u32> {
-        (0..count).map(|_| self.rng.roll_die(20)).collect()
+    /// Новый пул кубов хода: по `per_die` значений каждого куба из [`POOL_SIDES`].
+    pub fn deal_dice_pool(&mut self, per_die: usize) -> &DicePool {
+        let dice = POOL_SIDES
+            .iter()
+            .map(|&sides| (sides, (0..per_die).map(|_| self.rng.roll_die(sides)).collect()))
+            .collect();
+        self.dice_pool = DicePool { dice, used: Vec::new() };
+        &self.dice_pool
+    }
+
+    /// Пул кубов текущего хода.
+    pub fn dice_pool(&self) -> &DicePool {
+        &self.dice_pool
+    }
+
+    /// Бросок выражения кубами пула по порядку (кончились — генератором движка).
+    pub fn roll_from_pool(&mut self, expression: &str) -> Result<ExprRoll, EngineError> {
+        let expr = DiceExpr::parse(expression)?;
+        let mut rng = PoolRng { pool: &mut self.dice_pool, rng: &mut self.rng };
+        Ok(expr.roll(&mut rng, false))
     }
 
     /// Бросок выражения, например `8d6`; `critical` удваивает кубы.

@@ -8,7 +8,7 @@
 use crate::directives::{commands, find_character, split};
 use dnd_engine::Session;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 /// Сколько раундов запросов бросков допускается за один ход мастера.
 pub const MAX_ROLL_ROUNDS: usize = 3;
@@ -318,6 +318,93 @@ pub fn run_rolls(session: &mut Session, reply: &str) -> Option<RollRound> {
     Some(RollRound { rolls, feedback, prose, carried })
 }
 
+/// Итог разбора выражений пула в ответе мастера.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PoolTurn {
+    /// Текст, где каждое `[[выражение]]` заменено итогом.
+    pub text: String,
+    /// Броски по выражениям — для лотка и «Логирования».
+    pub rolls: Vec<MasterRoll>,
+    /// Команды урона по членам отряда (`[[1d8+3 > pc.nikis]]`) блоком ```engine; пусто, если
+    /// урона нет или его учтёт второй шаг.
+    pub commands: String,
+}
+
+/// Выражения пула кубов в рассказе мастера: `[[1d20+5]]` — бросок, `[[2d6+3 > pc.nikis]]` —
+/// урон члену отряда, `[[1d20+3 ?]]` — тайный бросок (в рассказ не попадает). Движок берёт
+/// значения из пула хода по порядку (кончились — бросает сам), подставляет итог в текст и,
+/// при `apply_damage`, готовит команды `hp`. Урон NPC и чудовищам только подставляется
+/// числом: их хиты пока не ведутся.
+pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> PoolTurn {
+    let mut out = String::with_capacity(text.len());
+    let mut rolls = Vec::new();
+    let mut commands = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("[[") {
+        let Some(len) = rest[start + 2..].find("]]") else { break };
+        out.push_str(&rest[..start]);
+        let inner = rest[start + 2..start + 2 + len].trim();
+        rest = &rest[start + 2 + len + 2..];
+        // «?» в конце — тайный бросок: куб забирается, число в рассказ не попадает.
+        let (inner, hidden) = match inner.strip_suffix('?') {
+            Some(i) => (i.trim(), true),
+            None => (inner, false),
+        };
+        let (expression, target) = match inner.split_once('>') {
+            Some((e, t)) => (e.trim(), Some(t.trim()).filter(|t| !t.is_empty())),
+            None => (inner, None),
+        };
+        let Ok(roll) = session.roll_from_pool(expression) else {
+            // Не выражение — оставляем текст без скобок, игрок не увидит служебной разметки.
+            out.push_str(inner);
+            continue;
+        };
+        let total = roll.total.max(0);
+        if !hidden {
+            out.push_str(&total.to_string());
+        }
+        let dice: Vec<u32> = roll.groups.iter().flat_map(|g| g.values.iter().copied()).collect();
+        let d20 =
+            roll.groups.iter().find(|g| g.sides == 20).and_then(|g| g.values.first().copied());
+        let member = target.and_then(|t| find_character(session, t).ok());
+        let who = match (&member, target) {
+            (Some(id), _) => session.character(id).map_or_else(|_| id.clone(), |c| c.name.clone()),
+            (None, Some(t)) => t.to_string(),
+            (None, None) => "Мастер".to_string(),
+        };
+        let what = match (hidden, target.is_some()) {
+            (true, _) => "тайный бросок",
+            (false, true) => "урон",
+            (false, false) => "бросок",
+        };
+        let values: Vec<String> = dice.iter().map(u32::to_string).collect();
+        let line =
+            format!("{who} — {what}: {} → [{}] = {total}", roll.expression, values.join(", "));
+        if let (Some(id), true, false) = (&member, apply_damage, hidden) {
+            commands.push(json!({ "cmd": "hp", "character": id, "damage": total }).to_string());
+        }
+        rolls.push(MasterRoll {
+            who,
+            what: what.to_string(),
+            expression: roll.expression,
+            dice,
+            total,
+            target: None,
+            outcome: None,
+            hidden,
+            line,
+            d20,
+        });
+    }
+    out.push_str(rest);
+    let commands = if commands.is_empty() {
+        String::new()
+    } else {
+        format!("```engine\n{}\n```", commands.join("\n"))
+    };
+    PoolTurn { text: out, rolls, commands }
+}
+
 /// Броски d20 в тексте мастера, которых движок не делал в этом ходу и которых нет в заявке
 /// игрока: «d20 17», «к20: 17», «d20 (17)». Модификаторы вида «1d20+5» не считаются.
 /// `rolled` — значения кубов, брошенных движком в этом ходу ([`rolled_faces`]).
@@ -379,6 +466,39 @@ mod tests {
 
     fn session() -> Session {
         Session::demo(Xoshiro256::from_seed(11))
+    }
+
+    #[test]
+    fn pool_expressions_are_counted_by_engine_in_order() {
+        let mut s = session();
+        let pool = s.deal_dice_pool(8).clone();
+        let d8 = pool.remaining(8).to_vec();
+        let d20 = pool.remaining(20).to_vec();
+        let text =
+            "Вор бьёт: [[1d20+4]] против КД 15. Клинок входит — [[1d8+2 > pc.nikis]] урона. \
+Второй — [[1d8+2]] по стражнику. [[не куб]]";
+        let turn = resolve_pool(&mut s, text, true);
+        let first = i64::from(d20[0]) + 4;
+        let hit = i64::from(d8[0]) + 2;
+        let second = i64::from(d8[1]) + 2;
+        assert!(turn.text.starts_with(&format!("Вор бьёт: {first} против")));
+        assert!(turn.text.contains(&format!("входит — {hit} урона")));
+        assert!(turn.text.contains(&format!("Второй — {second} по")));
+        assert!(turn.text.ends_with("не куб"));
+        assert!(!turn.text.contains("[["));
+        assert_eq!(turn.rolls.len(), 3);
+        assert_eq!(turn.rolls[0].d20, Some(d20[0]));
+        assert!(turn.commands.contains(&format!("\"damage\":{hit}")));
+        assert!(turn.commands.contains("pc.nikis"));
+        // Без apply_damage урон только подставлен числом (его учтёт второй шаг).
+        let quiet = resolve_pool(&mut s, "[[1d4 > pc.nikis]]", false);
+        assert!(quiet.commands.is_empty());
+        assert_eq!(quiet.text, pool.remaining(4)[0].to_string());
+        // Тайный бросок забирает куб, но числа в тексте нет.
+        let secret = resolve_pool(&mut s, "Тишина.[[1d20+3 ?]]", true);
+        assert_eq!(secret.text, "Тишина.");
+        assert!(secret.rolls[0].hidden);
+        assert_eq!(secret.rolls[0].d20, Some(d20[1]));
     }
 
     #[test]

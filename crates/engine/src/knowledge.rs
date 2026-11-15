@@ -282,6 +282,9 @@ pub struct KbCard {
     /// Полный текст карточки — ответ движка на запрос мастера `query card`.
     #[cfg_attr(feature = "serde", serde(default))]
     pub text: String,
+    /// Карточка, внутри которой находится эта (место внутри локации).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub parent: Option<String>,
 }
 
 /// Статус карточки, изменённый по ходу игры.
@@ -1350,6 +1353,7 @@ mod tests {
                 status: Some("progress".into()),
                 summary: String::new(),
                 text: String::new(),
+                parent: None,
             },
             KbCard {
                 id: "npc.orelie".into(),
@@ -1358,6 +1362,7 @@ mod tests {
                 status: Some("watch".into()),
                 summary: String::new(),
                 text: String::new(),
+                parent: None,
             },
         ]);
         s
