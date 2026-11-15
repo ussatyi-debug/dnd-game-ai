@@ -83,28 +83,32 @@ jobs:
         shell: bash
         run: |
           mkdir -p src/generated
-          # wasm2js не умеет невыровненные чтения и записи (их порождают оптимизации, сливающие
-          # соседние записи). Поэтому оптимизирует wasm-opt, последним проходом переводит записи
-          # в выровненные, а wasm2js переводит в JavaScript без своей оптимизации.
+          WASM=target/wasm32-unknown-unknown/release/dnd_engine_web.wasm
+          ALIGNED=target/dnd_engine_web.aligned.wasm
+          OUT=src/generated/engine-web.js
           FEATURES="--enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
             --enable-mutable-globals --enable-multivalue --enable-reference-types"
-          if ! out=$(npx --no-install wasm-opt $FEATURES -O2 --alignment-lowering \
-              target/wasm32-unknown-unknown/release/dnd_engine_web.wasm \
-              -o target/dnd_engine_web.aligned.wasm 2>&1); then
-            echo "$out" | head -n 20
-            echo "::error title=wasm-opt::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
-            exit 1
-          fi
-          if ! out=$(npx --no-install wasm2js \
-              target/dnd_engine_web.aligned.wasm \
-              --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
-              --enable-mutable-globals --enable-multivalue --enable-reference-types \
-              -o src/generated/engine-web.js 2>&1); then
-            echo "$out" | head -n 20
-            echo "::error title=wasm2js::$(echo "$out" | tail -n 8 | tr '\n' ' ')"
-            exit 1
-          fi
-          ls -l src/generated/engine-web.js
+          # wasm2js не умеет невыровненные записи в память. Обычно хватает его собственной
+          # оптимизации; если она падает на такой записи — сначала оптимизирует wasm-opt и
+          # последним проходом выравнивает записи. Берётся первый удавшийся вариант (чем раньше,
+          # тем меньше файл).
+          try() {
+            echo "== $1"
+            if out=$(eval "$2" 2>&1); then
+              ls -l "$OUT"
+              return 0
+            fi
+            echo "$out" | grep -m1 -E 'Assertion|Error' || echo "$out" | tail -n 3
+            return 1
+          }
+          try "wasm2js -O2" "npx --no-install wasm2js $WASM $FEATURES -O2 -o $OUT" \
+          || try "wasm-opt -O2 + выравнивание, wasm2js -O2" \
+               "npx --no-install wasm-opt $FEATURES -O2 --alignment-lowering $WASM -o $ALIGNED && npx --no-install wasm2js $ALIGNED $FEATURES -O2 -o $OUT" \
+          || try "wasm-opt -O2 + выравнивание, wasm2js -O1" \
+               "npx --no-install wasm2js $ALIGNED $FEATURES -O1 -o $OUT" \
+          || try "wasm-opt -O2 + выравнивание, wasm2js без оптимизации" \
+               "npx --no-install wasm2js $ALIGNED $FEATURES -o $OUT" \
+          || { echo "::error title=wasm2js::ни один вариант не удался"; exit 1; }
       - name: Проверка движка в Node
         shell: bash
         run: |
