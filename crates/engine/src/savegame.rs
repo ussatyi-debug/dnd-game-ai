@@ -221,7 +221,15 @@ pub(crate) fn apply_character(c: &mut Character, saved: SavedCharacter, report: 
 
     match saved.inventory {
         Some(mut inv) => match inv.validate_loaded() {
-            Ok(()) => c.inventory = inv,
+            Ok(()) => {
+                // Листы до 0.9.10: «Стрел ×20» — название в именительном падеже.
+                if inv.fix_genitive_names() > 0 {
+                    report.push(format!(
+                        "{name}: названия предметов исправлены («Стрел» → «Стрелы»)"
+                    ));
+                }
+                c.inventory = inv;
+            }
             Err(e) => report.push(format!("{name}: инвентарь из приложения ({e})")),
         },
         None => report.push(format!("{name}: инвентарь — из приложения")),

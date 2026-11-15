@@ -152,6 +152,17 @@ fn stem(word: &str) -> &str {
     word
 }
 
+/// Названия в родительном падеже из листов до 0.9.10: «20 стрел» сохранялось как «Стрел».
+const GENITIVE_NAMES: [(&str, &str); 7] = [
+    ("стрел", "Стрелы"),
+    ("болтов", "Болты"),
+    ("дротиков", "Дротики"),
+    ("игл", "Иглы"),
+    ("факелов", "Факелы"),
+    ("свечей", "Свечи"),
+    ("камней для пращи", "Камни для пращи"),
+];
+
 /// Совпадают ли названия с точностью до падежа и числа: «20 стрел» и «Стрелы».
 fn same_words(a: &str, b: &str) -> bool {
     let words =
@@ -180,6 +191,19 @@ impl Inventory {
             .find(|c| c.id == query || normalize(&c.name) == q)
             .or_else(|| self.containers.iter().find(|c| normalize(&c.name).contains(&q)))
             .ok_or_else(|| EngineError::UnknownContainer(query.to_string()))
+    }
+
+    /// Старые листы: «Стрел ×20» → «Стрелы ×20». Название меняется, предмет и количество — нет.
+    pub fn fix_genitive_names(&mut self) -> usize {
+        let mut fixed = 0;
+        for item in &mut self.items {
+            let name = normalize(&item.name);
+            if let Some((_, proper)) = GENITIVE_NAMES.iter().find(|(old, _)| *old == name) {
+                item.name = (*proper).to_string();
+                fixed += 1;
+            }
+        }
+        fixed
     }
 
     /// Предмет по ID или названию (точное совпадение важнее частичного).
@@ -461,6 +485,9 @@ mod tests {
         assert_eq!(inv.find_item("Стрелы").unwrap().name, "Стрел");
         assert_eq!(inv.find_item("стрелами").unwrap().name, "Стрел");
         assert!(inv.find_item("стрелок").is_err());
+        // Старый лист: название чинится, количество остаётся.
+        assert_eq!(inv.fix_genitive_names(), 1);
+        assert_eq!(inv.find_item("стрелы").unwrap().name, "Стрелы");
         assert!(matches!(inv.find_item("зелье"), Err(EngineError::AmbiguousItem { .. })));
         assert_eq!(inv.find_container("при себе").unwrap().id, ON_PERSON);
     }
