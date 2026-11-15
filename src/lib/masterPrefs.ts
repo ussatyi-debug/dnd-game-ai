@@ -27,8 +27,8 @@ const TWO_STEP_DEFAULT: Record<MasterEngine, boolean> = {
   claude: false,
 };
 
-export const HISTORY_TURNS_DEFAULT = 12;
-export const HISTORY_TURNS_MIN = 6;
+export const HISTORY_TURNS_DEFAULT = 6;
+export const HISTORY_TURNS_MIN = 4;
 export const HISTORY_TURNS_MAX = 20;
 
 /** Сколько ждать второй шаг, прежде чем предложить не ждать его. */
@@ -114,13 +114,25 @@ export function setShortSheet(on: boolean) {
 }
 
 /**
- * Последние `turns` заявок игрока с ответами мастера; `current` — новая заявка (входит в счёт).
+ * На сколько заявок сразу сдвигается начало истории. Начало запроса меняется только раз в
+ * HISTORY_STEP ходов, а между сдвигами история лишь дописывается — поэтому её можно кэшировать
+ * (у Claude — меткой кэша, у OpenAI кэш по совпадению начала запроса срабатывает сам).
+ */
+export const HISTORY_STEP = 4;
+
+/**
+ * Последние заявки игрока с ответами мастера; `current` — новая заявка (входит в счёт).
+ * Заявок уходит от `turns` до `turns + HISTORY_STEP - 1`: начало истории сдвигается порциями.
  * Раньше идущая часть диалога мастеру не нужна: её заменяет хроника.
  */
 export function recentTurns<T extends { author: string }>(prior: T[], current: T, turns = historyTurns()): T[] {
   const players = prior.flatMap((m, i) => (m.author === "player" ? [i] : []));
-  const keep = turns - 1;
-  const start = keep <= 0 ? prior.length : players.length > keep ? players[players.length - keep] : 0;
+  const keep = Math.max(0, turns - 1);
+  if (players.length <= keep) return [...prior, current];
+  // Отбрасываем ранние заявки целыми порциями — начало истории стоит на месте HISTORY_STEP ходов.
+  const drop = Math.ceil((players.length - keep) / HISTORY_STEP) * HISTORY_STEP - (HISTORY_STEP - 1);
+  const dropped = Math.min(players.length, Math.max(0, drop));
+  const start = dropped >= players.length ? prior.length : (players[dropped] ?? prior.length);
   return [...prior.slice(start), current];
 }
 
@@ -130,14 +142,21 @@ export const VERBATIM_TURNS = 4;
 /**
  * Сжатие истории: ранние ответы мастера сокращаются до первых фраз — подробности о них
  * мастер и так видит в хронике, базе знаний и снимке сцены. Заявки игрока не трогаются.
+ *
+ * Сжимается постоянное число первых ходов окна (`turns - verbatim`), а не «всё, кроме
+ * последних», — так уже отправленная часть истории не меняется, пока окно не сдвинется
+ * порцией, и кэш начала запроса не сбрасывается каждый ход.
  */
 export function compressHistory<T extends { role: string; text: string }>(
   items: T[],
   verbatim = VERBATIM_TURNS,
+  turns = historyTurns(),
 ): T[] {
   const players = items.flatMap((m, i) => (m.role === "player" ? [i] : []));
-  if (players.length <= verbatim) return items;
-  const from = players[players.length - verbatim] ?? 0;
+  const compressed = Math.max(0, turns - verbatim);
+  if (compressed === 0 || players.length <= verbatim) return items;
+  // Граница — начало хода номер `compressed` в окне (или конец окна, если ходов меньше).
+  const from = players[Math.min(compressed, players.length - 1)] ?? 0;
   return items.map((m, i) => {
     if (i >= from || m.role !== "master" || m.text.length <= 320) return m;
     const sentences = m.text.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+/g) ?? [m.text];
@@ -166,4 +185,62 @@ export function promptSize(
         ? `, кэш записан (${cacheWrite.toLocaleString("ru-RU")})`
         : "";
   return { text: `${head}${cache}`, overflow: share !== null && share > 80 };
+}
+
+/** Учёт токенов одного шага хода — то, что приходит от движка вместе с ответом мастера. */
+export interface StepUsage {
+  provider?: string;
+  prompt_tokens: number | null;
+  prompt_chars: number;
+  cached_tokens: number | null;
+  cache_write_tokens: number | null;
+  output_tokens?: number | null;
+  fresh_tokens?: number | null;
+  requests?: number;
+  blocks?: { name: string; chars: number }[];
+}
+
+/**
+ * Во сколько обходится токен кэша относительно обычного входа: чтение и запись. Claude —
+ * часовой кэш (чтение 0,1×, запись 2×); OpenAI — чтение около 0,1×, запись бесплатно;
+ * Gemini — чтение около 0,25×. Остальные провайдеры кэш не продают отдельно.
+ */
+const CACHE_PRICE: Record<string, { read: number; write: number }> = {
+  anthropic: { read: 0.1, write: 2 },
+  openai: { read: 0.1, write: 1 },
+  gemini: { read: 0.25, write: 1 },
+};
+
+const fmt = (n: number) => Math.round(n).toLocaleString("ru-RU");
+
+/**
+ * Строка для «Логирования»: свежая часть, кэш, ответ и цена шага в «токенах входа» —
+ * сколько обычных входных токенов стоил бы шаг (ответ модели считается отдельно: он
+ * дороже входа в несколько раз, и множитель у каждой модели свой).
+ */
+export function usageLine(u: StepUsage): string {
+  const read = u.cached_tokens ?? 0;
+  const write = u.cache_write_tokens ?? 0;
+  const fresh = u.fresh_tokens ?? (u.prompt_tokens === null ? null : Math.max(0, u.prompt_tokens - read - write));
+  const price = CACHE_PRICE[u.provider ?? ""] ?? { read: 1, write: 1 };
+  const parts: string[] = [];
+  if (fresh !== null) parts.push(`свежих ${fmt(fresh)}`);
+  if (read > 0) parts.push(`из кэша ${fmt(read)}`);
+  if (write > 0) parts.push(`запись кэша ${fmt(write)}`);
+  if (u.output_tokens) parts.push(`ответ ${fmt(u.output_tokens)}`);
+  if (u.requests && u.requests > 1) parts.push(`запросов ${u.requests}`);
+  if (fresh !== null) {
+    const cost = fresh + read * price.read + write * price.write;
+    parts.push(`цена входа ≈ ${fmt(cost)} ток.`);
+  }
+  return parts.join(" · ");
+}
+
+/** Разбивка запроса по блокам: символы и оценка в токенах (по доле в размере запроса). */
+export function blocksLine(u: StepUsage): string {
+  if (!u.blocks || u.blocks.length === 0) return "";
+  const perChar = u.prompt_tokens && u.prompt_chars > 0 ? u.prompt_tokens / u.prompt_chars : 1 / 3;
+  return u.blocks
+    .map((b) => `${b.name}: ${fmt(b.chars)} симв. (≈${fmt(b.chars * perChar)} ток.)`)
+    .join("; ");
 }

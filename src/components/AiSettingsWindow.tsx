@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import {
   aiListModels,
   aiSelectModel,
+  aiSelectUpdateModel,
   aiSetKey,
   aiSettings,
   errorText,
@@ -172,6 +173,19 @@ export default function AiSettingsWindow({
     });
   }
 
+  function selectUpdate(model: string) {
+    const provider = tab;
+    void run(async () => {
+      const next = await aiSelectUpdateModel(provider, model);
+      apply(next);
+      setStatus(
+        next.update_model
+          ? `Второй шаг ведёт ${next.update_model}`
+          : "Второй шаг ведёт та же модель, что и мастера",
+      );
+    });
+  }
+
   const visible = tabModels.filter((m) =>
     `${m.name} ${m.id}`.toLowerCase().includes(filter.trim().toLowerCase()),
   );
@@ -332,6 +346,43 @@ export default function AiSettingsWindow({
             )}
           </section>
 
+          {app && settings?.provider === tab && settings.model && (
+            <section className="space-y-2">
+              <h3 className="font-medium">Модель второго шага</h3>
+              <select
+                value={settings.update_model ?? ""}
+                onChange={(e) => selectUpdate(e.target.value)}
+                disabled={busy}
+                aria-label="Модель второго шага"
+                className="w-full rounded-md border border-edge bg-ink px-3 py-2 text-sm text-parchment"
+              >
+                <option value="">Та же, что у мастера ({settings.model})</option>
+                {settings.update_model_default && (
+                  <option value={settings.update_model_default}>
+                    {settings.update_model_default} — дешёвая, по умолчанию
+                  </option>
+                )}
+                {settings.update_model &&
+                  settings.update_model !== settings.update_model_default &&
+                  !tabModels.some((m) => m.id === settings.update_model) && (
+                    <option value={settings.update_model}>{settings.update_model}</option>
+                  )}
+                {tabModels
+                  .filter((m) => m.id !== settings.update_model_default)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-xs text-muted">
+                Двухшаговый ход: второй запрос только переводит готовый рассказ в команды движка (хиты, предметы,
+                записи), сильная модель ему не нужна — дешёвая заметно снижает цену хода. Если выбранная модель не
+                ответит, второй шаг повторит модель мастера.
+              </p>
+            </section>
+          )}
+
           <TurnSettings engine={masterMode === "claude" ? "claude" : (settings?.provider ?? null)} />
 
           {status && <p className="text-sm text-crit">{status}</p>}
@@ -391,8 +442,9 @@ function TurnSettings({ engine }: { engine: MasterEngine | null }) {
         />
         <span className="block text-xs text-muted">
           Раньше идущий диалог мастеру заменяет хроника по дням. Меньше — быстрее и надёжнее для моделей с маленьким
-          окном; в чате ничего не пропадает. Последние четыре хода уходят целиком, более ранние ответы мастера —
-          первыми фразами.
+          окном; в чате ничего не пропадает. Начало истории сдвигается порциями по четыре заявки — между сдвигами
+          она только дописывается и берётся из кэша, поэтому заявок уходит от {turns} до {turns + 3}. Первые{" "}
+          {Math.max(0, turns - 4)} из них — первыми фразами ответов мастера, остальные целиком.
         </span>
       </label>
       <label className="flex items-start gap-2 text-sm">

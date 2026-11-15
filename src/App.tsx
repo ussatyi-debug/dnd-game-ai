@@ -58,6 +58,7 @@ import {
   masterApply,
   masterContext,
   masterRepair,
+  masterPool,
   masterRolls,
   repairRequest,
   partyView,
@@ -118,9 +119,11 @@ import { heroSpec } from "./lib/sheetExport";
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { webAiGenerate } from "./lib/browserAi";
 import {
+  blocksLine,
   compressHistory,
   promptSize,
   recentTurns,
+  usageLine,
   shortSheet,
   skipEmptyUpdate,
   twoStepFor,
@@ -635,6 +638,11 @@ export default function App() {
           reply.cache_write_tokens,
         );
         const message = addMessage("master", reply.text, reply.model);
+        devLog.add(
+          "engine",
+          `Шаг 1 · ${reply.model}: ${usageLine(reply)}`,
+          blocksLine(reply),
+        );
         logMasterRolls(reply.rolls);
         recordTurn(message.id, { ...reply, model: `${reply.model} · ${size}` });
         // Экономия: мастер пометил ход как разговор без изменений — второй запрос не нужен.
@@ -645,7 +653,11 @@ export default function App() {
         }
         runUpdate(
           message.id,
-          () => aiUpdate(playerMessage.text, reply.text, reply.written_commands),
+          () =>
+            aiUpdate(playerMessage.text, reply.text, reply.written_commands).then((update) => {
+              devLog.add("engine", `Шаг 2 · ${update.model}: ${usageLine(update)}`, blocksLine(update));
+              return update;
+            }),
           reply.model,
           reply.fabricated,
         );
@@ -775,7 +787,11 @@ export default function App() {
       .then(withRolls)
       .then(async (text) => {
         brokenTail = prose.length > 0 && !hasProse(text);
-        const full = [...prose, text].filter(Boolean).join("\n\n");
+        // Выражения пула [[1d8+3]]: движок считает итог из кубов хода и подставляет числом.
+        const pooled = await masterPool([...prose, text].filter(Boolean).join("\n\n"), !twoStep);
+        rolled.push(...pooled.rolls);
+        if (pooled.commands) carried += `${pooled.commands}\n`;
+        const full = pooled.text;
         if (twoStep) return { narration: await masterNarration(full), turn: null };
         // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
         const turn = await masterApply(`${full}\n${carried}`, rolled.flatMap((r) => r.dice), playerMessage.text);
