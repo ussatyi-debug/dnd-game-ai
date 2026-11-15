@@ -1,0 +1,477 @@
+{
+ "source": "Player's Handbook 2024 (outside SRD)",
+ "license": "mechanics only, described in own words — no WotC text",
+ "mode": "paraphrase",
+ "note": "Таланты, которых нет в SRD 5.2.1. Часть уже есть в игре (src/data/rules/feats.ts) — их можно пропустить. status=todo — не заполнено.",
+ "records": [
+  {
+   "id": "actor",
+   "name": "Actor",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "athlete",
+   "name": "Athlete",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "charger",
+   "name": "Charger",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "chef",
+   "name": "Chef",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "crossbow-expert",
+   "name": "Crossbow Expert",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "crusher",
+   "name": "Crusher",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "defensive-duelist",
+   "name": "Defensive Duelist",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "dual-wielder",
+   "name": "Dual Wielder",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "durable",
+   "name": "Durable",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Constitution (max 20).",
+    "Defy Death: Advantage on Death Saving Throws.",
+    "Speedy Recovery: Bonus Action — expend one Hit Point Die, roll it and regain that many Hit Points."
+   ],
+   "verify": "Сверить с Книгой игрока 2024."
+  },
+  {
+   "id": "elemental-adept",
+   "name": "Elemental Adept",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "fey-touched",
+   "name": "Fey Touched",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "great-weapon-master",
+   "name": "Great Weapon Master",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "heavily-armored",
+   "name": "Heavily Armored",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "heavy-armor-master",
+   "name": "Heavy Armor Master",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "inspiring-leader",
+   "name": "Inspiring Leader",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "keen-mind",
+   "name": "Keen Mind",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "lightly-armored",
+   "name": "Lightly Armored",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "mage-slayer",
+   "name": "Mage Slayer",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "martial-weapon-training",
+   "name": "Martial Weapon Training",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "medium-armor-master",
+   "name": "Medium Armor Master",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "moderately-armored",
+   "name": "Moderately Armored",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "mounted-combatant",
+   "name": "Mounted Combatant",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "observant",
+   "name": "Observant",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "piercer",
+   "name": "Piercer",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "poisoner",
+   "name": "Poisoner",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "polearm-master",
+   "name": "Polearm Master",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "resilient",
+   "name": "Resilient",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "ritual-caster",
+   "name": "Ritual Caster",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "sentinel",
+   "name": "Sentinel",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "shadow-touched",
+   "name": "Shadow Touched",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "sharpshooter",
+   "name": "Sharpshooter",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "shield-master",
+   "name": "Shield Master",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "skill-expert",
+   "name": "Skill Expert",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "skulker",
+   "name": "Skulker",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "slasher",
+   "name": "Slasher",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "speedy",
+   "name": "Speedy",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "spell-sniper",
+   "name": "Spell Sniper",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "telekinetic",
+   "name": "Telekinetic",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "telepathic",
+   "name": "Telepathic",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "war-caster",
+   "name": "War Caster",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "weapon-master",
+   "name": "Weapon Master",
+   "type": "general",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "blind-fighting",
+   "name": "Blind Fighting",
+   "type": "fighting-style",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "dueling",
+   "name": "Dueling",
+   "type": "fighting-style",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "interception",
+   "name": "Interception",
+   "type": "fighting-style",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "protection",
+   "name": "Protection",
+   "type": "fighting-style",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "thrown-weapon-fighting",
+   "name": "Thrown Weapon Fighting",
+   "type": "fighting-style",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "unarmed-fighting",
+   "name": "Unarmed Fighting",
+   "type": "fighting-style",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "crafter",
+   "name": "Crafter",
+   "type": "origin",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "healer",
+   "name": "Healer",
+   "type": "origin",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "lucky",
+   "name": "Lucky",
+   "type": "origin",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "musician",
+   "name": "Musician",
+   "type": "origin",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "tavern-brawler",
+   "name": "Tavern Brawler",
+   "type": "origin",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "tough",
+   "name": "Tough",
+   "type": "origin",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "boon-of-energy-resistance",
+   "name": "Boon of Energy Resistance",
+   "type": "epic-boon",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "boon-of-fortitude",
+   "name": "Boon of Fortitude",
+   "type": "epic-boon",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "boon-of-recovery",
+   "name": "Boon of Recovery",
+   "type": "epic-boon",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "boon-of-skill",
+   "name": "Boon of Skill",
+   "type": "epic-boon",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  },
+  {
+   "id": "boon-of-speed",
+   "name": "Boon of Speed",
+   "type": "epic-boon",
+   "status": "todo",
+   "prerequisite": "",
+   "mechanics": []
+  }
+ ]
+}

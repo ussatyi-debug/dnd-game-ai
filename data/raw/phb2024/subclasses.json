@@ -1,0 +1,1023 @@
+{
+ "source": "Player's Handbook 2024 (outside SRD)",
+ "license": "mechanics only, described in own words — no WotC text",
+ "mode": "paraphrase",
+ "note": "Каркас: status=todo — механика не заполнена; переводчик такие записи пропускает. Заполнять сухими пунктами (числа, уровни, действия), без художественного текста книги.",
+ "records": [
+  {
+   "id": "path-of-the-wild-heart",
+   "class": "barbarian",
+   "name": "Path of the Wild Heart",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "path-of-the-world-tree",
+   "class": "barbarian",
+   "name": "Path of the World Tree",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "path-of-the-zealot",
+   "class": "barbarian",
+   "name": "Path of the Zealot",
+   "status": "ready",
+   "features": [
+    {
+     "level": 3,
+     "name": "Divine Fury",
+     "mechanics": [
+      "While raging: the first creature you hit on each of your turns with a weapon or an Unarmed Strike takes extra damage = 1d6 + half your barbarian level.",
+      "Damage type: Necrotic or Radiant, your choice each time."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Warrior of the Gods",
+     "mechanics": [
+      "Healing pool of d12s: 4 dice at level 3, 5 at level 6, 6 at level 12, 7 at level 17.",
+      "Bonus Action: spend any number of dice from the pool, roll them, regain Hit Points equal to the total.",
+      "The pool refills after a Long Rest."
+     ]
+    },
+    {
+     "level": 6,
+     "name": "Fanatical Focus",
+     "mechanics": [
+      "Once per active Rage: when you fail a saving throw, reroll it with a bonus equal to your Rage Damage bonus; you must use the new roll."
+     ]
+    },
+    {
+     "level": 10,
+     "name": "Zealous Presence",
+     "mechanics": [
+      "Bonus Action: up to 10 other creatures of your choice within 60 feet gain Advantage on attack rolls and saving throws until the start of your next turn.",
+      "Once per Long Rest; you can also restore the use by expending one use of Rage (no action)."
+     ]
+    },
+    {
+     "level": 14,
+     "name": "Rage of the Gods",
+     "mechanics": [
+      "When you activate Rage, you can take a divine form for 1 minute or until you drop to 0 Hit Points. Once per Long Rest.",
+      "Divine form: Fly Speed equal to your Speed, you can hover; Resistance to Necrotic, Psychic and Radiant damage.",
+      "Revivification: when a creature within 30 feet would drop to 0 Hit Points, take a Reaction and expend one use of Rage to set its Hit Points to your barbarian level instead."
+     ]
+    }
+   ],
+   "verify": "Сверить с Книгой игрока 2024: числа кубов, сроки и частоту использования."
+  },
+  {
+   "id": "college-of-dance",
+   "class": "bard",
+   "name": "College of Dance",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "college-of-glamour",
+   "class": "bard",
+   "name": "College of Glamour",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "college-of-valor",
+   "class": "bard",
+   "name": "College of Valor",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "light-domain",
+   "class": "cleric",
+   "name": "Light Domain",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "trickery-domain",
+   "class": "cleric",
+   "name": "Trickery Domain",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "war-domain",
+   "class": "cleric",
+   "name": "War Domain",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "circle-of-the-moon",
+   "class": "druid",
+   "name": "Circle of the Moon",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "circle-of-the-sea",
+   "class": "druid",
+   "name": "Circle of the Sea",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "circle-of-the-stars",
+   "class": "druid",
+   "name": "Circle of the Stars",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "battle-master",
+   "class": "fighter",
+   "name": "Battle Master",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 18,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "eldritch-knight",
+   "class": "fighter",
+   "name": "Eldritch Knight",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 18,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "psi-warrior",
+   "class": "fighter",
+   "name": "Psi Warrior",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 18,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "warrior-of-mercy",
+   "class": "monk",
+   "name": "Warrior of Mercy",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 11,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "warrior-of-shadow",
+   "class": "monk",
+   "name": "Warrior of Shadow",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 11,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "warrior-of-the-elements",
+   "class": "monk",
+   "name": "Warrior of the Elements",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 11,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "oath-of-glory",
+   "class": "paladin",
+   "name": "Oath of Glory",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 20,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "oath-of-the-ancients",
+   "class": "paladin",
+   "name": "Oath of the Ancients",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 20,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "oath-of-vengeance",
+   "class": "paladin",
+   "name": "Oath of Vengeance",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 20,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "beast-master",
+   "class": "ranger",
+   "name": "Beast Master",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 11,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "fey-wanderer",
+   "class": "ranger",
+   "name": "Fey Wanderer",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 11,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "gloom-stalker",
+   "class": "ranger",
+   "name": "Gloom Stalker",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 7,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 11,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 15,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "arcane-trickster",
+   "class": "rogue",
+   "name": "Arcane Trickster",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 9,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 13,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "assassin",
+   "class": "rogue",
+   "name": "Assassin",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 9,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 13,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "soulknife",
+   "class": "rogue",
+   "name": "Soulknife",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 9,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 13,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 17,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "aberrant-sorcery",
+   "class": "sorcerer",
+   "name": "Aberrant Sorcery",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 18,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "clockwork-sorcery",
+   "class": "sorcerer",
+   "name": "Clockwork Sorcery",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 18,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "wild-magic-sorcery",
+   "class": "sorcerer",
+   "name": "Wild Magic Sorcery",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 18,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "archfey-patron",
+   "class": "warlock",
+   "name": "Archfey Patron",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "celestial-patron",
+   "class": "warlock",
+   "name": "Celestial Patron",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "great-old-one-patron",
+   "class": "warlock",
+   "name": "Great Old One Patron",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "abjurer",
+   "class": "wizard",
+   "name": "Abjurer",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "diviner",
+   "class": "wizard",
+   "name": "Diviner",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  },
+  {
+   "id": "illusionist",
+   "class": "wizard",
+   "name": "Illusionist",
+   "status": "todo",
+   "features": [
+    {
+     "level": 3,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 6,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 10,
+     "name": "",
+     "mechanics": []
+    },
+    {
+     "level": 14,
+     "name": "",
+     "mechanics": []
+    }
+   ]
+  }
+ ]
+}
