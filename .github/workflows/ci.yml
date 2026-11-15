@@ -83,7 +83,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p src/generated
-          if ! out=$(npx --no-install wasm2js \
+          # Большой стек: binaryen обходит выражения рекурсивно и на крупных функциях движка
+          # упирается в стандартный стек Node.
+          ulimit -s unlimited || ulimit -s 65536 || true
+          if ! out=$(node --stack-size=60000 node_modules/binaryen/bin/wasm2js \
               target/wasm32-unknown-unknown/release/dnd_engine_web.wasm \
               --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
               --enable-mutable-globals --enable-multivalue --enable-reference-types \
