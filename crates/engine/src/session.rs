@@ -237,34 +237,48 @@ pub struct Session {
 pub const POOL_SIDES: [u32; 6] = [20, 12, 10, 8, 6, 4];
 
 /// Заранее брошенные кубы хода. Значения берутся по порядку; израсходованные не возвращаются.
+/// Кубы — по порядку [`POOL_SIDES`]; без кортежей и словарей: так wasm-сборка для веб-версии
+/// не получает невыровненных записей в память.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DicePool {
-    /// Куб → оставшиеся значения (в порядке выдачи).
-    pub dice: Vec<(u32, Vec<u32>)>,
-    /// Сколько значений каждого куба уже взято: (куб, взято).
-    pub used: Vec<(u32, usize)>,
+    /// Значения каждого куба из [`POOL_SIDES`] (в порядке выдачи).
+    pub values: Vec<Vec<u32>>,
+    /// Сколько значений каждого куба уже взято.
+    pub used: [usize; POOL_SIDES.len()],
 }
 
 impl DicePool {
+    fn slot(sides: u32) -> Option<usize> {
+        POOL_SIDES.iter().position(|&s| s == sides)
+    }
+
     /// Значения куба, ещё не взятые.
     pub fn remaining(&self, sides: u32) -> &[u32] {
-        let used = self.used.iter().find(|(s, _)| *s == sides).map_or(0, |(_, n)| *n);
-        self.dice
-            .iter()
-            .find(|(s, _)| *s == sides)
-            .map_or(&[][..], |(_, v)| v.get(used..).unwrap_or(&[]))
+        let Some(i) = Self::slot(sides) else { return &[] };
+        self.values.get(i).and_then(|v| v.get(self.used[i]..)).unwrap_or(&[])
     }
 
     /// Все значения пула (для проверки «чисел не от движка»).
     pub fn faces(&self) -> Vec<u32> {
-        self.dice.iter().flat_map(|(_, v)| v.iter().copied()).collect()
+        self.values.iter().flatten().copied().collect()
+    }
+
+    /// Пул строками: «d20: 14, 3, …».
+    pub fn lines(&self) -> Vec<String> {
+        POOL_SIDES
+            .iter()
+            .zip(&self.values)
+            .map(|(sides, values)| {
+                let values: Vec<String> = values.iter().map(u32::to_string).collect();
+                format!("d{sides}: {}", values.join(", "))
+            })
+            .collect()
     }
 
     fn take(&mut self, sides: u32) -> Option<u32> {
         let value = self.remaining(sides).first().copied()?;
-        match self.used.iter_mut().find(|(s, _)| *s == sides) {
-            Some((_, n)) => *n += 1,
-            None => self.used.push((sides, 1)),
+        if let Some(i) = Self::slot(sides) {
+            self.used[i] += 1;
         }
         Some(value)
     }
@@ -652,11 +666,11 @@ impl Session {
 
     /// Новый пул кубов хода: по `per_die` значений каждого куба из [`POOL_SIDES`].
     pub fn deal_dice_pool(&mut self, per_die: usize) -> &DicePool {
-        let dice = POOL_SIDES
+        let values = POOL_SIDES
             .iter()
-            .map(|&sides| (sides, (0..per_die).map(|_| self.rng.roll_die(sides)).collect()))
+            .map(|&sides| (0..per_die).map(|_| self.rng.roll_die(sides)).collect())
             .collect();
-        self.dice_pool = DicePool { dice, used: Vec::new() };
+        self.dice_pool = DicePool { values, used: [0; POOL_SIDES.len()] };
         &self.dice_pool
     }
 

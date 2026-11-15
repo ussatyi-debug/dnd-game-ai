@@ -565,17 +565,6 @@ fn scene_now_lines(session: &Session) -> Vec<String> {
     out
 }
 
-/// Пул кубов хода строками: «d20: 14, 3, …».
-fn pool_lines(pool: &dnd_engine::DicePool) -> Vec<String> {
-    pool.dice
-        .iter()
-        .map(|(sides, values)| {
-            let values: Vec<String> = values.iter().map(u32::to_string).collect();
-            format!("d{sides}: {}", values.join(", "))
-        })
-        .collect()
-}
-
 /// Последняя реплика игрока: сцена сейчас, изменения, напоминания, карточки по заявке, пул
 /// кубов, подсказка, заявка.
 fn turn_message(
@@ -680,7 +669,7 @@ fn turn_message(
 движок пропустит второй шаг. Если изменилось хоть что-то, строку не пиши.\n\n",
         );
     }
-    let pool = pool_lines(session.dice_pool());
+    let pool = session.dice_pool().lines();
     if !pool.is_empty() {
         out.push_str("[ПУЛ КУБОВ]\n");
         for line in pool {
