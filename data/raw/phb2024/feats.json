@@ -482,153 +482,219 @@
    "id": "war-caster",
    "name": "War Caster",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Spellcasting or Pact Magic feature",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Concentration: You have Advantage on Constitution saving throws to maintain Concentration.",
+    "Reactive Spell: When a creature provokes an Opportunity Attack from you by leaving your reach, you can use your Reaction to cast a spell at that creature instead, provided the spell has a casting time of 1 Action and targets only that creature.",
+    "Somatic Components: You can perform Somatic components of spells even when holding weapons or a Shield in one or both hands."
+   ]
   },
   {
    "id": "weapon-master",
    "name": "Weapon Master",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Mastery Property: You unlock the mastery property of 1 kind of Simple or Martial weapon of your choice with which you have proficiency.",
+    "Change Mastery: Whenever you finish a Long Rest, you can change the chosen kind of weapon to another eligible kind."
+   ]
   },
   {
    "id": "blind-fighting",
    "name": "Blind Fighting",
    "type": "fighting-style",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Blindsight: You gain Blindsight with a range of 10 feet."
+   ]
   },
   {
    "id": "dueling",
    "name": "Dueling",
    "type": "fighting-style",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Damage Bonus: When you are wielding a melee weapon in 1 hand and no other weapons, you gain a +2 bonus to damage rolls with that weapon."
+   ]
   },
   {
    "id": "interception",
    "name": "Interception",
    "type": "fighting-style",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Damage Reduction: When a creature you can see hits another creature within 5 feet of you with an attack roll, you can use a Reaction to reduce the damage dealt to the target by 1d10 + your Proficiency Bonus.",
+    "Equipment Requirement: You must be holding a Shield or a Simple or Martial weapon to use this Reaction."
+   ]
   },
   {
    "id": "protection",
    "name": "Protection",
    "type": "fighting-style",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Impose Disadvantage: When a creature you can see attacks a target other than you within 5 feet of you, you can take a Reaction to interpose your Shield (requires holding a Shield).",
+    "Duration: You impose Disadvantage on the triggering attack roll and on all other attack rolls against that target until the start of your next turn, provided you remain within 5 feet of the target."
+   ]
   },
   {
    "id": "thrown-weapon-fighting",
    "name": "Thrown Weapon Fighting",
    "type": "fighting-style",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Damage Bonus: When you hit with a ranged attack roll using a weapon that has the Thrown property, you gain a +2 bonus to the damage roll."
+   ]
   },
   {
    "id": "unarmed-fighting",
    "name": "Unarmed Fighting",
    "type": "fighting-style",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Unarmed Damage: When you hit with an Unarmed Strike and deal damage, you can deal Bludgeoning damage equal to 1d6 + your Strength modifier instead of the normal damage (becomes 1d8 + Strength modifier if you aren't holding any weapons or a Shield).",
+    "Grapple Damage: At the start of each of your turns, you can deal 1d4 Bludgeoning damage to 1 creature Grappled by you."
+   ]
   },
   {
    "id": "crafter",
    "name": "Crafter",
    "type": "origin",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Tool Proficiency: You gain proficiency with 3 different Artisan's Tools of your choice from the Fast Crafting table.",
+    "Discount: Whenever you buy a nonmagical item, you receive a 20% discount on it.",
+    "Fast Crafting: When you finish a Long Rest, you can craft 1 piece of gear from the Fast Crafting table, provided you have the associated Artisan's Tools and proficiency with them. The item lasts until you finish another Long Rest, at which point it falls apart."
+   ]
   },
   {
    "id": "healer",
    "name": "Healer",
    "type": "origin",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Battle Medic: If you have a Healer's Kit, you can take a Utilize action and expend 1 use of the kit to tend to a creature within 5 feet of you. That creature can expend 1 of its Hit Point Dice, and you roll that die; the creature regains Hit Points equal to the roll + your Proficiency Bonus.",
+    "Healing Rerolls: Whenever you roll a die to determine the number of Hit Points you restore with a spell or with this feat's Battle Medic benefit, you can reroll the die if it rolls a 1, and you must use the new roll."
+   ]
   },
   {
    "id": "lucky",
    "name": "Lucky",
    "type": "origin",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Luck Points: You have a number of Luck Points equal to your Proficiency Bonus. You regain all expended Luck Points when you finish a Long Rest.",
+    "Advantage: When you roll a d20 for a D20 Test, you can spend 1 Luck Point to give yourself Advantage on the roll.",
+    "Disadvantage: When a creature rolls a d20 for an attack roll against you, you can spend 1 Luck Point to impose Disadvantage on that roll."
+   ]
   },
   {
    "id": "musician",
    "name": "Musician",
    "type": "origin",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Instrument Training: You gain proficiency with 3 Musical Instruments of your choice.",
+    "Encouraging Song: As you finish a Short or Long Rest, you can play a song on a Musical Instrument with which you have proficiency and give Heroic Inspiration to allies who hear the song. The number of allies you can affect equals your Proficiency Bonus."
+   ]
   },
   {
    "id": "tavern-brawler",
    "name": "Tavern Brawler",
    "type": "origin",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Enhanced Unarmed Strike: When you hit with your Unarmed Strike and deal damage, you can deal Bludgeoning damage equal to 1d4 + your Strength modifier instead of the normal damage.",
+    "Damage Rerolls: Whenever you roll a damage die for your Unarmed Strike, you can reroll the die if it rolls a 1, and you must use the new roll.",
+    "Improvised Weaponry: You have proficiency with improvised weapons.",
+    "Push: When you hit a creature with an Unarmed Strike as part of the Attack action on your turn, you can deal damage to the target and also push it 5 feet away from you. You can use this benefit only once per turn."
+   ]
   },
   {
    "id": "tough",
    "name": "Tough",
    "type": "origin",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Hit Point Maximum Increase: Your Hit Point maximum increases by an amount equal to twice your character level when you gain this feat.",
+    "Level Scaling: Whenever you gain a character level thereafter, your Hit Point maximum increases by an additional 2 Hit Points."
+   ]
   },
   {
    "id": "boon-of-energy-resistance",
    "name": "Boon of Energy Resistance",
    "type": "epic-boon",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "Energy Resistances: You gain Resistance to 2 of the following damage types of your choice: Acid, Cold, Fire, Lightning, Necrotic, Poison, Psychic, Radiant, or Thunder. Whenever you finish a Long Rest, you can change your choices.",
+    "Energy Redirection: When you take damage of one of the types chosen for the Energy Resistances benefit, you can take a Reaction to direct damage of the same type toward another creature you can see within 60 feet of yourself that isn't behind Total Cover. The target must succeed on a Dexterity saving throw (DC = 8 + your Constitution modifier + your Proficiency Bonus) or take damage equal to 2d12 + your Constitution modifier."
+   ]
   },
   {
    "id": "boon-of-fortitude",
    "name": "Boon of Fortitude",
    "type": "epic-boon",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "Fortified Health: Your Hit Point maximum increases by 40.",
+    "Bolstered Healing: Once per turn when you regain Hit Points, you can regain additional Hit Points equal to your Constitution modifier."
+   ]
   },
   {
    "id": "boon-of-recovery",
    "name": "Boon of Recovery",
    "type": "epic-boon",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "Last Stand: When you would be reduced to 0 Hit Points, you can drop to 1 Hit Point instead and regain a number of Hit Points equal to half your Hit Point maximum. Once you use this benefit, you can't use it again until you finish a Long Rest.",
+    "Recover Vitality: You have a pool of ten d10s. As a Bonus Action, you can expend dice from the pool, roll those dice, and regain Hit Points equal to the roll's total. You regain all expended dice when you finish a Long Rest."
+   ]
   },
   {
    "id": "boon-of-skill",
    "name": "Boon of Skill",
    "type": "epic-boon",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "All-Around Adept: You gain proficiency in all skills.",
+    "Expertise: Choose 1 skill in which you lack Expertise. You gain Expertise in that skill."
+   ]
   },
   {
    "id": "boon-of-speed",
    "name": "Boon of Speed",
    "type": "epic-boon",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "Escape Artist: As a Bonus Action, you can take the Disengage action, which also ends the Grappled condition on yourself.",
+    "Quickness: Your Speed increases by 30 feet."
+   ]
   }
  ]
 }
