@@ -144,6 +144,13 @@ impl Session {
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
         self.turns_since_time += 1;
         self.cool_down_battle();
+        // Бой кончился (победой, бегством, переговорами) — нужна пометка опыта.
+        if self.scene.mood == Mood::Battle {
+            self.battle_seen = true;
+        } else if self.battle_seen {
+            self.battle_seen = false;
+            self.battle_unrewarded = true;
+        }
         self.age_due_timers();
         let after = self.checkpoint();
         let today = self.scene.day;

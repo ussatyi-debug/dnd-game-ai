@@ -132,7 +132,7 @@ import {
 } from "./lib/masterPrefs";
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
-import type { RollResult, TrayRoll } from "./lib/rolls";
+import type { DieId, RollResult, TrayRoll } from "./lib/rolls";
 
 const MAX_ROLLS = 200;
 /** Раундов запросов бросков мастера за ход (как в движке). */
@@ -425,6 +425,13 @@ export default function App() {
       .catch(() => undefined);
   }, [engineAvailable]);
 
+  /** Куб из формулы броска мастера: первая группа «NdM»; неизвестный — d6. */
+  const dieOf = (expression: string): DieId => {
+    const sides = /d(\d+)/i.exec(expression)?.[1];
+    const die = `d${sides}`;
+    return (["d4", "d6", "d8", "d10", "d12", "d20", "d100"] as string[]).includes(die) ? (die as DieId) : "d6";
+  };
+
   /** Открытые броски мастера — в лог кубов; тайные игрок не видит. */
   const logMasterRolls = useCallback((list: MasterRoll[]) => {
     if (list.length === 0) return;
@@ -432,7 +439,8 @@ export default function App() {
     const entries: TrayRoll[] = list.map((r) => ({
       id: nextId.current++,
       time: now(),
-      die: r.d20 !== null ? "d20" : "d6",
+      // Куб — по формуле броска («2d8+3» → d8), а не всегда d6.
+      die: r.d20 !== null ? "d20" : dieOf(r.expression),
       values: r.d20 !== null ? [r.d20] : r.dice,
       total: r.total,
       master: { who: r.who, what: r.what, line: r.line, outcome: r.outcome, hidden: r.hidden },

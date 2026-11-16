@@ -1,5 +1,7 @@
 // Сборка каталога заклинаний из исходных данных:
-//   data/spells/srd-en.json      — заклинания SRD 5.1 (английский оригинал, CC-BY-4.0);
+//   data/raw/srd52/spells.json   — заклинания SRD 5.2.1 (D&D 2024, CC-BY-4.0): механика;
+//   data/rules/spells.json       — их русский перевод (tools/translate_local.py, проверка Gemini);
+//   data/spells/srd-en.json      — заклинания SRD 5.1, которых нет в 5.2 (для старых листов);
 //   data/spells/custom.json      — заклинания вне SRD, описанные своими словами;
 //   data/spells/ru/names.json    — русские названия;
 //   data/spells/ru/text-*.json   — русские описания (по кругам).
@@ -148,7 +150,31 @@ function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
 }
 
-const srd = readJson<SrdSpell[]>(join(dataDir, "srd-en.json"));
+interface Srd52 {
+  id: string;
+  name: string;
+  level: number;
+  school: string;
+  classes: string[];
+  ritual: boolean;
+  concentration: boolean;
+  components: string[];
+  material?: string;
+}
+interface Ru52 {
+  name: string;
+  casting_time: string;
+  range: string;
+  duration: string;
+  material?: string;
+  desc: string[];
+  higher_level?: string[];
+}
+const srd52 = readJson<{ records: Srd52[] }>(join(root, "data", "raw", "srd52", "spells.json")).records;
+const ru52 = readJson<{ records: Record<string, Ru52> }>(join(root, "data", "rules", "spells.json")).records;
+const ids52 = new Set(srd52.map((s) => s.id));
+// SRD 5.1 — только то, чего нет в 5.2 (заклинания из старых листов отряда).
+const srd = readJson<SrdSpell[]>(join(dataDir, "srd-en.json")).filter((s) => !ids52.has(s.id));
 const custom = readJson<CustomSpell[]>(join(dataDir, "custom.json"));
 const names = readJson<Record<string, string>>(join(dataDir, "ru", "names.json"));
 
@@ -180,6 +206,25 @@ export interface OutSpell {
   higher: string[];
   source: "srd" | "custom";
   sourceNote: string;
+  /** Механика кратко для мастера: время, атака или спасбросок, кубы. */
+  mech: string;
+}
+
+const SAVE = /спасброс[а-яё]*\s+(Силы|Ловкости|Телосложения|Интеллекта|Мудрости|Харизмы)/;
+const DICE = /\b\d+d\d+(?:\s*[+−-]\s*\d+)?/g;
+
+/** «Действие; спасбросок Ловкости; 8d6; выше круга: 1d6» — для строки заклинания в листе мастера. */
+function mechOf(castingTime: string, desc: string[], higher: string[]): string {
+  const text = desc.join(" ");
+  const parts = [castingTime.split(/[,(]/)[0].trim()];
+  if (/бросок (рукопашной|дальнобойной) атаки|атак[а-яё]* заклинанием/i.test(text)) parts.push("атака заклинанием");
+  const save = SAVE.exec(text);
+  if (save) parts.push(`спасбросок ${save[1]}`);
+  const dice = [...new Set(text.match(DICE) ?? [])].slice(0, 4);
+  if (dice.length) parts.push(dice.join(", "));
+  const up = [...new Set(higher.join(" ").match(DICE) ?? [])].slice(0, 2);
+  if (up.length) parts.push(`выше круга: ${up.join(", ")}`);
+  return parts.join("; ");
 }
 
 function componentsRu(components: string[], material: string | undefined): string {
@@ -193,6 +238,34 @@ function checkClasses(id: string, classes: string[]) {
 
 const out: OutSpell[] = [];
 const seen = new Set<string>();
+
+for (const s of srd52) {
+  const ru = ru52[s.id];
+  if (!ru) fail(`нет перевода SRD 5.2 для «${s.id}» (data/rules/spells.json)`);
+  checkClasses(s.id, s.classes);
+  const duration =
+    s.concentration && !/концентрац/i.test(ru.duration) ? `Концентрация, ${ru.duration}` : ru.duration;
+  out.push({
+    id: s.id,
+    name: ru.name,
+    nameEn: s.name,
+    level: s.level,
+    school: lookup(SCHOOLS, s.school, "школа", s.id),
+    castingTime: ru.casting_time,
+    range: ru.range,
+    components: componentsRu(s.components, s.material ? ru.material ?? s.material : undefined),
+    duration,
+    ritual: s.ritual,
+    concentration: s.concentration,
+    classes: s.classes,
+    desc: ru.desc,
+    higher: ru.higher_level ?? [],
+    source: "srd",
+    sourceNote: "SRD 5.2.1",
+    mech: mechOf(ru.casting_time, ru.desc, ru.higher_level ?? []),
+  });
+  seen.add(s.id);
+}
 
 for (const s of srd) {
   const name = names[s.id];
@@ -217,11 +290,14 @@ for (const s of srd) {
     higher: ru.higher ?? [],
     source: "srd",
     sourceNote: "SRD 5.1",
+    mech: mechOf(lookup(CASTING_TIME, s.casting_time, "время накладывания", s.id), ru.desc, ru.higher ?? []),
   });
   seen.add(s.id);
 }
 
 for (const s of custom) {
+  // Заклинание вошло в SRD 5.2 — берётся оттуда, своё описание больше не нужно.
+  if (ids52.has(s.id)) continue;
   if (seen.has(s.id)) fail(`«${s.id}» есть и в SRD, и в custom.json`);
   checkClasses(s.id, s.classes);
   out.push({
@@ -241,17 +317,18 @@ for (const s of custom) {
     higher: s.higherRu ?? [],
     source: "custom",
     sourceNote: s.source,
+    mech: mechOf(lookup(CASTING_TIME, s.casting_time, "время накладывания", s.id), s.descRu, s.higherRu ?? []),
   });
   seen.add(s.id);
 }
 
+// Старые переводы SRD 5.1 для заклинаний, вошедших в 5.2, больше не используются.
 for (const id of Object.keys(texts)) if (!seen.has(id)) fail(`перевод для неизвестного заклинания «${id}»`);
-for (const id of Object.keys(names)) if (!seen.has(id)) fail(`название для неизвестного заклинания «${id}»`);
 
 out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
 const tsHeader = `// Сгенерировано scripts/build-spells.ts из data/spells — не править вручную.
-// Заклинания SRD 5.1 © Wizards of the Coast LLC, лицензия CC-BY-4.0
+// Заклинания SRD 5.2.1 (и 5.1 для старых листов) © Wizards of the Coast LLC, лицензия CC-BY-4.0
 // (https://creativecommons.org/licenses/by/4.0/); перевод на русский — проект dnd-game-ai.
 
 import type { SpellData } from "./types.ts";
@@ -267,13 +344,13 @@ const rsLines = out.map((s) => {
   const classes = s.classes.length
     ? s.classes.map((c) => `C_${c.toUpperCase()}`).join(" | ")
     : "0";
-  return `    SpellMeta { id: ${rsString(s.id)}, name: ${rsString(s.name)}, level: ${s.level}, ritual: ${s.ritual}, concentration: ${s.concentration}, classes: ${classes}, srd: ${s.source === "srd"} },`;
+  return `    SpellMeta { id: ${rsString(s.id)}, name: ${rsString(s.name)}, level: ${s.level}, ritual: ${s.ritual}, concentration: ${s.concentration}, classes: ${classes}, srd: ${s.source === "srd"}, mech: ${rsString(s.mech)} },`;
 });
 
 const rs = `//! Каталог заклинаний для проверок движка.
 //!
 //! Сгенерировано \`scripts/build-spells.ts\` из \`data/spells\` — не править вручную.
-//! Заклинания SRD 5.1 © Wizards of the Coast LLC, лицензия CC-BY-4.0.
+//! Заклинания SRD 5.2.1 (и 5.1 для старых листов) © Wizards of the Coast LLC, лицензия CC-BY-4.0.
 
 use crate::spells::{
     SpellMeta, C_BARD, C_CLERIC, C_DRUID, C_PALADIN, C_RANGER, C_SORCERER, C_WARLOCK, C_WIZARD,

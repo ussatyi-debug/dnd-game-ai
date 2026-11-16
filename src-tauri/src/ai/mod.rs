@@ -139,6 +139,15 @@ pub struct Generated {
     pub output_tokens: Option<u64>,
 }
 
+/// Ошибка сети, а не ответа модели: стоит повторить запрос.
+fn is_network_error(error: &str) -> bool {
+    let e = error.to_lowercase();
+    e.starts_with("нет связи")
+        || e.contains("timed out")
+        || e.contains("timeout")
+        || e.contains("connection")
+}
+
 /// Длина ответа в токенах: Anthropic и OpenAI Responses (`output_tokens`), Chat Completions
 /// (`completion_tokens`), Gemini (`candidatesTokenCount`), Ollama (`eval_count`), Яндекс
 /// (`completionTokens`, числом в строке).
@@ -413,22 +422,39 @@ pub async fn chat(
     let key = settings.key().ok_or("Введите API-ключ в меню «Модели ИИ»")?;
     let joined = system_parts.join("\n");
     let system = joined.as_str();
-    let out = match settings.provider {
-        Provider::Gemini => {
-            gemini::generate(client, key, &model, system, history, json_mode).await?
-        }
-        Provider::OpenAi => {
-            openai::generate(client, key, &model, system, history, json_mode).await?
-        }
-        Provider::Anthropic => {
-            anthropic::generate(client, key, &model, system_parts, history, json_mode, cache_upto)
-                .await?
-        }
-        Provider::Local => {
-            ollama::generate(client, key, &model, system, history, json_mode).await?
-        }
-        Provider::Yandex => {
-            yandex::generate(client, key, &model, system, history, json_mode).await?
+    // Обрыв связи («Нет связи с …», таймаут) — один повтор сразу, прежде чем показать
+    // ошибку игроку: короткие сбои сети у облачных провайдеров случаются посреди игры.
+    let mut attempt = 0;
+    let out = loop {
+        let result = match settings.provider {
+            Provider::Gemini => {
+                gemini::generate(client, key, &model, system, history, json_mode).await
+            }
+            Provider::OpenAi => {
+                openai::generate(client, key, &model, system, history, json_mode).await
+            }
+            Provider::Anthropic => {
+                anthropic::generate(
+                    client,
+                    key,
+                    &model,
+                    system_parts,
+                    history,
+                    json_mode,
+                    cache_upto,
+                )
+                .await
+            }
+            Provider::Local => {
+                ollama::generate(client, key, &model, system, history, json_mode).await
+            }
+            Provider::Yandex => {
+                yandex::generate(client, key, &model, system, history, json_mode).await
+            }
+        };
+        match result {
+            Err(e) if attempt == 0 && is_network_error(&e) => attempt += 1,
+            other => break other?,
         }
     };
     let prompt_chars =

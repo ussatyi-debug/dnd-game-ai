@@ -80,8 +80,10 @@ pub struct SpellMeta {
     pub concentration: bool,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) classes: u8,
-    /// Из SRD 5.1 (иначе — заклинание вне SRD, описанное своими словами).
+    /// Из SRD (иначе — заклинание вне SRD, описанное своими словами).
     pub srd: bool,
+    /// Механика кратко для мастера: время, кубы, спасбросок, усиление («действие; 2d8; …»).
+    pub mech: &'static str,
 }
 
 impl SpellMeta {

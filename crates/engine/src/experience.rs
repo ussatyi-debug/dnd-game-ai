@@ -184,6 +184,7 @@ impl Session {
                 );
             }
             self.xp_log.push(XpNote { day: self.scene.day, text: text.to_string(), xp });
+            self.battle_unrewarded = false;
             Ok(self.xp_log.len())
         })();
         self.logged(

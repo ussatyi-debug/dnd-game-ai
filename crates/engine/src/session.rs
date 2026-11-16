@@ -228,6 +228,10 @@ pub struct Session {
     /// Сколько ходов подряд в бою никто не получал урона: мастер мог забыть сменить музыку,
     /// когда бой кончился не победой (герой сбежал, враги разошлись).
     pub(crate) quiet_battle_turns: u8,
+    /// В прошлый ход шёл бой (настроение «бой»).
+    pub(crate) battle_seen: bool,
+    /// Бой кончился, а пометки опыта за него ещё нет — движок напоминает мастеру.
+    pub(crate) battle_unrewarded: bool,
     /// Пул кубов хода: движок бросает его заранее и показывает мастеру; выражения мастера
     /// `[[1d8+3]]` считаются из него по порядку (в сохранение не попадает).
     pub(crate) dice_pool: DicePool,
@@ -341,6 +345,8 @@ impl Session {
             turn_commands: Vec::new(),
             turn_damage: false,
             quiet_battle_turns: 0,
+            battle_seen: false,
+            battle_unrewarded: false,
             dice_pool: DicePool::default(),
         }
     }
@@ -442,6 +448,11 @@ impl Session {
     /// Запоминает выполненную команду хода.
     pub fn record_turn_command(&mut self, key: String) {
         self.turn_commands.push(key);
+    }
+
+    /// Бой кончился без пометки опыта.
+    pub fn battle_unrewarded(&self) -> bool {
+        self.battle_unrewarded
     }
 
     /// Сколько ходов мастера прошло без смены времени суток или дня.

@@ -19,4 +19,6 @@ export interface SpellData {
   higher: string[];
   source: "srd" | "custom";
   sourceNote: string;
+  /** Механика кратко для мастера: время, атака или спасбросок, кубы. */
+  mech: string;
 }

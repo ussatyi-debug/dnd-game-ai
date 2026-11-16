@@ -6,12 +6,17 @@ import { BASICS, CONDITIONS, EXHAUSTION } from "../data/reference";
 import { WORLD_ENTRIES } from "../data/kb/world";
 import { CLASS_LABELS, levelLabel, SPELLS, SRD_ATTRIBUTION, type SpellData } from "../data/spells/index.ts";
 import Modal from "./Modal";
+import SrdTab from "./SrdReference";
 import { SpellText } from "./SpellCard";
 
-type RefTab = "spells" | "conditions" | "basics" | "rules";
+type RefTab = "spells" | "monsters" | "items" | "feats" | "subclasses" | "conditions" | "basics" | "rules";
 
 const TABS: { id: RefTab; label: string }[] = [
   { id: "spells", label: "Заклинания" },
+  { id: "monsters", label: "Бестиарий" },
+  { id: "items", label: "Предметы" },
+  { id: "feats", label: "Таланты" },
+  { id: "subclasses", label: "Подклассы" },
   { id: "conditions", label: "Состояния" },
   { id: "basics", label: "Основы" },
   { id: "rules", label: "Правила кампании" },
@@ -249,6 +254,7 @@ export default function ReferenceWindow({ onClose }: { onClose: () => void }) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === "spells" && <SpellsTab />}
+        {(tab === "monsters" || tab === "items" || tab === "feats" || tab === "subclasses") && <SrdTab kind={tab} />}
         {tab === "conditions" && <ConditionsTab />}
         {tab === "basics" && <BasicsTab />}
         {tab === "rules" && <RulesTab />}
