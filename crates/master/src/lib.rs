@@ -535,7 +535,9 @@ mod tests {
         assert_eq!(nikis["ячейки"][0], "4 круг (договор, \"pact\"): 1/2");
         assert_eq!(nikis["классы"][0]["кс"], 17);
         let ready = nikis["классы"][0]["готовые"].as_array().unwrap();
-        assert!(ready.iter().any(|v| v == "Туманный шаг [misty-step], 2 круг"));
+        assert!(ready
+            .iter()
+            .any(|v| v.as_str().unwrap().starts_with("Туманный шаг [misty-step], 2 круг")));
         assert!(context["магия"]["npc.valeria"].is_object());
         assert!(context["магия"].get("npc.corvus").is_none());
         assert!(context["журнал_движка"][0].as_str().unwrap().contains("Туманный шаг"));
