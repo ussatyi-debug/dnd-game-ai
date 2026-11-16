@@ -376,11 +376,23 @@ def join_chunks(payload: dict, answers: list) -> dict:
     return {k: result[k] for k in payload}
 
 
+def small_number_diff(part: dict, answer: dict, limit: int = 2) -> bool:
+    """Расхождение только в числах, и не больше `limit` штук («до нуля» вместо «0» и т.п.)."""
+    if shape(answer) != shape(part) or answer.get("id") != part.get("id"):
+        return False
+    a, b = list(strings(part)), list(strings(answer))
+    if dice_of(a) != dice_of(b) or any(CJK.search(t) for t in b):
+        return False
+    src_n, out_n = numbers_of(a), numbers_of(b)
+    diff = sum((src_n - out_n).values()) + sum((out_n - src_n).values())
+    return 0 < diff <= limit
+
+
 def translate_part(args, system: str, shots: list, part: dict, mode: str):
     """Одна часть записи: запрос, проверка, до RETRIES повторов с замечанием."""
     messages = [{"role": "system", "content": system}, *shots,
                 {"role": "user", "content": json.dumps(part, ensure_ascii=False)}]
-    last, errors = "", []
+    last, errors, near = "", [], None
     retries = args.retries
     for attempt in range(retries + 1):
         try:
@@ -392,11 +404,18 @@ def translate_part(args, system: str, shots: list, part: dict, mode: str):
             errors = check(part, answer, mode)
             if not errors:
                 return answer, []
+            if near is None and small_number_diff(part, answer) and all(
+                    e.startswith("числа не совпадают") for e in errors):
+                near = (answer, errors[0])
         if attempt < retries:
             log(f"   повтор {attempt + 1}: {'; '.join(errors)}")
             messages += [{"role": "assistant", "content": last},
                          {"role": "user", "content": "Исправь ответ. Ошибки: " + "; ".join(errors)
                           + ". Верни полный JSON той же структуры."}]
+    if args.lenient and near is not None:
+        answer, note = near
+        answer["_check"] = note
+        return answer, []
     return None, errors + [f"последний ответ: {last[:400]}"]
 
 
@@ -444,7 +463,10 @@ def run_collection(args, collection: str, examples: dict, known_names: dict) -> 
             write_json(review_path, review)
             log(f"✗ [{n}/{len(todo)}] {rid}: на проверку — {failed[0]}")
             continue
+        notes = [a.pop("_check") for a in answers if "_check" in a]
         translated = merge(rec, join_chunks(payload, answers))
+        if notes:
+            translated["check"] = "; ".join(notes)
         translated.pop("status", None)
         translated.pop("verify", None)
         out["records"][rid] = translated
@@ -477,6 +499,8 @@ def main() -> None:
     p.add_argument("--host", default=HOST)
     p.add_argument("--chunk", type=int, default=CHUNK_CHARS,
                    help="размер части записи в знаках (меньше — надёжнее для таблиц), по умолчанию 4000")
+    p.add_argument("--lenient", action="store_true",
+                   help="сохранять переводы, где расходятся 1–2 числа, с пометкой check (сверить вручную)")
     p.add_argument("--retries", type=int, default=RETRIES, help="повторов при ошибке (по умолчанию 2)")
     p.add_argument("--selftest", action="store_true", help="проверить эталоны без модели")
     args = p.parse_args()
