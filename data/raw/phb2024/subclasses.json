@@ -1365,27 +1365,61 @@
    "id": "aberrant-sorcery",
    "class": "sorcerer",
    "name": "Aberrant Sorcery",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Psionic Spells",
+     "mechanics": [
+      "You always have these spells prepared at the listed Sorcerer levels: 3rd — Arms of Hadar, Calm Emotions, Detect Thoughts, Dissonant Whispers, Mind Sliver; 5th — Hunger of Hadar, Sending; 7th — Evard's Black Tentacles, Summon Aberration; 9th — Rary's Telepathic Bond, Telekinesis."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Telepathic Speech",
+     "mechanics": [
+      "Bonus action: choose one creature you can see within 30 feet to establish a telepathic link.",
+      "Duration: a number of minutes equal to your Sorcerer level; ends early if you use this feature to connect to a different creature.",
+      "While within a number of miles of each other equal to your Charisma modifier (minimum 1 mile), you and the target can speak telepathically to each other (requires knowing at least one language)."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Psionic Sorcery",
+     "mechanics": [
+      "When you cast any level 1+ spell from your Psionic Spells feature, you can cast it by expending a spell slot as normal or by spending a number of Sorcery Points equal to the spell's level.",
+      "If you cast the spell using Sorcery Points, it requires no Verbal or Somatic components, and it requires no Material components unless they are consumed by the spell or have a cost specified in it."
+     ]
+    },
+    {
+     "level": 6,
+     "name": "Psychic Defenses",
+     "mechanics": [
+      "You have Resistance to Psychic damage.",
+      "You have Advantage on saving throws to avoid or end the Charmed or Frightened condition."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Revelation in Flesh",
+     "mechanics": [
+      "Bonus action: spend 1 or more Sorcery Points to transform your body for 10 minutes. For each 1 Sorcery Point spent, you gain one of the following benefits of your choice (each benefit stays for the duration):",
+      "See the Invisible: you can see any Invisible creature within 60 feet of yourself that isn't behind Total Cover.",
+      "Ethereal Flight: you gain a Fly Speed equal to your Speed, and you can hover.",
+      "Aquatic Adaptation: you gain a Swim Speed equal to twice your Speed, and you can breathe underwater.",
+      "Wormlike Movement: your body and equipment become slimy and pliable; you can move through any space as narrow as 1 inch without squeezing, and you can spend 5 feet of movement to escape from nonmagical restraints or the Grappled condition."
+     ]
     },
     {
      "level": 18,
-     "name": "",
-     "mechanics": []
+     "name": "Warping Implosion",
+     "mechanics": [
+      "Magic action: teleport to an unoccupied space you can see within 120 feet of yourself.",
+      "Each creature within 30 feet of the space you left must make a Strength saving throw against your spell save DC.",
+      "On a failed save: the creature takes 3d10 Force damage and is pulled straight toward the space you left, ending in an unoccupied space as close to that space as possible.",
+      "On a successful save: the creature takes half as much damage only.",
+      "Frequency: 1 use per Long Rest, or expend 5 Sorcery Points to restore your use of it."
+     ]
     }
    ]
   },
@@ -1393,83 +1427,179 @@
    "id": "clockwork-sorcery",
    "class": "sorcerer",
    "name": "Clockwork Sorcery",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Clockwork Spells",
+     "mechanics": [
+      "You always have these spells prepared at the listed Sorcerer levels: 3rd — Aid, Alarm, Lesser Restoration, Protection from Evil and Good; 5th — Dispel Magic, Protection from Energy; 7th — Freedom of Movement, Summon Construct; 9th — Greater Restoration, Wall of Force."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Restore Balance",
+     "mechanics": [
+      "Reaction when a creature you can see within 60 feet of yourself is about to roll a d20 with Advantage or Disadvantage: prevent the roll from being affected by Advantage and Disadvantage.",
+      "Frequency: a number of times equal to your Proficiency Bonus, regaining all expended uses when you finish a Long Rest."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Bastion of Law",
+     "mechanics": [
+      "Magic action: expend 1 to 5 Sorcery Points to create a magical ward around yourself or another creature you can see within 30 feet.",
+      "The ward is represented by a number of d8s equal to the number of Sorcery Points spent and lasts until you finish a Long Rest or use this feature again.",
+      "When the warded creature takes damage, it can expend a number of those dice, roll them, and reduce the damage taken by the total rolled on those dice."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Trance of Order",
+     "mechanics": [
+      "Bonus action: enter an orderly state for 1 minute.",
+      "For the duration, Attack Rolls against you can't benefit from Advantage.",
+      "Whenever you make a D20 Test, you can treat a roll of 9 or lower on the d20 as a 10.",
+      "Frequency: 1 use per Long Rest, or expend 5 Sorcery Points to restore your use of it."
+     ]
     },
     {
      "level": 18,
-     "name": "",
-     "mechanics": []
+     "name": "Clockwork Cavalcade",
+     "mechanics": [
+      "Magic action: summon spirits of order in a 30-foot Cube originating from you; the spirits apply three effects before vanishing:",
+      "Heal: restore up to 100 Hit Points, divided as you choose among any number of creatures of your choice in the Cube.",
+      "Repair: any damaged objects entirely in the Cube are repaired instantly.",
+      "Dispel: every spell of level 6 or lower ends on creatures and objects of your choice in the Cube.",
+      "Frequency: 1 use per Long Rest, or expend 7 Sorcery Points to restore your use of it."
+     ]
     }
-   ]
+   ],
+   "verify": "В Bastion of Law в PHB 2024 проверить, тратит ли само защищённое существо кубы d8 без действия (free/no action) или реакцией защищённого существа/чародея."
   },
   {
    "id": "wild-magic-sorcery",
    "class": "sorcerer",
    "name": "Wild Magic Sorcery",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Wild Magic Surge",
+     "mechanics": [
+      "Once per turn immediately after you cast a Sorcerer spell with a spell slot, you can roll 1d20; if you roll a 20, roll 1d100 on the Wild Magic Surge table to create a magical effect.",
+      "If the magical effect is a spell, it is too wild to be affected by your Metamagic.",
+      "01-04: Roll on this table at the start of each of your turns for the next minute, ignoring this result on subsequent rolls.",
+      "05-08: A creature that is Friendly toward you appears in a random unoccupied space within 60 feet of you. The creature is under the DM's control and disappears 1 minute later. Roll 1d4 to determine the creature: 1 — Modron Duodrone, 2 — Flumph, 3 — Modron Monodrone, 4 — Unicorn.",
+      "09-12: For the next minute, you regain 5 Hit Points at the start of each of your turns.",
+      "13-16: Creatures have Disadvantage on saving throws against the next spell you cast in the next minute that involves a saving throw.",
+      "17-20: You are subjected to an effect that lasts for 1 minute unless its description says otherwise. Roll 1d8 to determine the effect: 1 — you're surrounded by faint, ethereal music for the duration; 2 — your size increases by one size category; 3 — you grow a long beard made of feathers that remains until you sneeze, at which point the feathers explode from your face and vanish; 4 — you must shout when you speak; 5 — illusory butterflies flutter in the air within 10 feet of you; 6 — an eye appears on your forehead, granting you Advantage on Wisdom (Perception) checks; 7 — pink bubbles float out of your mouth whenever you speak; 8 — your skin turns a vibrant shade of blue for 24 hours or until the effect is ended by a Remove Curse spell.",
+      "21-24: For the next minute, all your spells with a casting time of an action have a casting time of a Bonus Action.",
+      "25-28: You are transported to the Astral Plane until the end of your next turn. You then return to the space you previously occupied or the nearest unoccupied space if that space is occupied.",
+      "29-32: The next time you cast a spell that deals damage within the next minute, don't roll the spell's damage dice for the damage; instead use the highest number possible for each damage die.",
+      "33-36: You have Resistance to all damage for the next minute.",
+      "37-40: You turn into a potted plant until the start of your next turn. While you're a plant, you have the Incapacitated condition and have Vulnerability to all damage. If you drop to 0 Hit Points, your pot breaks, and your form reverts.",
+      "41-44: For the next minute, you can teleport up to 20 feet as a Bonus Action on each of your turns.",
+      "45-48: You and up to three creatures you choose within 30 feet of you have the Invisible condition for 1 minute. This invisibility ends on a creature immediately after it makes an attack roll, deals damage, or casts a spell.",
+      "49-52: A spectral shield hovers near you for the next minute, granting you a +2 bonus to AC and immunity to Magic Missile.",
+      "53-56: You can take one extra action on this turn.",
+      "57-60: You cast a random spell. If the spell normally requires Concentration, it doesn't require Concentration in this case; the spell lasts for its full duration. Roll 1d10 to determine the spell: 1 — Confusion, 2 — Fireball, 3 — Fog Cloud, 4 — Fly (cast on a random creature within 60 feet of you), 5 — Grease, 6 — Levitate (cast on yourself), 7 — Magic Missile (cast as a level 5 spell), 8 — Mirror Image, 9 — Polymorph (cast on yourself, and if you fail the saving throw, you turn into a Goat), 10 — See Invisibility.",
+      "61-64: For the next minute, any flammable, nonmagical object you touch that isn't being worn or carried by another creature bursts into flame, takes 1d4 Fire damage, and is burning.",
+      "65-68: If you die within the next hour, you immediately revive as if by the Reincarnate spell.",
+      "69-72: You have the Frightened condition until the end of your next turn. The DM determines the source of your fear.",
+      "73-76: Each creature within 30 feet of you takes 1d10 Necrotic damage. You regain Hit Points equal to the sum of the Necrotic damage dealt.",
+      "77-80: You Glow with Bright Light in a 30-foot radius for the next minute. Any creature that ends its turn within 5 feet of you has the Blinded condition until the end of its next turn.",
+      "81-84: Up to three creatures of your choice that you can see within 30 feet of you take 4d10 Lightning damage.",
+      "85-88: You and all creatures within 30 feet of you have Vulnerability to Piercing damage for the next minute.",
+      "89-92: You cast Polymorph on yourself. If you fail the saving throw, you turn into a Sheep for the spell's duration.",
+      "93-96: Illusory butterflies and flower petals flutter in the air within 10 feet of you for the next minute.",
+      "97-00: You regain all expended Sorcery Points."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Tides of Chaos",
+     "mechanics": [
+      "You can give yourself Advantage on one D20 Test before you roll the d20.",
+      "Frequency: 1 use per Long Rest.",
+      "Recharge via Wild Magic: before you regain the use via a Long Rest, if you cast a Sorcerer spell with a spell slot, you can automatically roll on the Wild Magic Surge table and immediately regain the use of Tides of Chaos."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Bend Luck",
+     "mechanics": [
+      "Reaction immediately after another creature you can see rolls the d20 for a D20 Test: spend 1 Sorcery Point and roll 1d4, applying the number rolled as a bonus or penalty (your choice) to the d20 roll."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Controlled Chaos",
+     "mechanics": [
+      "Whenever you roll on the Wild Magic Surge table, you can roll twice and use either number."
+     ]
     },
     {
      "level": 18,
-     "name": "",
-     "mechanics": []
+     "name": "Tamed Surge",
+     "mechanics": [
+      "Immediately after you cast a Sorcerer spell with a spell slot, you can choose any effect from the Wild Magic Surge table instead of rolling on it, except for the final row (97-00).",
+      "If the chosen effect involves a roll, you must make it.",
+      "Frequency: 1 use per Long Rest."
+     ]
     }
-   ]
+   ],
+   "verify": "Сверить точное соответствие диапазонов 81-96 в таблице Wild Magic Surge PHB 2024 (в 2024 таблица перегруппирована по диапазонам по 4 пункта и убраны негативные самоподрывы на ранних номерах, но точный порядок строк 85-96 стоит сверить с печатной таблицей 2024)."
   },
   {
    "id": "archfey-patron",
    "class": "warlock",
    "name": "Archfey Patron",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Archfey Spells",
+     "mechanics": [
+      "You always have these spells prepared at the listed Warlock levels: 3rd — Calm Emotions, Faerie Fire, Misty Step, Phantasmal Force, Sleep; 5th — Blink, Plant Growth; 7th — Dominate Beast, Greater Invisibility; 9th — Dominate Person, Seeming."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Steps of the Fey",
+     "mechanics": [
+      "You can cast Misty Step without expending a spell slot a number of times equal to your Charisma modifier (minimum of once), regaining all expended uses when you finish a Long Rest.",
+      "Whenever you cast Misty Step, you can choose one of the following additional effects:",
+      "Refreshing Step: immediately after you teleport, you or one creature you can see within 10 feet of yourself gains 1d10 Temporary Hit Points.",
+      "Taunting Step: creatures within 5 feet of the space you left must succeed on a Wisdom saving throw against your spell save DC or have Disadvantage on attack rolls against creatures other than you until the start of your next turn."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Misty Escape",
+     "mechanics": [
+      "You can cast Misty Step as a Reaction in response to taking damage.",
+      "New Steps of the Fey options are added whenever you cast Misty Step:",
+      "Disappearing Step: you have the Invisible condition until the start of your next turn or until immediately after you make an attack roll, deal damage, or cast a spell.",
+      "Dreadful Step: creatures within 5 feet of the space you left or the space you appear in (your choice) must make a Wisdom saving throw against your spell save DC, taking 2d10 Psychic damage on a failed save or half as much damage on a successful one."
+     ]
     },
     {
      "level": 10,
-     "name": "",
-     "mechanics": []
+     "name": "Beguiling Defenses",
+     "mechanics": [
+      "You are immune to the Charmed condition.",
+      "Reaction immediately after a creature you can see hits you with an attack roll: reduce the damage you take by half (round down), and you can force the attacker to make a Wisdom saving throw against your spell save DC.",
+      "On a failed save, the attacker takes Psychic damage equal to the damage you take from the attack.",
+      "Frequency of the reaction: 1 use per Long Rest, or expend a Pact Magic spell slot to restore your use of it."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Bewitching Magic",
+     "mechanics": [
+      "Immediately after you cast an Enchantment or Illusion spell using an action and a spell slot, you can cast Misty Step as part of the same action and without expending a spell slot."
+     ]
     }
    ]
   },
@@ -1477,55 +1607,117 @@
    "id": "celestial-patron",
    "class": "warlock",
    "name": "Celestial Patron",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Celestial Spells",
+     "mechanics": [
+      "You always have these spells prepared at the listed Warlock levels: 3rd — Aid, Cure Wounds, Guiding Bolt, Lesser Restoration, Light, Sacred Flame; 5th — Daylight, Revivify; 7th — Guardian of Faith, Wall of Fire; 9th — Greater Restoration, Summon Celestial."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Healing Light",
+     "mechanics": [
+      "You have a pool of d6s equal to 1 + your Warlock level; the pool replenishes when you finish a Long Rest.",
+      "Bonus action: heal one creature you can see within 60 feet of yourself by expending dice from the pool.",
+      "Maximum dice spent at once: equal to your Charisma modifier (minimum of 1 die). Roll the expended dice and restore Hit Points equal to the total."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Radiant Soul",
+     "mechanics": [
+      "You have Resistance to Radiant damage.",
+      "Once per turn, when a spell you cast deals Radiant or Fire damage, you can add your Charisma modifier to that spell's damage against one of the spell's targets."
+     ]
     },
     {
      "level": 10,
-     "name": "",
-     "mechanics": []
+     "name": "Celestial Resilience",
+     "mechanics": [
+      "Whenever you finish a Short or Long Rest, or whenever you use your Magical Cunning feature, you gain Temporary Hit Points equal to your Warlock level + your Charisma modifier.",
+      "Additionally, choose up to five creatures you can see when you gain those Temporary Hit Points; each of them gains Temporary Hit Points equal to half your Warlock level + your Charisma modifier."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Searing Vengeance",
+     "mechanics": [
+      "When you or an ally within 60 feet of you is about to make a Death Saving Throw, you can unleash radiant energy to save the creature.",
+      "The creature immediately regains Hit Points equal to half its Hit Point Maximum and can end the Prone condition on itself.",
+      "Each creature of your choice that is within 30 feet of the creature takes Radiant damage equal to 2d8 + your Charisma modifier and has the Blinded condition until the end of the current turn.",
+      "Frequency: 1 use per Long Rest."
+     ]
     }
-   ]
+   ],
+   "verify": "В Searing Vengeance проверить, требуется ли реакция для срабатывания на союзника или это происходит без траты действия (no action)."
   },
   {
    "id": "great-old-one-patron",
    "class": "warlock",
    "name": "Great Old One Patron",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Great Old One Spells",
+     "mechanics": [
+      "You always have these spells prepared at the listed Warlock levels: 3rd — Detect Thoughts, Dissonant Whispers, Mind Sliver, Phantasmal Force, Tasha's Hideous Laughter; 5th — Clairvoyance, Hunger of Hadar; 7th — Confusion, Summon Aberration; 9th — Modify Memory, Telekinesis."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Awakened Mind",
+     "mechanics": [
+      "Bonus action: choose one creature you can see within 30 feet of yourself to form a telepathic bond.",
+      "Duration: a number of minutes equal to your Warlock level; ends early if you use this feature to connect to a different creature.",
+      "While within a number of miles of each other equal to your Charisma modifier (minimum 1 mile), you and the target can speak telepathically to each other (requires knowing at least one language)."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Psychic Spells",
+     "mechanics": [
+      "When you cast a Warlock spell that deals damage, you can change its damage type to Psychic.",
+      "When you cast a Warlock spell that is an Enchantment or Illusion, you can do so without Verbal or Somatic components."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Clairvoyant Combatant",
+     "mechanics": [
+      "When you form a telepathic bond with a creature using your Awakened Mind, you can force that creature to make a Wisdom saving throw against your spell save DC.",
+      "On a failed save, the creature has Disadvantage on attack rolls against you, and you have Advantage on attack rolls against that creature for the duration of the bond.",
+      "Frequency: 1 use per Short or Long Rest, or expend a Pact Magic spell slot to restore your use of it."
+     ]
     },
     {
      "level": 10,
-     "name": "",
-     "mechanics": []
+     "name": "Eldritch Hex",
+     "mechanics": [
+      "You always have the Hex spell prepared.",
+      "When you cast Hex and choose an ability, the target also has Disadvantage on saving throws of the chosen ability for the duration of the spell."
+     ]
+    },
+    {
+     "level": 10,
+     "name": "Thought Shield",
+     "mechanics": [
+      "Your thoughts can't be read by telepathy or other means unless you allow it.",
+      "You have Resistance to Psychic damage.",
+      "Whenever a creature deals Psychic damage to you, that creature takes the same amount of damage that you take."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Create Thrall",
+     "mechanics": [
+      "When you cast Summon Aberration, you can modify it so it doesn't require Concentration.",
+      "When you do so, the spell's duration becomes 1 minute for that casting, and when summoned, the Aberration has a number of Temporary Hit Points equal to your Warlock level + your Charisma modifier.",
+      "In addition, the first time each turn the Aberration hits a creature under the effect of your Hex, the Aberration deals extra Psychic damage to that creature equal to the bonus damage of that spell (1d6)."
+     ]
     }
    ]
   },
@@ -1533,55 +1725,104 @@
    "id": "abjurer",
    "class": "wizard",
    "name": "Abjurer",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Abjuration Savant",
+     "mechanics": [
+      "Choose two Wizard spells from the Abjuration school, each of which must be no higher than level 2, and add them to your spellbook for free.",
+      "Whenever you gain access to a new level of spell slots in this class, you can add one Wizard spell from the Abjuration school to your spellbook for free; the chosen spell must be of a level for which you have spell slots."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Arcane Ward",
+     "mechanics": [
+      "Whenever you cast an Abjuration spell with a spell slot, you can simultaneously weave a magical ward around yourself that lasts until you finish a Long Rest.",
+      "Maximum Hit Points of the ward: equal to twice your Wizard level + your Intelligence modifier.",
+      "Whenever you take damage, the ward takes the damage instead; if this damage reduces the ward to 0 Hit Points, you take any remaining damage.",
+      "While the ward has 0 Hit Points, it can't absorb damage, but its magic remains.",
+      "Whenever you cast an Abjuration spell with a spell slot, the ward regains a number of Hit Points equal to twice the level of the spell slot.",
+      "Bonus action: you can expend a spell slot to restore Hit Points to the ward equal to twice the slot's level."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Projected Ward",
+     "mechanics": [
+      "Reaction when a creature that you can see within 30 feet of yourself takes damage: cause your Arcane Ward to absorb that damage.",
+      "If this damage reduces the ward to 0 Hit Points, the warded creature takes any remaining damage."
+     ]
     },
     {
      "level": 10,
-     "name": "",
-     "mechanics": []
+     "name": "Spell Breaker",
+     "mechanics": [
+      "You always have the Counterspell and Dispel Magic spells prepared.",
+      "You can cast Dispel Magic as a Bonus Action.",
+      "When you cast Counterspell or Dispel Magic, you can add your Proficiency Bonus to that spell's ability check (if any) or if Counterspell's target succeeds on its saving throw, the spell slot isn't expended."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Spell Resistance",
+     "mechanics": [
+      "You have Advantage on saving throws against spells.",
+      "You have Resistance to the damage of spells."
+     ]
     }
-   ]
+   ],
+   "verify": "В Spell Breaker (10 уровень Abjurer) уточнить точный бонус для Dispel Magic и Counterspell в PHB 2024: в 2024 Counterspell использует спасбросок Телосложения (при успехе врага ячейка не тратится), а Dispel Magic всё ещё использует проверку характеристики (добавляется ли бонус мастерства к проверке Dispel Magic)."
   },
   {
    "id": "diviner",
    "class": "wizard",
    "name": "Diviner",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Divination Savant",
+     "mechanics": [
+      "Choose two Wizard spells from the Divination school, each of which must be no higher than level 2, and add them to your spellbook for free.",
+      "Whenever you gain access to a new level of spell slots in this class, you can add one Wizard spell from the Divination school to your spellbook for free; the chosen spell must be of a level for which you have spell slots."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Portent",
+     "mechanics": [
+      "Whenever you finish a Long Rest, roll two d20s and record the numbers rolled.",
+      "You can replace any D20 Test made by you or a creature that you can see with one of these foretelling rolls; you must choose to do so before the roll.",
+      "You can replace a roll in this way only once per turn.",
+      "Each foretelling roll can be used only once, and you lose any unused foretelling rolls when you finish a Long Rest."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Expert Divination",
+     "mechanics": [
+      "When you cast a Divination spell using a level 2+ spell slot, you regain one expended spell slot.",
+      "The regained slot must be of a level lower than the spell you cast and can't be higher than level 5."
+     ]
     },
     {
      "level": 10,
-     "name": "",
-     "mechanics": []
+     "name": "The Third Eye",
+     "mechanics": [
+      "Bonus action: choose one of the following benefits, which lasts until you are Incapacitated or you take a Short or Long Rest (you can't use this feature again until you finish a Short or Long Rest):",
+      "Darkvision: you gain Darkvision with a range of 120 feet.",
+      "Greater Comprehension: you can read any language.",
+      "See Invisibility: you can cast See Invisibility without expending a spell slot."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Greater Portent",
+     "mechanics": [
+      "You roll three d20s for your Portent feature, rather than two."
+     ]
     }
    ]
   },
@@ -1589,29 +1830,53 @@
    "id": "illusionist",
    "class": "wizard",
    "name": "Illusionist",
-   "status": "todo",
+   "status": "ready",
    "features": [
     {
      "level": 3,
-     "name": "",
-     "mechanics": []
+     "name": "Illusion Savant",
+     "mechanics": [
+      "Choose two Wizard spells from the Illusion school, each of which must be no higher than level 2, and add them to your spellbook for free.",
+      "Whenever you gain access to a new level of spell slots in this class, you can add one Wizard spell from the Illusion school to your spellbook for free; the chosen spell must be of a level for which you have spell slots."
+     ]
+    },
+    {
+     "level": 3,
+     "name": "Improved Illusions",
+     "mechanics": [
+      "You can cast Illusion spells without Verbal components, and if an Illusion spell you cast has a range of 10+ feet, the range increases by 60 feet.",
+      "You know the Minor Illusion cantrip; if you already know it, you learn a different Wizard cantrip of your choice. The cantrip doesn't count against your number of cantrips known.",
+      "You can cast Minor Illusion as a Bonus Action, and when you cast it, you can create both a sound and an image with a single casting."
+     ]
     },
     {
      "level": 6,
-     "name": "",
-     "mechanics": []
+     "name": "Phantasmal Creatures",
+     "mechanics": [
+      "You always have the Summon Beast and Summon Fey spells prepared.",
+      "Whenever you cast either spell, you can change its school to Illusion, which causes the summoned creature to appear spectral.",
+      "You can cast the Illusion version of each spell once without expending a spell slot, casting it at the lowest possible spell level; when cast without a spell slot, the summoned creature has half as many Hit Points as normal.",
+      "You regain the ability to cast each spell in this way when you finish a Long Rest."
+     ]
     },
     {
      "level": 10,
-     "name": "",
-     "mechanics": []
+     "name": "Illusory Self",
+     "mechanics": [
+      "Reaction when a creature hits you with an attack roll: interpose an illusory duplicate between the attacker and yourself, causing the attack to automatically miss you, then the illusion dissipates.",
+      "Frequency: 1 use per Short or Long Rest, or expend a level 2+ spell slot to restore your use of it."
+     ]
     },
     {
      "level": 14,
-     "name": "",
-     "mechanics": []
+     "name": "Illusory Reality",
+     "mechanics": [
+      "Bonus action: choose one inanimate, nonmagical object that is part of an Illusion spell of level 1+ that you have cast and make that object real for 1 minute.",
+      "The object can't deal damage or directly harm anyone."
+     ]
     }
-   ]
+   ],
+   "verify": "В Illusory Self (10 уровень Illusionist) проверить, восстанавливается ли бесплатное использование после длительного отдыха (Long Rest) или короткого/длительного отдыха (Short or Long Rest) в редакции 2024."
   }
  ]
 }
