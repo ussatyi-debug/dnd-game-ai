@@ -245,153 +245,238 @@
    "id": "moderately-armored",
    "name": "Moderately Armored",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Light Armor Training",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Armor Training: Gain proficiency with Medium Armor."
+   ],
+   "verify": "В PHB 2024 владение щитами убрано из этого таланта (перенесено в Lightly Armored)."
   },
   {
    "id": "mounted-combatant",
    "name": "Mounted Combatant",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength, Dexterity, or Wisdom (max 20).",
+    "Mounted Strike: While mounted, you have Advantage on melee attack rolls against any unmounted creature within 5 feet of your mount that is smaller than your mount.",
+    "Leap Aside: If your mount is subjected to an effect that allows a Dexterity saving throw to take only half damage, it instead takes no damage on a success and half damage on a failure (disabled if you have the Incapacitated condition).",
+    "Veer: While mounted and not Incapacitated, when an attack hits your mount, you can force the attacker to target you instead (uses no action)."
+   ]
   },
   {
    "id": "observant",
    "name": "Observant",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Intelligence or Wisdom 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence or Wisdom (max 20).",
+    "Keen Observer: Gain proficiency in one skill from Insight, Investigation, or Perception; if you already have proficiency in the chosen skill, gain Expertise in it instead.",
+    "Quick Search: You can take the Search action as a Bonus Action."
+   ]
   },
   {
    "id": "piercer",
    "name": "Piercer",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Puncture: Once per turn, when you hit a target with an attack that deals Piercing damage, you can reroll one of the attack's damage dice, and you must use the new roll.",
+    "Enhanced Critical: When you score a Critical Hit that deals Piercing damage, you can roll one additional damage die when determining the extra Piercing damage."
+   ]
   },
   {
    "id": "poisoner",
    "name": "Poisoner",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Dexterity or Intelligence (max 20).",
+    "Potent Poison: Damage rolls you make for Poison damage ignore Resistance to Poison damage.",
+    "Brew Poison: Gain proficiency with the Poisoner's Kit. With 1 hour of work using the kit and 50 GP of materials, you can create a number of poison doses equal to your Proficiency Bonus.",
+    "Apply and Trigger Poison: As a Bonus Action, apply 1 poison dose to a weapon or piece of ammunition (lasts 1 minute or until you hit with it). On a hit, the target must succeed on a Constitution saving throw (DC = 8 + your Dexterity or Intelligence modifier + your Proficiency Bonus) or take 2d8 Poison damage and have the Poisoned condition until the end of your next turn."
+   ]
   },
   {
    "id": "polearm-master",
    "name": "Polearm Master",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Strength or Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Pole Strike: Immediately after you take the Attack action and attack with a Quarterstaff, a Spear, or a weapon that has the Heavy and Reach properties, you can use a Bonus Action to make a melee attack with the opposite end of the weapon (deals 1d4 Bludgeoning damage, uses the same ability modifier as the primary attack).",
+    "Reactive Strike: While holding a Quarterstaff, a Spear, or a weapon that has the Heavy and Reach properties, you can take a Reaction to make one melee attack with that weapon against a creature that enters the reach you have with that weapon."
+   ],
+   "verify": "В PHB 2024 Reactive Strike — это отдельная реакция при входе в досягаемость, а не атака по возможности (Opportunity Attack), поэтому не комбинируется напрямую с остановкой движения от Sentinel."
   },
   {
    "id": "resilient",
    "name": "Resilient",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: Choose one ability in which you lack saving throw proficiency; increase that ability score by 1 (max 20).",
+    "Saving Throw Proficiency: Gain saving throw proficiency with the chosen ability."
+   ]
   },
   {
    "id": "ritual-caster",
    "name": "Ritual Caster",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Intelligence, Wisdom, or Charisma 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Ritual Spells: Choose a number of level 1 spells with the Ritual tag equal to your Proficiency Bonus; you always have these spells prepared and can cast them with any spell slots you have. Whenever your Proficiency Bonus increases, add one additional level 1 Ritual spell. Spellcasting ability is the ability increased by this feat.",
+    "Quick Ritual: Once per Long Rest, you can cast one of your Ritual spells from this feat using its regular casting time rather than the extended ritual time without expending a spell slot."
+   ]
   },
   {
    "id": "sentinel",
    "name": "Sentinel",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Strength or Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Guardian: Immediately after a creature within 5 feet of you takes the Disengage action or hits a target other than you with an attack, you can make an Opportunity Attack against that creature.",
+    "Halt: When you hit a creature with an Opportunity Attack, that creature's Speed becomes 0 for the rest of the current turn."
+   ]
   },
   {
    "id": "shadow-touched",
    "name": "Shadow Touched",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Shadow Magic: Choose one level 1 spell from the Illusion or Necromancy school. You always have that spell and the Invisibility spell prepared.",
+    "Free Casting and Slots: You can cast each of these two spells once without a spell slot per Long Rest, and you can also cast them using any spell slots you have. Spellcasting ability is the ability increased by this feat."
+   ]
   },
   {
    "id": "sharpshooter",
    "name": "Sharpshooter",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Dexterity (max 20).",
+    "Bypass Cover: Your ranged attacks with weapons ignore Half Cover and Three-Quarters Cover against targets within the weapon's range.",
+    "Firing in Melee: Being within 5 feet of an enemy doesn't impose Disadvantage on your ranged attack rolls with weapons.",
+    "Long Shots: Attacking at long range doesn't impose Disadvantage on your ranged attack rolls with weapons."
+   ],
+   "verify": "В PHB 2024 полностью убрана механика штрафа -5 к попаданию / +10 к урону из версии 2014 года."
   },
   {
    "id": "shield-master",
    "name": "Shield Master",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Shield Training",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength (max 20).",
+    "Shield Bash: If you attack a creature within 5 feet of you as part of the Attack action and hit with a Melee weapon, you can immediately bash the target with your equipped Shield if it's within 5 feet of you (no action required, once per turn). The target must succeed on a Strength saving throw (DC = 8 + your Strength modifier + your Proficiency Bonus) or either be pushed 5 feet away or have the Prone condition (your choice).",
+    "Interpose Shield: If you are subjected to an effect that allows a Dexterity saving throw to take only half damage, you can take a Reaction to take no damage if you succeed on the saving throw and are holding a Shield."
+   ]
   },
   {
    "id": "skill-expert",
    "name": "Skill Expert",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any ability score of your choice (max 20).",
+    "Skill Proficiency: Gain proficiency in one skill of your choice.",
+    "Expertise: Gain Expertise in one skill of your choice in which you have proficiency but lack Expertise."
+   ]
   },
   {
    "id": "skulker",
    "name": "Skulker",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Dexterity (max 20).",
+    "Blindsight: Gain Blindsight with a range of 10 feet.",
+    "Fog of War: You have Advantage on Dexterity (Stealth) checks you make as part of the Hide action during combat.",
+    "Sniper: If you make an attack roll while hidden and the attack misses, making the attack roll doesn't reveal your location."
+   ]
   },
   {
    "id": "slasher",
    "name": "Slasher",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Hamstring: Once per turn, when you hit a creature with an attack that deals Slashing damage, you can reduce the speed of that target by 10 feet until the start of your next turn.",
+    "Enhanced Critical: When you score a Critical Hit that deals Slashing damage to a creature, that target has Disadvantage on attack rolls until the start of your next turn."
+   ]
   },
   {
    "id": "speedy",
    "name": "Speedy",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Dexterity or Constitution 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Dexterity or Constitution (max 20).",
+    "Speed Increase: Your Speed increases by 10 feet.",
+    "Dash over Difficult Terrain: When you take the Dash action on your turn, Difficult Terrain doesn't cost you extra movement for the rest of that turn.",
+    "Agile Movement: Opportunity Attacks have Disadvantage against you."
+   ],
+   "verify": "Талант переименован из Mobile (2014) в Speedy (2024)."
   },
   {
    "id": "spell-sniper",
    "name": "Spell Sniper",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+, Spellcasting or Pact Magic feature",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Bypass Cover: Your attack rolls for spells ignore Half Cover and Three-Quarters Cover.",
+    "Casting in Melee: Being within 5 feet of an enemy doesn't impose Disadvantage on your attack rolls with spells.",
+    "Increased Range: When you cast a spell that has a range of at least 10 feet and requires you to make an attack roll, you can increase the spell's range by 60 feet."
+   ],
+   "verify": "В PHB 2024 дальность увеличивается на фиксированные +60 футов (вместо удвоения из 2014), убрано получение дополнительного заговора, добавлена стрельба вблизи без помехи."
   },
   {
    "id": "telekinetic",
    "name": "Telekinetic",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Minor Telekinesis: You learn the Mage Hand cantrip. You can cast it without Verbal or Somatic components, you can make the spectral hand Invisible, and its range and the distance it can be away from you increase by 30 feet if you already know it. Spellcasting ability is the ability increased by this feat.",
+    "Telekinetic Shove: As a Bonus Action, choose one creature you can see within 30 feet of you; the target must succeed on a Strength saving throw (DC = 8 + the ability modifier of the score increased by this feat + your Proficiency Bonus) or be moved 5 feet toward you or away from you (a creature can willingly fail this save)."
+   ]
   },
   {
    "id": "telepathic",
    "name": "Telepathic",
    "type": "general",
-   "status": "todo",
-   "prerequisite": "",
-   "mechanics": []
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Telepathic Utterance: You can speak telepathically to any creature you can see within 60 feet of you in a language you know (the creature understands you only if it knows that language, and this doesn't give it the ability to respond telepathically).",
+    "Detect Thoughts: You always have the Detect Thoughts spell prepared. You can cast it once per Long Rest without a spell slot or spell components, and you can also cast it using any spell slots you have. Spellcasting ability is the ability increased by this feat."
+   ]
   },
   {
    "id": "war-caster",
