@@ -1,0 +1,19 @@
+{
+ "source": "Player's Handbook 2024 (outside SRD)",
+ "license": "mechanics only, described in own words — no WotC text",
+ "attribution": null,
+ "mode": "paraphrase",
+ "records": {
+  "durable": {
+   "id": "durable",
+   "name": "Прочный",
+   "type": "general",
+   "prerequisite": "Уровень 4+",
+   "mechanics": [
+    "Прирост характеристики: +1 к Телосложению (максимум 20).",
+    "Преодоление смерти: Преимущество на спасброски от смерти.",
+    "Быстрое восстановление: Бонусное действие — потратить одну кость хитов, бросить её и восстановить такое количество хитов."
+   ]
+  }
+ }
+}

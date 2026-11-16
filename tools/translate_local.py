@@ -39,7 +39,7 @@ SPELL_NAMES = ROOT / "data" / "spells" / "ru" / "names.json"
 
 MODEL = "qwen3.6:35b-a3b"
 HOST = "http://localhost:11434"
-RETRIES = 2
+RETRIES = 2  # меняется ключом --retries
 # Запись длиннее — переводится частями (поле за полем, большие списки — кусками).
 CHUNK_CHARS = 4000
 
@@ -101,6 +101,7 @@ RULES_COMMON = """ПРАВИЛА ОТВЕТА:
 - Формулы кубов (1d8, 8d6, 2d4 + 2, d12) — латиницей и без изменений. Все числа — те же и столько же,
   цифрами («2-го», «10 минут»), не словами.
 - Каждый элемент списка переводи отдельным элементом: абзацы не объединяй и не дели.
+- Таблицы (строки вида «1d100 | Эффект» или «01–05 …») переводи полностью, строка за строкой: ни одной не пропускай и не сокращай.
 - Писать только по-русски, кириллицей; никаких китайских иероглифов и английских слов (кроме формул кубов).
 - Обращение к игроку — на «вы» со строчной. Единицы — футы (фт.), не метры."""
 
@@ -252,8 +253,12 @@ def dice_of(texts):
     return Counter(d.lower() for t in texts for d in DICE.findall(t))
 
 
+# Разряды: «1,000» в оригинале и «1 000» / «1000» в переводе — одно число.
+THOUSANDS = re.compile(r"(?<=\d)[,\u00a0\u202f ](?=\d{3}\b)")
+
+
 def numbers_of(texts):
-    return Counter(n for t in texts for n in NUMBER.findall(DICE.sub(" ", t)))
+    return Counter(n for t in texts for n in NUMBER.findall(THOUSANDS.sub("", DICE.sub(" ", t))))
 
 
 def check(source: dict, answer, mode: str) -> list:
@@ -375,7 +380,8 @@ def translate_part(args, system: str, shots: list, part: dict, mode: str):
     messages = [{"role": "system", "content": system}, *shots,
                 {"role": "user", "content": json.dumps(part, ensure_ascii=False)}]
     last, errors = "", []
-    for attempt in range(RETRIES + 1):
+    retries = args.retries
+    for attempt in range(retries + 1):
         try:
             last = ollama(args.host, args.model, messages)
             answer = coerce(part, json.loads(last))
@@ -385,7 +391,7 @@ def translate_part(args, system: str, shots: list, part: dict, mode: str):
             errors = check(part, answer, mode)
             if not errors:
                 return answer, []
-        if attempt < RETRIES:
+        if attempt < retries:
             log(f"   повтор {attempt + 1}: {'; '.join(errors)}")
             messages += [{"role": "assistant", "content": last},
                          {"role": "user", "content": "Исправь ответ. Ошибки: " + "; ".join(errors)
@@ -468,6 +474,7 @@ def main() -> None:
     p.add_argument("--limit", type=int, default=0, help="не больше N записей на коллекцию")
     p.add_argument("--model", default=MODEL)
     p.add_argument("--host", default=HOST)
+    p.add_argument("--retries", type=int, default=RETRIES, help="повторов при ошибке (по умолчанию 2)")
     p.add_argument("--selftest", action="store_true", help="проверить эталоны без модели")
     args = p.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
