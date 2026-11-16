@@ -333,8 +333,9 @@ def few_shot(collection: str, raw_records: dict, examples: dict, keys: set, skip
             {"role": "assistant", "content": json.dumps(ex["ru"], ensure_ascii=False)}]
 
 
-def chunks(payload: dict) -> list:
+def chunks(payload: dict, limit: int = CHUNK_CHARS) -> list:
     """Большая запись → части: короткие поля вместе, каждый длинный список — кусками."""
+    CHUNK_CHARS = limit  # noqa: N806 — локальный предел вместо общего
     if len(json.dumps(payload, ensure_ascii=False)) <= CHUNK_CHARS:
         return [payload]
     rid = payload["id"]
@@ -432,7 +433,7 @@ def run_collection(args, collection: str, examples: dict, known_names: dict) -> 
         shots = few_shot(collection, records, examples, keys, rid)
         started = time.time()
         answers, failed = [], []
-        for part in chunks(payload):
+        for part in chunks(payload, args.chunk):
             answer, errors = translate_part(args, system, shots, part, mode)
             if answer is None:
                 failed = errors
@@ -474,6 +475,8 @@ def main() -> None:
     p.add_argument("--limit", type=int, default=0, help="не больше N записей на коллекцию")
     p.add_argument("--model", default=MODEL)
     p.add_argument("--host", default=HOST)
+    p.add_argument("--chunk", type=int, default=CHUNK_CHARS,
+                   help="размер части записи в знаках (меньше — надёжнее для таблиц), по умолчанию 4000")
     p.add_argument("--retries", type=int, default=RETRIES, help="повторов при ошибке (по умолчанию 2)")
     p.add_argument("--selftest", action="store_true", help="проверить эталоны без модели")
     args = p.parse_args()
