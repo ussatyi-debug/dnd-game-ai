@@ -1,0 +1,700 @@
+{
+ "source": "Player's Handbook 2024 (outside SRD)",
+ "license": "mechanics only, described in own words — no WotC text",
+ "mode": "paraphrase",
+ "note": "Таланты, которых нет в SRD 5.2.1. Часть уже есть в игре (src/data/rules/feats.ts) — их можно пропустить. status=todo — не заполнено.",
+ "records": [
+  {
+   "id": "actor",
+   "name": "Actor",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Charisma 13+",
+   "mechanics": [
+    "Ability Score Increase: Charisma +1 (max 20).",
+    "Impersonation: Advantage on Charisma (Deception and Performance) checks to pass yourself off as a fictional or real person while disguised.",
+    "Mimicry: Imitate sounds of other creatures or ambient noises; creatures discerning the fake must succeed on a Wisdom (Insight) check vs. DC (8 + Charisma modifier + Proficiency Bonus)."
+   ]
+  },
+  {
+   "id": "athlete",
+   "name": "Athlete",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Strength or Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: Strength or Dexterity +1 (max 20).",
+    "Climb Speed: Gain a Climb Speed equal to your Speed.",
+    "Hop Up: Standing up from the Prone condition costs only 5 feet of movement.",
+    "Jumping: You can make a running Long or High Jump after moving only 5 feet instead of 10 feet."
+   ]
+  },
+  {
+   "id": "charger",
+   "name": "Charger",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Strength or Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: Strength or Dexterity +1 (max 20).",
+    "Improved Dash: When you take the Dash action, your Speed increases by 10 feet for that action.",
+    "Charge Attack: If you move at least 10 feet in a straight line toward a target immediately before hitting it with a melee attack as part of the Attack action, choose one effect (1/turn): add 1d8 to the attack's damage roll, or push the target up to 10 feet away if it is no more than one size larger than you."
+   ]
+  },
+  {
+   "id": "chef",
+   "name": "Chef",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: Constitution or Wisdom +1 (max 20).",
+    "Cook's Utensils: Gain proficiency with Cook's Utensils if you don't already have it.",
+    "Replenishing Meal: During a Short Rest, with Cook's Utensils and ingredients, prepare food for up to (4 + Proficiency Bonus) creatures; a creature that eats it and spends Hit Dice during that Short Rest regains an extra 1d8 Hit Points.",
+    "Bolstering Treats: With 1 hour of work or at the end of a Long Rest, create a number of treats equal to your Proficiency Bonus (last 8 hours); eating a treat takes a Bonus Action and grants Temporary Hit Points equal to your Proficiency Bonus."
+   ]
+  },
+  {
+   "id": "crossbow-expert",
+   "name": "Crossbow Expert",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: Dexterity +1 (max 20).",
+    "Ignore Loading: You ignore the Loading property of the Hand Crossbow, Heavy Crossbow, and Light Crossbow (and can load them even without a free hand).",
+    "Firing in Melee: Being within 5 feet of an enemy doesn't impose Disadvantage on your attack rolls with crossbows.",
+    "Dual Wielding: When you make the extra attack of the Light property with a crossbow, you can add your ability modifier to the damage roll if not already added."
+   ]
+  },
+  {
+   "id": "crusher",
+   "name": "Crusher",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: Strength or Constitution +1 (max 20).",
+    "Push: Once per turn, when you hit a creature with an attack that deals Bludgeoning damage, you can move it 5 feet to an unoccupied space if the target is no more than one size larger than you.",
+    "Enhanced Critical: When you score a Critical Hit that deals Bludgeoning damage to a creature, attack rolls against that creature have Advantage until the start of your next turn."
+   ]
+  },
+  {
+   "id": "defensive-duelist",
+   "name": "Defensive Duelist",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: Dexterity +1 (max 20).",
+    "Parry: While holding a Finesse weapon, when another creature hits you with a melee attack, you can take a Reaction to add your Proficiency Bonus to your AC against melee attacks until the start of your next turn (potentially causing the triggering attack to miss)."
+   ]
+  },
+  {
+   "id": "dual-wielder",
+   "name": "Dual Wielder",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Strength or Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: Strength or Dexterity +1 (max 20).",
+    "Enhanced Dual Wielding: When you take the Attack action on your turn and attack with a weapon that has the Light property, you can make one extra attack as a Bonus Action later on the same turn with a different melee weapon that lacks the Two-Handed property (no ability modifier to damage unless negative).",
+    "Quick Draw: You can draw or stow two weapons that lack the Two-Handed property when you would normally be able to draw or stow only one."
+   ]
+  },
+  {
+   "id": "durable",
+   "name": "Durable",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Constitution (max 20).",
+    "Defy Death: Advantage on Death Saving Throws.",
+    "Speedy Recovery: Bonus Action — expend one Hit Point Die, roll it and regain that many Hit Points."
+   ],
+   "verify": "Сверить с Книгой игрока 2024."
+  },
+  {
+   "id": "elemental-adept",
+   "name": "Elemental Adept",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Spellcasting or Pact Magic feature",
+   "mechanics": [
+    "Ability Score Increase: Intelligence, Wisdom, or Charisma +1 (max 20).",
+    "Energy Mastery: Choose one damage type: Acid, Cold, Fire, Lightning, or Thunder. Spells you cast ignore Resistance to the chosen damage type, and when you roll damage for a spell of that type, treat any 1 on a damage die as a 2.",
+    "Repeatable: You can take this feat more than once, choosing a different damage type each time."
+   ]
+  },
+  {
+   "id": "fey-touched",
+   "name": "Fey Touched",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: Intelligence, Wisdom, or Charisma +1 (max 20).",
+    "Fey Magic: Choose one level 1 spell from the Divination or Enchantment school of magic. You always have that spell and the Misty Step spell prepared.",
+    "Free Casting & Spell Slots: You can cast each of these two spells once without a spell slot (regaining the ability on a Long Rest), and you can also cast them using any spell slots you have. The spellcasting ability is the ability increased by this feat."
+   ]
+  },
+  {
+   "id": "great-weapon-master",
+   "name": "Great Weapon Master",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Strength 13+",
+   "mechanics": [
+    "Ability Score Increase: Strength +1 (max 20).",
+    "Heavy Weapon Mastery: When you hit a creature with a weapon that has the Heavy property as part of the Attack action on your turn, you can cause the weapon to deal extra damage equal to your Proficiency Bonus.",
+    "Hew: Immediately after you score a Critical Hit with a melee weapon or reduce a creature to 0 Hit Points with one, you can make one attack with the same weapon as a Bonus Action."
+   ]
+  },
+  {
+   "id": "heavily-armored",
+   "name": "Heavily Armored",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Medium Armor training",
+   "mechanics": [
+    "Ability Score Increase: Constitution or Strength +1 (max 20).",
+    "Armor Training: Gain training with Heavy armor."
+   ]
+  },
+  {
+   "id": "heavy-armor-master",
+   "name": "Heavy Armor Master",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Heavy Armor training",
+   "mechanics": [
+    "Ability Score Increase: Constitution or Strength +1 (max 20).",
+    "Damage Reduction: When you are hit by an attack while wearing Heavy armor, any Bludgeoning, Piercing, and Slashing damage dealt to you by that attack is reduced by an amount equal to your Proficiency Bonus."
+   ]
+  },
+  {
+   "id": "inspiring-leader",
+   "name": "Inspiring Leader",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Wisdom or Charisma 13+",
+   "mechanics": [
+    "Ability Score Increase: Wisdom or Charisma +1 (max 20).",
+    "Bolstering Performance: When you finish a Short or Long Rest, you can give an inspiring performance to up to 6 friendly creatures (which can include yourself) within 30 feet who witness it; each gains Temporary Hit Points equal to your character level + the modifier of the ability increased by this feat."
+   ]
+  },
+  {
+   "id": "keen-mind",
+   "name": "Keen Mind",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Intelligence 13+",
+   "mechanics": [
+    "Ability Score Increase: Intelligence +1 (max 20).",
+    "Lore Knowledge: Gain proficiency in one of the following skills: Arcana, History, Investigation, Nature, or Religion. If you already have proficiency in the chosen skill, gain Expertise in it instead.",
+    "Quick Study: You can take the Study action as a Bonus Action."
+   ]
+  },
+  {
+   "id": "lightly-armored",
+   "name": "Lightly Armored",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: Strength or Dexterity +1 (max 20).",
+    "Armor Training: Gain training with Light armor and Shields."
+   ]
+  },
+  {
+   "id": "mage-slayer",
+   "name": "Mage Slayer",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: Strength or Dexterity +1 (max 20).",
+    "Concentration Breaker: When you damage a creature that is concentrating, it has Disadvantage on the saving throw it makes to maintain Concentration.",
+    "Guarded Mind: If you fail an Intelligence, a Wisdom, or a Charisma saving throw, you can cause yourself to succeed instead. Once you use this benefit, you can't use it again until you finish a Short or Long Rest."
+   ]
+  },
+  {
+   "id": "martial-weapon-training",
+   "name": "Martial Weapon Training",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: Strength or Dexterity +1 (max 20).",
+    "Weapon Proficiency: Gain proficiency with Martial weapons."
+   ]
+  },
+  {
+   "id": "medium-armor-master",
+   "name": "Medium Armor Master",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Medium Armor training",
+   "mechanics": [
+    "Ability Score Increase: Strength or Dexterity +1 (max 20).",
+    "Dexterous Wearer: While wearing Medium armor, you can add 3, rather than 2, to your AC if you have a Dexterity score of 16 or higher."
+   ]
+  },
+  {
+   "id": "moderately-armored",
+   "name": "Moderately Armored",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Light Armor Training",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Armor Training: Gain proficiency with Medium Armor."
+   ],
+   "verify": "В PHB 2024 владение щитами убрано из этого таланта (перенесено в Lightly Armored)."
+  },
+  {
+   "id": "mounted-combatant",
+   "name": "Mounted Combatant",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength, Dexterity, or Wisdom (max 20).",
+    "Mounted Strike: While mounted, you have Advantage on melee attack rolls against any unmounted creature within 5 feet of your mount that is smaller than your mount.",
+    "Leap Aside: If your mount is subjected to an effect that allows a Dexterity saving throw to take only half damage, it instead takes no damage on a success and half damage on a failure (disabled if you have the Incapacitated condition).",
+    "Veer: While mounted and not Incapacitated, when an attack hits your mount, you can force the attacker to target you instead (uses no action)."
+   ]
+  },
+  {
+   "id": "observant",
+   "name": "Observant",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Intelligence or Wisdom 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence or Wisdom (max 20).",
+    "Keen Observer: Gain proficiency in one skill from Insight, Investigation, or Perception; if you already have proficiency in the chosen skill, gain Expertise in it instead.",
+    "Quick Search: You can take the Search action as a Bonus Action."
+   ]
+  },
+  {
+   "id": "piercer",
+   "name": "Piercer",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Puncture: Once per turn, when you hit a target with an attack that deals Piercing damage, you can reroll one of the attack's damage dice, and you must use the new roll.",
+    "Enhanced Critical: When you score a Critical Hit that deals Piercing damage, you can roll one additional damage die when determining the extra Piercing damage."
+   ]
+  },
+  {
+   "id": "poisoner",
+   "name": "Poisoner",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Dexterity or Intelligence (max 20).",
+    "Potent Poison: Damage rolls you make for Poison damage ignore Resistance to Poison damage.",
+    "Brew Poison: Gain proficiency with the Poisoner's Kit. With 1 hour of work using the kit and 50 GP of materials, you can create a number of poison doses equal to your Proficiency Bonus.",
+    "Apply and Trigger Poison: As a Bonus Action, apply 1 poison dose to a weapon or piece of ammunition (lasts 1 minute or until you hit with it). On a hit, the target must succeed on a Constitution saving throw (DC = 8 + your Dexterity or Intelligence modifier + your Proficiency Bonus) or take 2d8 Poison damage and have the Poisoned condition until the end of your next turn."
+   ]
+  },
+  {
+   "id": "polearm-master",
+   "name": "Polearm Master",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Strength or Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Pole Strike: Immediately after you take the Attack action and attack with a Quarterstaff, a Spear, or a weapon that has the Heavy and Reach properties, you can use a Bonus Action to make a melee attack with the opposite end of the weapon (deals 1d4 Bludgeoning damage, uses the same ability modifier as the primary attack).",
+    "Reactive Strike: While holding a Quarterstaff, a Spear, or a weapon that has the Heavy and Reach properties, you can take a Reaction to make one melee attack with that weapon against a creature that enters the reach you have with that weapon."
+   ],
+   "verify": "В PHB 2024 Reactive Strike — это отдельная реакция при входе в досягаемость, а не атака по возможности (Opportunity Attack), поэтому не комбинируется напрямую с остановкой движения от Sentinel."
+  },
+  {
+   "id": "resilient",
+   "name": "Resilient",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: Choose one ability in which you lack saving throw proficiency; increase that ability score by 1 (max 20).",
+    "Saving Throw Proficiency: Gain saving throw proficiency with the chosen ability."
+   ]
+  },
+  {
+   "id": "ritual-caster",
+   "name": "Ritual Caster",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Intelligence, Wisdom, or Charisma 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Ritual Spells: Choose a number of level 1 spells with the Ritual tag equal to your Proficiency Bonus; you always have these spells prepared and can cast them with any spell slots you have. Whenever your Proficiency Bonus increases, add one additional level 1 Ritual spell. Spellcasting ability is the ability increased by this feat.",
+    "Quick Ritual: Once per Long Rest, you can cast one of your Ritual spells from this feat using its regular casting time rather than the extended ritual time without expending a spell slot."
+   ]
+  },
+  {
+   "id": "sentinel",
+   "name": "Sentinel",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Strength or Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Guardian: Immediately after a creature within 5 feet of you takes the Disengage action or hits a target other than you with an attack, you can make an Opportunity Attack against that creature.",
+    "Halt: When you hit a creature with an Opportunity Attack, that creature's Speed becomes 0 for the rest of the current turn."
+   ]
+  },
+  {
+   "id": "shadow-touched",
+   "name": "Shadow Touched",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Shadow Magic: Choose one level 1 spell from the Illusion or Necromancy school. You always have that spell and the Invisibility spell prepared.",
+    "Free Casting and Slots: You can cast each of these two spells once without a spell slot per Long Rest, and you can also cast them using any spell slots you have. Spellcasting ability is the ability increased by this feat."
+   ]
+  },
+  {
+   "id": "sharpshooter",
+   "name": "Sharpshooter",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Dexterity (max 20).",
+    "Bypass Cover: Your ranged attacks with weapons ignore Half Cover and Three-Quarters Cover against targets within the weapon's range.",
+    "Firing in Melee: Being within 5 feet of an enemy doesn't impose Disadvantage on your ranged attack rolls with weapons.",
+    "Long Shots: Attacking at long range doesn't impose Disadvantage on your ranged attack rolls with weapons."
+   ],
+   "verify": "В PHB 2024 полностью убрана механика штрафа -5 к попаданию / +10 к урону из версии 2014 года."
+  },
+  {
+   "id": "shield-master",
+   "name": "Shield Master",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Shield Training",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength (max 20).",
+    "Shield Bash: If you attack a creature within 5 feet of you as part of the Attack action and hit with a Melee weapon, you can immediately bash the target with your equipped Shield if it's within 5 feet of you (no action required, once per turn). The target must succeed on a Strength saving throw (DC = 8 + your Strength modifier + your Proficiency Bonus) or either be pushed 5 feet away or have the Prone condition (your choice).",
+    "Interpose Shield: If you are subjected to an effect that allows a Dexterity saving throw to take only half damage, you can take a Reaction to take no damage if you succeed on the saving throw and are holding a Shield."
+   ]
+  },
+  {
+   "id": "skill-expert",
+   "name": "Skill Expert",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any ability score of your choice (max 20).",
+    "Skill Proficiency: Gain proficiency in one skill of your choice.",
+    "Expertise: Gain Expertise in one skill of your choice in which you have proficiency but lack Expertise."
+   ]
+  },
+  {
+   "id": "skulker",
+   "name": "Skulker",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Dexterity 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Dexterity (max 20).",
+    "Blindsight: Gain Blindsight with a range of 10 feet.",
+    "Fog of War: You have Advantage on Dexterity (Stealth) checks you make as part of the Hide action during combat.",
+    "Sniper: If you make an attack roll while hidden and the attack misses, making the attack roll doesn't reveal your location."
+   ]
+  },
+  {
+   "id": "slasher",
+   "name": "Slasher",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Hamstring: Once per turn, when you hit a creature with an attack that deals Slashing damage, you can reduce the speed of that target by 10 feet until the start of your next turn.",
+    "Enhanced Critical: When you score a Critical Hit that deals Slashing damage to a creature, that target has Disadvantage on attack rolls until the start of your next turn."
+   ]
+  },
+  {
+   "id": "speedy",
+   "name": "Speedy",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Dexterity or Constitution 13+",
+   "mechanics": [
+    "Ability Score Increase: +1 Dexterity or Constitution (max 20).",
+    "Speed Increase: Your Speed increases by 10 feet.",
+    "Dash over Difficult Terrain: When you take the Dash action on your turn, Difficult Terrain doesn't cost you extra movement for the rest of that turn.",
+    "Agile Movement: Opportunity Attacks have Disadvantage against you."
+   ],
+   "verify": "Талант переименован из Mobile (2014) в Speedy (2024)."
+  },
+  {
+   "id": "spell-sniper",
+   "name": "Spell Sniper",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Spellcasting or Pact Magic feature",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Bypass Cover: Your attack rolls for spells ignore Half Cover and Three-Quarters Cover.",
+    "Casting in Melee: Being within 5 feet of an enemy doesn't impose Disadvantage on your attack rolls with spells.",
+    "Increased Range: When you cast a spell that has a range of at least 10 feet and requires you to make an attack roll, you can increase the spell's range by 60 feet."
+   ],
+   "verify": "В PHB 2024 дальность увеличивается на фиксированные +60 футов (вместо удвоения из 2014), убрано получение дополнительного заговора, добавлена стрельба вблизи без помехи."
+  },
+  {
+   "id": "telekinetic",
+   "name": "Telekinetic",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Minor Telekinesis: You learn the Mage Hand cantrip. You can cast it without Verbal or Somatic components, you can make the spectral hand Invisible, and its range and the distance it can be away from you increase by 30 feet if you already know it. Spellcasting ability is the ability increased by this feat.",
+    "Telekinetic Shove: As a Bonus Action, choose one creature you can see within 30 feet of you; the target must succeed on a Strength saving throw (DC = 8 + the ability modifier of the score increased by this feat + your Proficiency Bonus) or be moved 5 feet toward you or away from you (a creature can willingly fail this save)."
+   ]
+  },
+  {
+   "id": "telepathic",
+   "name": "Telepathic",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Telepathic Utterance: You can speak telepathically to any creature you can see within 60 feet of you in a language you know (the creature understands you only if it knows that language, and this doesn't give it the ability to respond telepathically).",
+    "Detect Thoughts: You always have the Detect Thoughts spell prepared. You can cast it once per Long Rest without a spell slot or spell components, and you can also cast it using any spell slots you have. Spellcasting ability is the ability increased by this feat."
+   ]
+  },
+  {
+   "id": "war-caster",
+   "name": "War Caster",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+, Spellcasting or Pact Magic feature",
+   "mechanics": [
+    "Ability Score Increase: +1 Intelligence, Wisdom, or Charisma (max 20).",
+    "Concentration: You have Advantage on Constitution saving throws to maintain Concentration.",
+    "Reactive Spell: When a creature provokes an Opportunity Attack from you by leaving your reach, you can use your Reaction to cast a spell at that creature instead, provided the spell has a casting time of 1 Action and targets only that creature.",
+    "Somatic Components: You can perform Somatic components of spells even when holding weapons or a Shield in one or both hands."
+   ]
+  },
+  {
+   "id": "weapon-master",
+   "name": "Weapon Master",
+   "type": "general",
+   "status": "ready",
+   "prerequisite": "Level 4+",
+   "mechanics": [
+    "Ability Score Increase: +1 Strength or Dexterity (max 20).",
+    "Mastery Property: You unlock the mastery property of 1 kind of Simple or Martial weapon of your choice with which you have proficiency.",
+    "Change Mastery: Whenever you finish a Long Rest, you can change the chosen kind of weapon to another eligible kind."
+   ]
+  },
+  {
+   "id": "blind-fighting",
+   "name": "Blind Fighting",
+   "type": "fighting-style",
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Blindsight: You gain Blindsight with a range of 10 feet."
+   ]
+  },
+  {
+   "id": "dueling",
+   "name": "Dueling",
+   "type": "fighting-style",
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Damage Bonus: When you are wielding a melee weapon in 1 hand and no other weapons, you gain a +2 bonus to damage rolls with that weapon."
+   ]
+  },
+  {
+   "id": "interception",
+   "name": "Interception",
+   "type": "fighting-style",
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Damage Reduction: When a creature you can see hits another creature within 5 feet of you with an attack roll, you can use a Reaction to reduce the damage dealt to the target by 1d10 + your Proficiency Bonus.",
+    "Equipment Requirement: You must be holding a Shield or a Simple or Martial weapon to use this Reaction."
+   ]
+  },
+  {
+   "id": "protection",
+   "name": "Protection",
+   "type": "fighting-style",
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Impose Disadvantage: When a creature you can see attacks a target other than you within 5 feet of you, you can take a Reaction to interpose your Shield (requires holding a Shield).",
+    "Duration: You impose Disadvantage on the triggering attack roll and on all other attack rolls against that target until the start of your next turn, provided you remain within 5 feet of the target."
+   ]
+  },
+  {
+   "id": "thrown-weapon-fighting",
+   "name": "Thrown Weapon Fighting",
+   "type": "fighting-style",
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Damage Bonus: When you hit with a ranged attack roll using a weapon that has the Thrown property, you gain a +2 bonus to the damage roll."
+   ]
+  },
+  {
+   "id": "unarmed-fighting",
+   "name": "Unarmed Fighting",
+   "type": "fighting-style",
+   "status": "ready",
+   "prerequisite": "Fighting Style Feature",
+   "mechanics": [
+    "Unarmed Damage: When you hit with an Unarmed Strike and deal damage, you can deal Bludgeoning damage equal to 1d6 + your Strength modifier instead of the normal damage (becomes 1d8 + Strength modifier if you aren't holding any weapons or a Shield).",
+    "Grapple Damage: At the start of each of your turns, you can deal 1d4 Bludgeoning damage to 1 creature Grappled by you."
+   ]
+  },
+  {
+   "id": "crafter",
+   "name": "Crafter",
+   "type": "origin",
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Tool Proficiency: You gain proficiency with 3 different Artisan's Tools of your choice from the Fast Crafting table.",
+    "Discount: Whenever you buy a nonmagical item, you receive a 20% discount on it.",
+    "Fast Crafting: When you finish a Long Rest, you can craft 1 piece of gear from the Fast Crafting table, provided you have the associated Artisan's Tools and proficiency with them. The item lasts until you finish another Long Rest, at which point it falls apart."
+   ]
+  },
+  {
+   "id": "healer",
+   "name": "Healer",
+   "type": "origin",
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Battle Medic: If you have a Healer's Kit, you can take a Utilize action and expend 1 use of the kit to tend to a creature within 5 feet of you. That creature can expend 1 of its Hit Point Dice, and you roll that die; the creature regains Hit Points equal to the roll + your Proficiency Bonus.",
+    "Healing Rerolls: Whenever you roll a die to determine the number of Hit Points you restore with a spell or with this feat's Battle Medic benefit, you can reroll the die if it rolls a 1, and you must use the new roll."
+   ]
+  },
+  {
+   "id": "lucky",
+   "name": "Lucky",
+   "type": "origin",
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Luck Points: You have a number of Luck Points equal to your Proficiency Bonus. You regain all expended Luck Points when you finish a Long Rest.",
+    "Advantage: When you roll a d20 for a D20 Test, you can spend 1 Luck Point to give yourself Advantage on the roll.",
+    "Disadvantage: When a creature rolls a d20 for an attack roll against you, you can spend 1 Luck Point to impose Disadvantage on that roll."
+   ]
+  },
+  {
+   "id": "musician",
+   "name": "Musician",
+   "type": "origin",
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Instrument Training: You gain proficiency with 3 Musical Instruments of your choice.",
+    "Encouraging Song: As you finish a Short or Long Rest, you can play a song on a Musical Instrument with which you have proficiency and give Heroic Inspiration to allies who hear the song. The number of allies you can affect equals your Proficiency Bonus."
+   ]
+  },
+  {
+   "id": "tavern-brawler",
+   "name": "Tavern Brawler",
+   "type": "origin",
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Enhanced Unarmed Strike: When you hit with your Unarmed Strike and deal damage, you can deal Bludgeoning damage equal to 1d4 + your Strength modifier instead of the normal damage.",
+    "Damage Rerolls: Whenever you roll a damage die for your Unarmed Strike, you can reroll the die if it rolls a 1, and you must use the new roll.",
+    "Improvised Weaponry: You have proficiency with improvised weapons.",
+    "Push: When you hit a creature with an Unarmed Strike as part of the Attack action on your turn, you can deal damage to the target and also push it 5 feet away from you. You can use this benefit only once per turn."
+   ]
+  },
+  {
+   "id": "tough",
+   "name": "Tough",
+   "type": "origin",
+   "status": "ready",
+   "prerequisite": "Origin Feat",
+   "mechanics": [
+    "Hit Point Maximum Increase: Your Hit Point maximum increases by an amount equal to twice your character level when you gain this feat.",
+    "Level Scaling: Whenever you gain a character level thereafter, your Hit Point maximum increases by an additional 2 Hit Points."
+   ]
+  },
+  {
+   "id": "boon-of-energy-resistance",
+   "name": "Boon of Energy Resistance",
+   "type": "epic-boon",
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "Energy Resistances: You gain Resistance to 2 of the following damage types of your choice: Acid, Cold, Fire, Lightning, Necrotic, Poison, Psychic, Radiant, or Thunder. Whenever you finish a Long Rest, you can change your choices.",
+    "Energy Redirection: When you take damage of one of the types chosen for the Energy Resistances benefit, you can take a Reaction to direct damage of the same type toward another creature you can see within 60 feet of yourself that isn't behind Total Cover. The target must succeed on a Dexterity saving throw (DC = 8 + your Constitution modifier + your Proficiency Bonus) or take damage equal to 2d12 + your Constitution modifier."
+   ]
+  },
+  {
+   "id": "boon-of-fortitude",
+   "name": "Boon of Fortitude",
+   "type": "epic-boon",
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "Fortified Health: Your Hit Point maximum increases by 40.",
+    "Bolstered Healing: Once per turn when you regain Hit Points, you can regain additional Hit Points equal to your Constitution modifier."
+   ]
+  },
+  {
+   "id": "boon-of-recovery",
+   "name": "Boon of Recovery",
+   "type": "epic-boon",
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "Last Stand: When you would be reduced to 0 Hit Points, you can drop to 1 Hit Point instead and regain a number of Hit Points equal to half your Hit Point maximum. Once you use this benefit, you can't use it again until you finish a Long Rest.",
+    "Recover Vitality: You have a pool of ten d10s. As a Bonus Action, you can expend dice from the pool, roll those dice, and regain Hit Points equal to the roll's total. You regain all expended dice when you finish a Long Rest."
+   ]
+  },
+  {
+   "id": "boon-of-skill",
+   "name": "Boon of Skill",
+   "type": "epic-boon",
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "All-Around Adept: You gain proficiency in all skills.",
+    "Expertise: Choose 1 skill in which you lack Expertise. You gain Expertise in that skill."
+   ]
+  },
+  {
+   "id": "boon-of-speed",
+   "name": "Boon of Speed",
+   "type": "epic-boon",
+   "status": "ready",
+   "prerequisite": "Level 19+",
+   "mechanics": [
+    "Ability Score Increase: +1 to any 1 ability score of your choice (max 30).",
+    "Escape Artist: As a Bonus Action, you can take the Disengage action, which also ends the Grappled condition on yourself.",
+    "Quickness: Your Speed increases by 30 feet."
+   ]
+  }
+ ]
+}
