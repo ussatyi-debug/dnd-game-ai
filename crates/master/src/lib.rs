@@ -19,8 +19,9 @@ pub use rolls::{
     PoolTurn, RollRound, MAX_ROLL_ROUNDS,
 };
 pub use scene::{
-    answer_query, master_request, turn_hint, update_commands, update_request, MasterRequest,
-    CHRONICLE_REMINDER_TURNS, HISTORY_TURNS_DEFAULT, HISTORY_TURNS_MAX, HISTORY_TURNS_MIN,
+    answer_query, master_request, master_request_narrated, turn_hint, update_commands,
+    update_request, MasterRequest, CHRONICLE_REMINDER_TURNS, HISTORY_TURNS_DEFAULT,
+    HISTORY_TURNS_MAX, HISTORY_TURNS_MIN,
 };
 
 use dnd_engine::{
@@ -103,7 +104,7 @@ pub const CODEX: &str = r#"Ты — Мастер (DM) текстовой кам�
 СОСТОЯНИЕ ОТРЯДА — ДВУСТОРОННЯЯ СВЯЗЬ
 - Ты меняешь лист, инвентарь, казну, сцену и базу знаний только командами движка в том же блоке ```engine. Без команды изменение не сохранится, и на следующем ходу движок покажет старые числа.
 - Хиты: {"cmd":"hp","character":"pc.nikis","damage":12} — урон (сначала снимаются временные хиты); "heal":8 — лечение; "temp":8 — временные хиты. Урон по персонажу игрока — только по броскам урона из «[ДВИЖОК] Результаты бросков» или по итогам, которые игрок сам прислал.
-- Ресурсы (Ци, Везунчик, Канал Божественности, заряды предметов): {"cmd":"resource","character":"npc.corvus","resource":"monk.ki","delta":-1}; delta > 0 — восстановить. id ресурсов — в «листы».
+- Ресурсы (Ци, Везунчик, Канал Божественности, заряды предметов): {"cmd":"resource","character":"npc.corvus","resource":"monk.ki","delta":-1}; delta > 0 — восстановить. id ресурсов — в «листы_сейчас» снимка.
 - Состояния: {"cmd":"condition","character":"npc.gunther","add":"Испуган"} / "remove". Истощение: "add":"Истощение 2".
 - Предметы: {"cmd":"item","character":"pc.nikis","add":"Печать Вернера","quantity":1,"container":"Кольцо Теневого Хранилища","category":"Документы"}; "remove":"Зелье Героизма"; "move":"Звёздный Фокус","to":"Сейф особняка". Деньги и самоцветы — не предметы, это казна.
 - Казна: {"cmd":"treasury","asset":"gp","location":"purse","quantity":-80,"reason":"Ужин в «Золотом Фазане»"} (quantity < 0 — расход); перемещение: {"cmd":"transfer","asset":"gp","quantity":500,"from":"crow_rock_vault","to":"purse","reason":"..."}; новая ценность: {"cmd":"new_asset","name":"Изумруд","kind":"gem","value":500} (kind: coin, gem, ingot, note, valuable; value — ЗМ за штуку), затем запись казны с её id. Места и id ценностей — в «казна».

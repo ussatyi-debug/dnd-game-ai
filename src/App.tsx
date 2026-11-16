@@ -124,6 +124,7 @@ import {
   promptSize,
   recentTurns,
   usageLine,
+  narration,
   shortSheet,
   skipEmptyUpdate,
   twoStepFor,
@@ -625,7 +626,7 @@ export default function App() {
     abortRef.current = controller;
     setThinking(true);
     const twoStep = twoStepNow();
-    aiChat(historyWith(playerMessage), kbExtraFor(playerMessage.text), twoStep, shortSheet())
+    aiChat(historyWith(playerMessage), kbExtraFor(playerMessage.text), twoStep, shortSheet(), narration())
       .then((reply) => {
         if (controller.signal.aborted) {
           setFailed({ playerId: playerMessage.id, partialId: null });
@@ -783,7 +784,7 @@ export default function App() {
         history.push({ role: "master", text }, { role: "player", text: r.feedback });
       }
     };
-    masterContext(playerMessage.text, kbExtraFor(playerMessage.text), twoStep, shortSheet())
+    masterContext(playerMessage.text, kbExtraFor(playerMessage.text), twoStep, shortSheet(), narration())
       .then(withRolls)
       .then(async (text) => {
         brokenTail = prose.length > 0 && !hasProse(text);

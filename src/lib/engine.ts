@@ -261,8 +261,9 @@ export function masterContext(
   kbExtra: string,
   twoStep = false,
   shortSheet = false,
+  narration = "normal",
 ): Promise<MasterRequest> {
-  return call<MasterRequest>("master_context", { query, kbExtra, twoStep, shortSheet });
+  return call<MasterRequest>("master_context", { query, kbExtra, twoStep, shortSheet, narration });
 }
 
 /** Двухшаговый ход: рассказ для игрока и команды, которые мастер всё же написал в нём. */
@@ -1049,8 +1050,9 @@ export function aiChat(
   kbExtra: string,
   twoStep = false,
   shortSheet = false,
+  narration = "normal",
 ): Promise<MasterReply> {
-  return invoke<MasterReply>("ai_chat", { history, kbExtra, twoStep, shortSheet });
+  return invoke<MasterReply>("ai_chat", { history, kbExtra, twoStep, shortSheet, narration });
 }
 
 /** Второй шаг двухшагового хода: команды движка по рассказу мастера. */

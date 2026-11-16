@@ -113,6 +113,19 @@ export function setShortSheet(on: boolean) {
   write(SHORT_SHEET_KEY, on);
 }
 
+/** Длина рассказа мастера: ответ модели дороже запроса, краткий рассказ — главная экономия. */
+export type Narration = "short" | "normal" | "long";
+const NARRATION_KEY = "dnd.narration";
+
+export function narration(): Narration {
+  const v = read<string>(NARRATION_KEY, "normal");
+  return v === "short" || v === "long" ? v : "normal";
+}
+
+export function setNarration(v: Narration) {
+  write(NARRATION_KEY, v);
+}
+
 /**
  * На сколько заявок сразу сдвигается начало истории. Начало запроса меняется только раз в
  * HISTORY_STEP ходов, а между сдвигами история лишь дописывается — поэтому её можно кэшировать

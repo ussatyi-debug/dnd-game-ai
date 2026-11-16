@@ -22,11 +22,14 @@ import {
   setHistoryTurns,
   setShortSheet,
   setSkipEmptyUpdate,
+  narration,
+  setNarration,
   shortSheet,
   skipEmptyUpdate,
   setTwoStep,
   twoStepFor,
   type MasterEngine,
+  type Narration,
 } from "../lib/masterPrefs";
 import Modal from "./Modal";
 
@@ -462,6 +465,26 @@ function TurnSettings({ engine }: { engine: MasterEngine | null }) {
             Если мастер пометил ход как разговор без изменений, движок не делает второй запрос — ход дешевле и быстрее.
             Слабая модель может поставить пометку по ошибке, и тогда изменения хода потеряются.
           </span>
+        </span>
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span>Длина рассказа мастера</span>
+        <select
+          value={narration()}
+          onChange={(e) => {
+            setNarration(e.target.value as Narration);
+            rerender((n) => n + 1);
+          }}
+          aria-label="Длина рассказа мастера"
+          className="w-full rounded-md border border-edge bg-ink px-3 py-2 text-sm text-parchment"
+        >
+          <option value="short">Кратко — 1–2 абзаца, дешевле всего</option>
+          <option value="normal">Обычно — как модель привыкла</option>
+          <option value="long">Подробно — живые описания, дороже</option>
+        </select>
+        <span className="block text-xs text-muted">
+          Ответ модели стоит в несколько раз дороже запроса: «Кратко» заметно снижает цену хода. Броски, команды и
+          записи в базу знаний мастер пишет при любой длине.
         </span>
       </label>
       <label className="flex items-start gap-2 text-sm">

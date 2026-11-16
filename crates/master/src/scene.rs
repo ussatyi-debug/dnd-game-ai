@@ -33,6 +33,8 @@ const SNAPSHOT_PLAYER_NOTES: usize = 15;
 const TURN_CARDS_FOUND: usize = 3;
 /// Сколько записей журнала, подходящих к заявке, добавляется к реплике.
 const TURN_JOURNAL_FOUND: usize = 5;
+/// Сколько последних записей этой сцены идут в [ИЗМЕНЕНИЯ] полным текстом.
+const NOTES_FULL_IN_CHANGES: usize = 4;
 /// Сколько последних дней хроники идёт целиком; более ранние — первой фразой.
 const CHRONICLE_FULL_DAYS: usize = 7;
 /// Через сколько ходов без обновления пересказа текущего дня мастер получает напоминание.
@@ -44,7 +46,7 @@ const TIME_REMINDER_TURNS: u32 = 8;
 const PROTOCOL: &str = r#"
 КОНТЕКСТ ПО СЦЕНАМ
 - «СНИМОК СЦЕНЫ» ниже собран в начале сцены и не меняется, пока сцена не сменится. День, время, место и хиты отряда сейчас — в блоке «[СЦЕНА]» последнего сообщения игрока; всё, что изменилось с начала сцены, — в «[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]». Последнее сообщение важнее снимка.
-- Полные листы и магия в снимке — только у тех, кто в сцене; у остальных — строка в «отряд». Чего не видишь — запроси у движка блоком ```engine (как броски), а не выдумывай:
+- Постоянная часть листов всего отряда (спасброски, навыки, атаки, владения, умения, заклинания) — в блоке «ЛИСТЫ ОТРЯДА» сразу после кодекса. Текущее (ресурсы с id, кости хитов, состояния, инвентарь, ячейки) — «листы_сейчас» и «магия_сейчас» в снимке, у тех, кто в сцене; хиты — в [СЦЕНА]. Записи журнала, сделанные в этой сцене, в [ИЗМЕНЕНИЯХ] — полным текстом только последние, остальные заголовком. Чего не видишь — запроси у движка блоком ```engine (как броски), а не выдумывай:
   {"cmd":"query","what":"sheet","id":"npc.valeria"} — лист; "spells" — книга заклинаний и ячейки; {"cmd":"query","what":"card","id":"npc.krot"} — текст карточки базы; {"cmd":"query","what":"notes","text":"склад"} — поиск по журналу мастера; {"cmd":"query","what":"chronicle","day":54} — пересказ дня.
 - Запрос бросков или запрос к движку можно дописать в конце уже начатого рассказа: рассказ игрок увидит, движок вернёт ответ, и ты продолжишь с места остановки.
 - Блоки последнего сообщения игрока заменяют поля прежнего контекста: [ЖУРНАЛ ДВИЖКА] — «журнал_движка», [СРАБОТАВШИЕ ТАЙМЕРЫ] — «сработавшие_таймеры», [ПРЕДЛОЖЕНИЯ ЛИСТА ЖДУТ ИГРОКА] — «предложения_листа_ждут_игрока», [НАПОМИНАНИЯ] — «напоминание_о_записях», [КАРТОЧКИ ПО ЗАЯВКЕ] и [ЖУРНАЛ МАСТЕРА ПО ЗАЯВКЕ] — подходящие к заявке карточки и записи.
@@ -278,8 +280,16 @@ fn changes(session: &Session, memo: &MasterMemo) -> Vec<String> {
             out.push(format!("{owner}: {field} — израсходовано полностью"));
         }
     }
-    // База знаний.
+    // База знаний. Записи этой сцены копятся с каждым ходом: полным текстом идут только
+    // последние, остальные — заголовком (их писал сам мастер; текст — по запросу query).
     let kb = |map: &BTreeMap<&str, &str>, key: &str| map.get(key).map(|v| (*v).to_string());
+    let mut touched: Vec<u64> = now
+        .iter()
+        .filter(|(k, v)| k.starts_with("база|запись|") && before.get(**k) != Some(*v))
+        .filter_map(|(k, _)| k.rsplit('|').next()?.parse().ok())
+        .collect();
+    touched.sort_unstable();
+    let full_from = touched.iter().rev().nth(NOTES_FULL_IN_CHANGES - 1).copied().unwrap_or(0);
     for (key, value) in now.iter().filter(|(k, _)| k.starts_with("база|")) {
         let old = kb(&before, key);
         if old.as_deref() == Some(*value) {
@@ -304,6 +314,14 @@ fn changes(session: &Session, memo: &MasterMemo) -> Vec<String> {
                 NoteLayer::Master => "журнал мастера",
             };
             let who = if n.by_player { ", записал игрок" } else { "" };
+            let compact: String;
+            let value: &str = if n.id < full_from {
+                let done = if n.done { " (отработано)" } else { "" };
+                compact = format!("«{}»{done} — текст: query notes", n.title);
+                &compact
+            } else {
+                value
+            };
             if new {
                 out.push(format!(
                     "Новая запись ({layer}, {}{who}) [запись {id}]: {value}",
@@ -371,10 +389,11 @@ fn snapshot(session: &Session, short: bool) -> Value {
             "в_сцене": m.in_scene,
         })).collect::<Vec<_>>(),
         "персонаж_игрока": player,
-        "листы": session.party().iter().filter(|c| here(&c.id)).map(|c| (c.id.clone(), sheet_context(c, short))).collect::<serde_json::Map<_, _>>(),
-        "магия": session.party().iter().filter(|c| here(&c.id)).filter_map(|c| {
+        // Постоянная часть листов — в блоке «ЛИСТЫ ОТРЯДА» (кэш на всю игру), здесь — текущее.
+        "листы_сейчас": session.party().iter().filter(|c| here(&c.id)).map(|c| (c.id.clone(), split_keys(sheet_context(c, short), SHEET_NOW).1)).collect::<serde_json::Map<_, _>>(),
+        "магия_сейчас": session.party().iter().filter(|c| here(&c.id)).filter_map(|c| {
             let book = c.spellbook()?;
-            Some((c.id.clone(), magic_context(&book)))
+            Some((c.id.clone(), split_keys(magic_context(&book), MAGIC_NOW).1))
         }).collect::<serde_json::Map<_, _>>(),
         "казна_всего_зм": party.treasury_total / 100,
         "казна": session.treasury_view().locations.iter().filter(|l| !l.lines.is_empty()).map(|l| json!({
@@ -393,6 +412,42 @@ fn snapshot(session: &Session, short: bool) -> Value {
         },
         "таймеры": timers,
     })
+}
+
+/// Поля листа, меняющиеся в игре: они идут в снимок сцены, остальное — в блок «ЛИСТЫ ОТРЯДА».
+const SHEET_NOW: &[&str] = &["состояния", "истощение", "кости_хитов", "ресурсы", "инвентарь"];
+/// Поля книги заклинаний, меняющиеся в игре.
+const MAGIC_NOW: &[&str] = &["ячейки", "от_черт_и_предметов", "свитки", "подготовка_открыта"];
+
+/// Объект JSON → (постоянные поля, поля из `now`).
+fn split_keys(value: Value, now: &[&str]) -> (Value, Value) {
+    let Value::Object(map) = value else { return (value, Value::Null) };
+    let (dynamic, fixed): (serde_json::Map<_, _>, serde_json::Map<_, _>) =
+        map.into_iter().partition(|(k, _)| now.contains(&k.as_str()));
+    (Value::Object(fixed), Value::Object(dynamic))
+}
+
+/// Блок «ЛИСТЫ ОТРЯДА»: постоянная часть листов и заклинаний всего отряда. Меняется только
+/// при повышении уровня, новом спутнике, подготовке заклинаний или настройке предмета, —
+/// поэтому кэшируется вместе с кодексом, а не перезаписывается со снимком каждой сцены.
+fn party_sheets(session: &Session, short: bool) -> String {
+    let sheets: serde_json::Map<_, _> = session
+        .party()
+        .iter()
+        .map(|c| (c.id.clone(), split_keys(sheet_context(c, short), SHEET_NOW).0))
+        .collect();
+    let magic: serde_json::Map<_, _> = session
+        .party()
+        .iter()
+        .filter_map(|c| {
+            Some((c.id.clone(), split_keys(magic_context(&c.spellbook()?), MAGIC_NOW).0))
+        })
+        .collect();
+    let body = json!({ "листы": sheets, "магия": magic });
+    format!(
+        "\nЛИСТЫ ОТРЯДА (постоянная часть; текущее — «листы_сейчас», «магия_сейчас» в снимке и [СЦЕНА]):\n{}\n",
+        serde_json::to_string(&body).unwrap_or_default()
+    )
 }
 
 /// Хроника: главы из базы знаний кратко, дни этой игры — последние целиком.
@@ -573,6 +628,7 @@ fn turn_message(
     player_text: &str,
     kb_extra: &str,
     two_step: bool,
+    narration: &str,
 ) -> String {
     let mut out = String::new();
     let block = |out: &mut String, title: &str, lines: &[String]| {
@@ -692,9 +748,29 @@ fn turn_message(
     if !session.scene().now.trim().is_empty() {
         out.push_str(&format!("[СЕЙЧАС]\n{}\n\n", session.scene().now.trim()));
     }
+    if let Some(rule) = narration_rule(narration) {
+        out.push_str(&format!("[ДЛИНА РАССКАЗА]\n{rule}\n\n"));
+    }
     out.push_str("[ЗАЯВКА ИГРОКА]\n");
     out.push_str(player_text);
     out
+}
+
+/// Длина рассказа из настроек игрока: "short", "long"; иначе — обычная (без указаний).
+/// Ответ модели стоит в несколько раз дороже запроса, поэтому краткий рассказ — самая
+/// заметная экономия.
+fn narration_rule(narration: &str) -> Option<&'static str> {
+    match narration {
+        "short" => Some(
+            "Кратко: 1–2 коротких абзаца, не больше 600–800 знаков. Только то, что произошло, и \
+ответы NPC по делу; без описаний обстановки, которые игрок уже знает, и без пересказа его заявки. \
+Записи в базу знаний — по 1–2 предложения. Броски, команды и блок «СЕЙЧАС» — как обычно.",
+        ),
+        "long" => Some(
+            "Подробно: живое описание обстановки, звуков и деталей, реплики NPC целиком — до 5–6 абзацев.",
+        ),
+        _ => None,
+    }
 }
 
 /// Созданные по ходу игры карточки, подходящие к заявке, с описанием.
@@ -733,10 +809,23 @@ pub fn master_request(
     two_step: bool,
     short_sheet: bool,
 ) -> MasterRequest {
+    master_request_narrated(session, player_text, kb_extra, two_step, short_sheet, "")
+}
+
+/// То же с длиной рассказа из настроек игрока ("short", "normal", "long").
+pub fn master_request_narrated(
+    session: &mut Session,
+    player_text: &str,
+    kb_extra: &str,
+    two_step: bool,
+    short_sheet: bool,
+    narration: &str,
+) -> MasterRequest {
     let memo = scene_system(session, short_sheet);
     session.deal_dice_pool(POOL_PER_DIE);
-    let turn = turn_message(session, &memo, player_text, kb_extra, two_step);
-    MasterRequest::new(vec![codex(session), memo.system], turn)
+    let turn = turn_message(session, &memo, player_text, kb_extra, two_step, narration);
+    let fixed = format!("{}{}", codex(session), party_sheets(session, short_sheet));
+    MasterRequest::new(vec![fixed, memo.system], turn)
 }
 
 /// Ответ движка на запрос мастера `query`.
@@ -1079,6 +1168,33 @@ mod tests {
         let next = master_request(&mut s, "Утро", "", false, false);
         assert_ne!(first.system_parts[1], next.system_parts[1]);
         assert_eq!(first.system_parts[0], next.system_parts[0]);
+    }
+
+    #[test]
+    fn party_sheets_are_cached_with_codex_and_scene_notes_shrink() {
+        let mut s = session();
+        let first = master_request_narrated(&mut s, "Осматриваюсь", "", false, false, "short");
+        assert!(first.system_parts[0].contains("ЛИСТЫ ОТРЯДА"));
+        assert!(first.system_parts[0].contains("спасброски"));
+        assert!(!first.system_parts[1].contains("спасброски"));
+        assert!(first.system_parts[1].contains("листы_сейчас"));
+        assert!(first.turn.contains("[ДЛИНА РАССКАЗА]\nКратко"), "{}", first.turn);
+        // Урон и записи меняют текущее, но не блок кодекса с листами.
+        let mut cmds = String::from("{\"cmd\":\"hp\",\"character\":\"pc.nikis\",\"damage\":3}");
+        for i in 1..=6 {
+            cmds.push_str(&format!(
+                "\n{{\"cmd\":\"note\",\"title\":\"Улика {i}\",\"text\":\"длинный текст улики номер {i}\"}}"
+            ));
+        }
+        crate::apply_directives(&mut s, &format!("```engine\n{cmds}\n```"));
+        let next = master_request_narrated(&mut s, "Дальше", "", false, false, "normal");
+        assert_eq!(first.system_parts[0], next.system_parts[0]);
+        assert!(!next.turn.contains("[ДЛИНА РАССКАЗА]"));
+        // Последние записи сцены — полным текстом, ранние — заголовком.
+        assert!(next.turn.contains("длинный текст улики номер 6"), "{}", next.turn);
+        assert!(next.turn.contains("длинный текст улики номер 3"));
+        assert!(!next.turn.contains("длинный текст улики номер 2"));
+        assert!(next.turn.contains("«Улика 1» — текст: query notes"));
     }
 
     #[test]

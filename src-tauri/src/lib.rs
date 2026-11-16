@@ -869,6 +869,7 @@ async fn ai_chat(
     kb_extra: Option<String>,
     two_step: Option<bool>,
     short_sheet: Option<bool>,
+    narration: Option<String>,
     ai: State<'_, AiState>,
     session: State<'_, SessionState>,
 ) -> Result<MasterReply, String> {
@@ -880,12 +881,13 @@ async fn ai_chat(
         .find(|m| m.role == ai::Role::Player)
         .map(|m| m.text.clone())
         .unwrap_or_default();
-    let request = dnd_master::master_request(
+    let request = dnd_master::master_request_narrated(
         &mut *lock(&session)?,
         &player_text,
         kb_extra.as_deref().unwrap_or(""),
         two_step,
         short_sheet.unwrap_or(false),
+        narration.as_deref().unwrap_or(""),
     );
     let system = request.system_parts;
     let mut history = history;

@@ -46,6 +46,9 @@ pub enum Request {
         /// Короткий лист в снимке: навыки без владения и владения не уходят мастеру.
         #[serde(default)]
         short_sheet: bool,
+        /// Длина рассказа: "short", "normal", "long".
+        #[serde(default)]
+        narration: String,
     },
     /// Двухшаговый ход: рассказ для игрока и команды, которые мастер написал в нём.
     MasterNarration {
@@ -297,8 +300,15 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::Party => to_value(session.party_view()),
         Request::Treasury => to_value(session.treasury_view()),
         Request::SaveState => to_value(session.save_state()),
-        Request::MasterContext { query, kb_extra, two_step, short_sheet } => {
-            to_value(dnd_master::master_request(session, &query, &kb_extra, two_step, short_sheet))
+        Request::MasterContext { query, kb_extra, two_step, short_sheet, narration } => {
+            to_value(dnd_master::master_request_narrated(
+                session,
+                &query,
+                &kb_extra,
+                two_step,
+                short_sheet,
+                &narration,
+            ))
         }
         Request::MasterNarration { text } => {
             let now = dnd_master::scene_now(&text);

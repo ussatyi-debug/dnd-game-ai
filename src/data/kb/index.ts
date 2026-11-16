@@ -150,7 +150,9 @@ export function entryText(entry: KbEntry, max = 2500): string {
 
 /** Подходящие к заявке карточки одним текстом для контекста мастера. */
 export function kbExtraFor(query: string): string {
-  return relevantEntries(query)
-    .map((e) => entryText(e))
+  // Карточки уходят в каждом ходу заново (свежая часть запроса) — три самых подходящих,
+  // по 1500 знаков; остальное мастер запросит командой query.
+  return relevantEntries(query, 3)
+    .map((e) => entryText(e, 1500))
     .join("\n\n---\n\n");
 }
