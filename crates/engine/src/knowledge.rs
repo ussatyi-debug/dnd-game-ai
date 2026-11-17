@@ -179,6 +179,10 @@ pub struct CustomCard {
     /// Данные цели (раздел `goals`): заказчик, награда, срок, шаги, ход выполнения.
     #[cfg_attr(feature = "serde", serde(default))]
     pub goal: Option<Goal>,
+    /// Карточка того же лица или места в другом слое: карточка игрока «Известные NPC»
+    /// ↔ полная правда о нём в «Мире» или у мастера. Игроку связь не показывается.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub link: Option<String>,
 }
 
 /// Цель героя: что обещано, к какому сроку, из каких шагов состоит и как продвигается.
@@ -261,6 +265,105 @@ pub const KB_SECTIONS: [(&str, &[&str]); 3] = [
     ("master", &["schedule", "threats", "prisoners", "secrets", "journal"]),
     ("world", &["locations", "npc", "factions", "lore", "artifacts", "rules", "maps"]),
 ];
+
+/// Русские названия слоёв и разделов (как в интерфейсе) и частые ошибки модели → ID.
+/// Модель видит разделы в кодексе и пишет их то по-русски, то «npc» в слое игрока.
+const LAYER_ALIASES: [(&str, &str); 3] =
+    [("игрок", "player"), ("мастер", "master"), ("мир", "world")];
+const SECTION_ALIASES: [(&str, &str, &str); 30] = [
+    ("player", "цели", "goals"),
+    ("player", "личины", "personas"),
+    ("player", "пароли и маршруты", "secrets"),
+    ("player", "пароли", "secrets"),
+    ("player", "маршруты", "secrets"),
+    ("player", "известные npc", "known"),
+    ("player", "известные нпс", "known"),
+    ("player", "известные лица", "known"),
+    ("player", "npc", "known"),
+    ("player", "нпс", "known"),
+    ("player", "люди", "known"),
+    ("player", "people", "known"),
+    ("player", "persons", "known"),
+    ("player", "хроника", "chronicle"),
+    ("player", "заметки", "notes"),
+    ("master", "расписание", "schedule"),
+    ("master", "угрозы", "threats"),
+    ("master", "пленники", "prisoners"),
+    ("master", "тайны", "secrets"),
+    ("master", "журнал мастера", "journal"),
+    ("master", "журнал", "journal"),
+    ("master", "npc", "journal"),
+    ("world", "локации", "locations"),
+    ("world", "места", "locations"),
+    ("world", "нпс", "npc"),
+    ("world", "фракции", "factions"),
+    ("world", "лор", "lore"),
+    ("world", "артефакты", "artifacts"),
+    ("world", "правила", "rules"),
+    ("world", "карты", "maps"),
+];
+
+fn normalize_layer(layer: &str) -> String {
+    let key = fold(layer);
+    LAYER_ALIASES.iter().find(|(ru, _)| *ru == key).map_or(key, |(_, id)| (*id).to_string())
+}
+
+fn normalize_section(layer: &str, section: &str) -> String {
+    let key = fold(section);
+    SECTION_ALIASES
+        .iter()
+        .find(|(l, ru, _)| *l == layer && *ru == key)
+        .map_or(key, |(_, _, id)| (*id).to_string())
+}
+
+/// Слова, по которым карточку в «Личинах» можно признать обличьем героя, а не человеком,
+/// которого он встретил.
+const PERSONA_MARKS: [&str; 7] =
+    ["личин", "облич", "маскир", "под видом", "под именем", "псевдоним", "прикрыти"];
+
+fn looks_like_persona(parts: &[&str]) -> bool {
+    parts.iter().any(|p| {
+        let p = fold(p);
+        PERSONA_MARKS.iter().any(|m| p.contains(m))
+    })
+}
+
+/// Имя или название встречается в тексте в любом падеже: каждое слово названия от трёх
+/// букв (без окончания) начинает какое-то слово текста.
+pub fn name_in_text(title: &str, text: &str) -> bool {
+    let words: Vec<String> = fold(text)
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_string)
+        .collect();
+    let stems: Vec<String> = fold(title)
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() >= 3)
+        .map(|w| {
+            let n = w.chars().count();
+            let keep = if n >= 6 {
+                n - 2
+            } else if n >= 5 {
+                n - 1
+            } else {
+                n
+            };
+            w.chars().take(keep).collect()
+        })
+        .collect();
+    !stems.is_empty() && stems.iter().all(|s| words.iter().any(|w| w.starts_with(s.as_str())))
+}
+
+fn layer_suffix(layer: &str) -> &'static str {
+    match layer {
+        "player" => "игрок",
+        "world" => "мир",
+        _ => "мастер",
+    }
+}
+
+/// Сколько ходов движок напоминает завести карточку встреченного NPC.
+pub const MET_REMINDER_TURNS: u8 = 3;
 
 /// Сколько ходов мастера без записей в базу, прежде чем ему напомнят.
 pub const NOTE_REMINDER_TURNS: u32 = 6;
@@ -476,6 +579,7 @@ impl Session {
             let mut unlinked = None;
             let card = match new.card.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
                 Some(c) => self.resolve_card(c).map_err(|_| unlinked = Some(c.to_string())).ok(),
+                None if !new.by_player => self.guess_card(layer, &format!("{title}\n{text}")),
                 None => None,
             };
             if new.kind == NoteKind::Timer && new.due_day.is_none() {
@@ -513,6 +617,18 @@ impl Session {
                         unlinked,
                         Some(kept),
                     ));
+                }
+            }
+            // Журнал мастера — для правды за событием, а не для второго пересказа того, что
+            // уже записано игроку в этом же ходу.
+            if !new.by_player && layer == NoteLayer::Master && new.kind == NoteKind::Event {
+                if let Some(told) = self.notes.iter().find(|n| {
+                    n.id >= self.turn_note_start
+                        && !n.by_player
+                        && n.layer == NoteLayer::Player
+                        && n.kind == NoteKind::Event
+                }) {
+                    return Err(EngineError::JournalRetell(told.id));
                 }
             }
             let id = self.next_note_id;
@@ -701,9 +817,10 @@ impl Session {
             if title.is_empty() {
                 return Err(EngineError::EmptyNote);
             }
-            let mut layer = draft.layer.as_deref().unwrap_or("master").trim().to_string();
-            let mut section = draft.section.as_deref().unwrap_or_default().trim().to_string();
-            let mut moved = None;
+            let mut layer = normalize_layer(draft.layer.as_deref().unwrap_or("master"));
+            let mut section =
+                normalize_section(&layer, draft.section.as_deref().unwrap_or_default());
+            let mut remarks: Vec<String> = Vec::new();
             if check_section(&layer, &section).is_err() {
                 let asked = format!("{layer}/{section}");
                 if by_player {
@@ -714,7 +831,24 @@ impl Session {
                     "world" => ("world".into(), "lore".into()),
                     _ => ("master".into(), "journal".into()),
                 };
-                moved = Some(asked);
+                remarks.push(format!("раздела «{asked}» нет — положена в запасной"));
+            }
+            // «Личины» — только обличья самого героя; людей, которых он встретил, модель
+            // туда кладёт по ошибке («personas» — «персоны»).
+            if !by_player
+                && layer == "player"
+                && section == "personas"
+                && !looks_like_persona(&[
+                    title.as_str(),
+                    draft.subtitle.as_deref().unwrap_or_default(),
+                    draft.summary.as_deref().unwrap_or_default(),
+                    draft.text.as_deref().unwrap_or_default(),
+                ])
+            {
+                section = "known".into();
+                remarks.push(
+                    "это не обличье героя — положена в «Известные NPC» (player/known)".into(),
+                );
             }
             let status = match draft.status.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
                 Some(s) => {
@@ -753,9 +887,23 @@ impl Session {
                     if let Some(edit) = &draft.goal {
                         apply_goal(old.goal.get_or_insert_with(Goal::default), edit, day)?;
                     }
-                    return Ok((old.id.clone(), title, Some("уже есть — обновлена".to_string())));
+                    remarks.push("уже есть — обновлена".into());
+                    return Ok((old.id.clone(), title, remarks));
                 }
             }
+            // То же лицо или место в другом слое: не копия с хвостом «_2», а связанная карточка.
+            let key = fold(&title);
+            let link = self
+                .custom_cards
+                .iter()
+                .find(|c| c.layer != layer && fold(&c.title) == key)
+                .map(|c| c.id.clone())
+                .or_else(|| {
+                    self.kb_cards
+                        .iter()
+                        .find(|c| c.layer != layer && fold(&c.title) == key)
+                        .map(|c| c.id.clone())
+                });
             let base = title
                 .to_lowercase()
                 .chars()
@@ -765,13 +913,25 @@ impl Session {
                 .take(4)
                 .collect::<Vec<_>>()
                 .join("_");
+            let taken = |id: &str| {
+                self.custom_cards.iter().any(|c| c.id == id)
+                    || self.kb_cards.iter().any(|c| c.id == id)
+            };
             let mut id = format!("dyn.{base}");
+            if taken(&id) && link.is_some() {
+                id = format!("dyn.{base}_{}", layer_suffix(&layer));
+            }
+            let stem = id.clone();
             let mut n = 2;
-            while self.custom_cards.iter().any(|c| c.id == id)
-                || self.kb_cards.iter().any(|c| c.id == id)
-            {
-                id = format!("dyn.{base}_{n}");
+            while taken(&id) {
+                id = format!("{stem}_{n}");
                 n += 1;
+            }
+            if let Some(other) = &link {
+                if let Some(c) = self.custom_cards.iter_mut().find(|c| &c.id == other) {
+                    c.link.get_or_insert_with(|| id.clone());
+                }
+                remarks.push(format!("связана с [{other}]"));
             }
             let goal = if section == "goals" {
                 let mut goal = Goal::default();
@@ -796,14 +956,20 @@ impl Session {
                 text: draft.text.unwrap_or_default().trim().to_string(),
                 parent,
                 goal,
+                link,
             });
-            Ok((id, title, moved.map(|m| format!("раздела «{m}» нет — положена в запасной"))))
+            Ok((id, title, remarks))
         })();
         self.logged(
             result,
-            |(id, title, note)| match note {
-                Some(n) => format!("База знаний: карточка «{title}» [{id}] — {n}"),
-                None => format!("База знаний: новая карточка «{title}» [{id}]"),
+            |(id, title, notes)| {
+                if notes.iter().any(|n| n.starts_with("уже есть")) {
+                    format!("База знаний: карточка «{title}» [{id}] — {}", notes.join("; "))
+                } else if notes.is_empty() {
+                    format!("База знаний: новая карточка «{title}» [{id}]")
+                } else {
+                    format!("База знаний: новая карточка «{title}» [{id}] — {}", notes.join("; "))
+                }
             },
             || "новая карточка".into(),
         )
@@ -833,10 +999,10 @@ impl Session {
                 .ok_or_else(|| EngineError::NotCustomCard(id.to_string()))?;
             let mut next = card.clone();
             if let Some(l) = draft.layer {
-                next.layer = l.trim().into();
+                next.layer = normalize_layer(&l);
             }
             if let Some(s) = draft.section {
-                next.section = s.trim().into();
+                next.section = normalize_section(&next.layer, &s);
             }
             check_section(&next.layer, &next.section)?;
             if let Some(t) = draft.title.filter(|t| !t.trim().is_empty()) {
@@ -1040,6 +1206,137 @@ impl Session {
         }
     }
 
+    /// Карточка, о которой запись, если мастер не указал её: название (имя NPC, цель, место)
+    /// встречается в заголовке или тексте. Записи игроку — сперва карточки слоя игрока.
+    fn guess_card(&self, layer: NoteLayer, text: &str) -> Option<String> {
+        let first = if layer == NoteLayer::Player { "player" } else { "master" };
+        let pick = |own: bool| {
+            self.custom_cards
+                .iter()
+                .filter(|c| (c.layer == first) == own && c.goal.is_none())
+                .filter(|c| name_in_text(&c.title, text))
+                .max_by_key(|c| c.title.chars().count())
+                .map(|c| c.id.clone())
+        };
+        pick(true).or_else(|| pick(false))
+    }
+
+    /// Есть ли у героя карточка этого лица в слое игрока.
+    fn player_knows(&self, card: &str, title: &str) -> bool {
+        let key = fold(title);
+        self.custom_cards.iter().any(|c| {
+            c.layer == "player"
+                && (fold(&c.title) == key || c.link.as_deref() == Some(card) || c.id == card)
+        }) || self.kb_cards.iter().any(|c| c.layer == "player" && fold(&c.title) == key)
+    }
+
+    /// NPC из «Мира» и журнала мастера, названные в тексте, у которых нет карточки игрока:
+    /// «название [id]». Герой их встретил — что он знает, мастер записывает сам.
+    pub fn named_unknown(&self, text: &str) -> Vec<String> {
+        let party: Vec<String> = self.party.iter().map(|c| fold(&c.name)).collect();
+        let custom = self
+            .custom_cards
+            .iter()
+            .filter(|c| {
+                (c.layer == "world" && c.section == "npc")
+                    || (c.layer == "master"
+                        && matches!(c.section.as_str(), "prisoners" | "journal"))
+            })
+            .map(|c| (c.id.as_str(), c.title.as_str()));
+        let builtin = self
+            .kb_cards
+            .iter()
+            .filter(|c| c.layer == "world" && c.id.starts_with("npc."))
+            .map(|c| (c.id.as_str(), c.title.as_str()));
+        let mut out: Vec<String> = Vec::new();
+        for (id, title) in custom.chain(builtin) {
+            if party.contains(&fold(title)) || self.player_knows(id, title) {
+                continue;
+            }
+            if name_in_text(title, text) && !out.iter().any(|o| o.ends_with(&format!("[{id}]"))) {
+                out.push(format!("{title} [{id}]"));
+            }
+        }
+        out
+    }
+
+    /// Рассказ хода: запомнить встреченных NPC без карточки игрока, чтобы напомнить мастеру.
+    pub fn note_met_in_narration(&mut self, text: &str) {
+        for line in self.named_unknown(text) {
+            if !self.met_unknown.iter().any(|(l, _)| *l == line) {
+                self.met_unknown.push((line, 0));
+            }
+        }
+    }
+
+    /// Встреченные NPC, которым мастер ещё не завёл карточку игрока.
+    pub fn met_unknown(&self) -> Vec<String> {
+        self.met_unknown
+            .iter()
+            .filter(|(line, _)| self.still_unknown(line))
+            .map(|(line, _)| line.clone())
+            .collect()
+    }
+
+    fn still_unknown(&self, line: &str) -> bool {
+        let Some((title, id)) = line.rsplit_once(" [") else { return false };
+        !self.player_knows(id.trim_end_matches(']'), title)
+    }
+
+    /// Конец хода: заведённые карточки снимаются с напоминания, остальным — счётчик.
+    pub(crate) fn age_met_unknown(&mut self) {
+        let list = std::mem::take(&mut self.met_unknown);
+        self.met_unknown = list
+            .into_iter()
+            .filter(|(line, _)| self.still_unknown(line))
+            .map(|(line, n)| (line, n + 1))
+            .filter(|(_, n)| *n <= MET_REMINDER_TURNS)
+            .collect();
+    }
+
+    /// После загрузки: люди из «Личин» — в «Известные NPC», карточки одного лица в разных
+    /// слоях связываются (сохранения до 0.9.12).
+    pub fn repair_player_sections(&mut self) -> usize {
+        let mut fixed = Vec::new();
+        for c in self.custom_cards.iter_mut() {
+            if c.layer == "player"
+                && c.section == "personas"
+                && !c.by_player
+                && !looks_like_persona(&[
+                    c.title.as_str(),
+                    c.subtitle.as_str(),
+                    c.summary.as_str(),
+                    c.text.as_str(),
+                ])
+            {
+                c.section = "known".into();
+                fixed.push(format!("«{}» → Известные NPC", c.title));
+            }
+        }
+        let pairs: Vec<(usize, String)> = self
+            .custom_cards
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.link.is_none())
+            .filter_map(|(i, c)| {
+                let key = fold(&c.title);
+                self.custom_cards
+                    .iter()
+                    .find(|o| o.layer != c.layer && fold(&o.title) == key)
+                    .map(|o| (i, o.id.clone()))
+            })
+            .collect();
+        for (i, other) in pairs {
+            let c = &mut self.custom_cards[i];
+            fixed.push(format!("«{}» [{}] ↔ [{other}]", c.title, c.id));
+            c.link = Some(other);
+        }
+        if !fixed.is_empty() {
+            self.log(format!("База знаний: разделы игрока исправлены — {}", fixed.join(", ")));
+        }
+        fixed.len()
+    }
+
     /// Удаление карточки, созданной по ходу игры; записи отвязываются от неё.
     pub fn delete_card(&mut self, id: &str) -> Result<(), EngineError> {
         let result = self
@@ -1051,6 +1348,9 @@ impl Session {
         if result.is_ok() {
             for n in self.notes.iter_mut().filter(|n| n.card.as_deref() == Some(id)) {
                 n.card = None;
+            }
+            for c in self.custom_cards.iter_mut().filter(|c| c.link.as_deref() == Some(id)) {
+                c.link = None;
             }
             self.kb_overrides.retain(|o| o.card_id != id);
         }
@@ -1580,5 +1880,146 @@ mod tests {
         assert!(s.update_card("goal.astrolabe", CardDraft::default()).is_err());
         s.delete_card(&id).unwrap();
         assert!(s.notes()[0].card.is_none());
+    }
+
+    fn npc(layer: &str, section: &str, title: &str, summary: &str) -> CardDraft {
+        CardDraft {
+            layer: Some(layer.into()),
+            section: Some(section.into()),
+            title: Some(title.into()),
+            summary: Some(summary.into()),
+            ..CardDraft::default()
+        }
+    }
+
+    #[test]
+    fn people_go_to_known_npc_not_personas() {
+        let mut s = session();
+        let id = s
+            .create_card(npc("player", "personas", "Эдвин Вальд", "Младший служащий описей"), false)
+            .unwrap();
+        assert_eq!(s.custom_cards()[0].section, "known");
+        assert!(s.engine_log().last().unwrap().contains("Известные NPC"));
+        // Настоящая личина остаётся в «Личинах»; русские названия разделов понятны движку.
+        s.create_card(
+            npc("player", "personas", "Торговец Гельмут", "Личина героя для рынка"),
+            false,
+        )
+        .unwrap();
+        assert_eq!(s.custom_cards()[1].section, "personas");
+        s.create_card(npc("игрок", "Пароли и маршруты", "Пароль гати", "«Серый камень»"), false)
+            .unwrap();
+        assert_eq!(
+            (s.custom_cards()[2].layer.as_str(), s.custom_cards()[2].section.as_str()),
+            ("player", "secrets")
+        );
+        s.create_card(npc("player", "npc", "Конрад Эбер", "Начальник отдела"), false).unwrap();
+        assert_eq!(s.custom_cards()[3].section, "known");
+        assert_eq!(id, "dyn.эдвин_вальд");
+    }
+
+    #[test]
+    fn same_person_in_two_layers_is_linked_not_copied() {
+        let mut s = session();
+        let world = s
+            .create_card(
+                npc("world", "npc", "Маттиас Ренц", "Старший регистратор; тайно служит банку"),
+                false,
+            )
+            .unwrap();
+        let known = s
+            .create_card(npc("player", "known", "Маттиас Ренц", "Старший регистратор"), false)
+            .unwrap();
+        assert_eq!(known, "dyn.маттиас_ренц_игрок");
+        assert_eq!(s.custom_cards()[1].link.as_deref(), Some(world.as_str()));
+        assert_eq!(s.custom_cards()[0].link.as_deref(), Some(known.as_str()));
+        s.delete_card(&known).unwrap();
+        assert!(s.custom_cards()[0].link.is_none());
+    }
+
+    #[test]
+    fn met_npc_without_player_card_is_reminded() {
+        let mut s = session();
+        s.create_card(npc("world", "npc", "Каспар Флинц", "Бывший посыльный"), false).unwrap();
+        let text = "У ворот вас ждёт Каспар Флинц, а за ним — мадам Орели.";
+        let met = s.named_unknown(text);
+        assert_eq!(met.len(), 2, "{met:?}");
+        s.note_met_in_narration("Вы узнаёте Каспара Флинца по шраму.");
+        assert_eq!(s.met_unknown().len(), 1);
+        s.create_card(npc("player", "known", "Каспар Флинц", "Посыльный со шрамом"), false)
+            .unwrap();
+        assert!(s.met_unknown().is_empty());
+        s.age_met_unknown();
+        assert!(s.met_unknown.is_empty());
+        // Без карточки игрока напоминание живёт несколько ходов и снимается само.
+        s.note_met_in_narration("Мадам Орели кивает.");
+        for _ in 0..=MET_REMINDER_TURNS {
+            assert_eq!(s.met_unknown().len(), 1);
+            s.age_met_unknown();
+        }
+        assert!(s.met_unknown().is_empty());
+    }
+
+    #[test]
+    fn journal_does_not_retell_player_note_and_notes_find_their_card() {
+        let mut s = session();
+        let card = s
+            .create_card(npc("player", "known", "Конрад Эбер", "Начальник отдела"), false)
+            .unwrap();
+        let before = s.notes().len();
+        s.begin_turn_commands();
+        let told = s
+            .add_note(NoteLayer::Player, "Разговор в отделе", "Конрад Эбер рассказал о заявке")
+            .unwrap();
+        let note = s.notes().iter().find(|n| n.id == told).unwrap();
+        assert_eq!(note.card.as_deref(), Some(card.as_str()));
+        let err = s
+            .add_note(NoteLayer::Master, "Эбер о заявке", "Эбер заверил заявку Вальда")
+            .unwrap_err();
+        assert_eq!(err, EngineError::JournalRetell(told));
+        // Тайна в журнал мастера — можно.
+        s.create_note(NewNote {
+            kind: NoteKind::Secret,
+            ..NewNote::new(NoteLayer::Master, "Эбер покрывает Вальда", "Он знал о подделке")
+        })
+        .unwrap();
+        assert_eq!(s.notes().len(), before + 2);
+        // Новый ход — журнал снова открыт для событий, которых герой не видел.
+        s.begin_turn_commands();
+        s.add_note(NoteLayer::Master, "Ночью в отделе", "Кто-то сжёг черновики").unwrap();
+    }
+
+    #[test]
+    fn old_saves_get_people_out_of_personas() {
+        let mut s = session();
+        s.create_card(npc("world", "npc", "Маттиас Ренц", "Регистратор"), false).unwrap();
+        s.custom_cards.push(CustomCard {
+            id: "dyn.маттиас_ренц_2".into(),
+            layer: "player".into(),
+            section: "personas".into(),
+            title: "Маттиас Ренц".into(),
+            subtitle: String::new(),
+            summary: "Поручил герою дело".into(),
+            facts: Vec::new(),
+            status: None,
+            day: 41,
+            by_player: false,
+            text: String::new(),
+            parent: None,
+            goal: None,
+            link: None,
+        });
+        assert_eq!(s.repair_player_sections(), 3);
+        assert_eq!(s.custom_cards()[1].section, "known");
+        assert_eq!(s.custom_cards()[1].link.as_deref(), Some("dyn.маттиас_ренц"));
+        assert_eq!(s.custom_cards()[0].link.as_deref(), Some("dyn.маттиас_ренц_2"));
+        assert_eq!(s.repair_player_sections(), 0);
+    }
+
+    #[test]
+    fn names_match_in_any_case() {
+        assert!(name_in_text("Маттиас Ренц", "к Маттиасу Ренцу"));
+        assert!(name_in_text("Эдвин Вальд", "у Эдвина Вальда"));
+        assert!(!name_in_text("Каспар Флинц", "Оттокар Флинц"));
     }
 }

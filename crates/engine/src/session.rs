@@ -232,6 +232,11 @@ pub struct Session {
     pub(crate) battle_seen: bool,
     /// Бой кончился, а пометки опыта за него ещё нет — движок напоминает мастеру.
     pub(crate) battle_unrewarded: bool,
+    /// NPC из «Мира» или журнала мастера, названные в рассказе, без карточки игрока
+    /// «Известные NPC»: id карточки и сколько ходов уже напоминали (в сохранение не идёт).
+    pub(crate) met_unknown: Vec<(String, u8)>,
+    /// Номер первой записи базы в текущем ходу мастера.
+    pub(crate) turn_note_start: u64,
     /// Пул кубов хода: движок бросает его заранее и показывает мастеру; выражения мастера
     /// `[[1d8+3]]` считаются из него по порядку (в сохранение не попадает).
     pub(crate) dice_pool: DicePool,
@@ -347,6 +352,8 @@ impl Session {
             quiet_battle_turns: 0,
             battle_seen: false,
             battle_unrewarded: false,
+            met_unknown: Vec::new(),
+            turn_note_start: u64::MAX,
             dice_pool: DicePool::default(),
         }
     }
@@ -438,6 +445,7 @@ impl Session {
     /// Начало нового хода мастера: список выполненных команд пуст.
     pub fn begin_turn_commands(&mut self) {
         self.turn_commands.clear();
+        self.turn_note_start = self.next_note_id;
     }
 
     /// Такая команда уже выполнена в этом ходу.

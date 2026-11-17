@@ -152,6 +152,7 @@ impl Session {
             self.battle_unrewarded = true;
         }
         self.age_due_timers();
+        self.age_met_unknown();
         let after = self.checkpoint();
         let today = self.scene.day;
         let day_note = |c: &Checkpoint| {

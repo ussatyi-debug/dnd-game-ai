@@ -755,6 +755,9 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
         session.set_scene_now(&now);
     }
     let actions = run_blocks(session, &blocks, false);
+    if !text.trim().is_empty() {
+        session.note_met_in_narration(&text);
+    }
     // Пропуски и пустые команды в список «отменить действия мастера» не идут.
     let summaries = actions
         .iter()
@@ -770,7 +773,7 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
 /// запроса к модели, поэтому движок отвечает «ничего не изменилось».
 fn nothing_to_do(reason: &str) -> bool {
     let reason = reason.to_lowercase();
-    ["и так свободны", "уже полон", "уже восстановлен", "больше нуля"]
+    ["и так свободны", "уже полон", "уже восстановлен", "больше нуля", "не пересказывает"]
         .iter()
         .any(|mark| reason.contains(mark))
 }

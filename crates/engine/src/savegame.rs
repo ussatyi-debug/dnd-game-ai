@@ -382,6 +382,9 @@ impl Session {
         self.level_up_open = save.level_up_open.into_iter().filter(|id| ids.contains(id)).collect();
         self.master_memo = None;
         self.repair_links();
+        self.repair_player_sections();
+        self.turn_note_start = u64::MAX;
+        self.met_unknown.clear();
         self.chronicle_from = self.scene.day;
         self.turns_since_chronicle = 0;
         self.log(format!("Загружено сохранение: День {}", self.scene.day));

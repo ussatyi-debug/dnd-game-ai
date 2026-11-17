@@ -316,6 +316,7 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
                 session.set_scene_now(&now);
             }
             let (text, written, no_changes) = dnd_master::narration_parts(&text);
+            session.note_met_in_narration(&text);
             Ok(json!({ "text": text, "written": written, "no_changes": no_changes }))
         }
         Request::MasterUpdateRequest { player, narration, written } => {

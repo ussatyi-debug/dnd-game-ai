@@ -204,7 +204,10 @@ fn state_lines(session: &Session) -> Vec<(String, String)> {
 
 /// Карточка одной строкой для списка изменений: название, id, статус, ход цели.
 fn card_line(c: &CustomCard) -> String {
-    let mut line = format!("«{}» [{}]", c.title, c.id);
+    let mut line = format!("«{}» [{}] {}/{}", c.title, c.id, c.layer, c.section);
+    if let Some(link) = &c.link {
+        line.push_str(&format!(" ↔ {link}"));
+    }
     if let Some(s) = c.status.as_deref() {
         line.push_str(&format!(" — {}", crate::status_label(s)));
     }
@@ -699,6 +702,10 @@ fn turn_message(
             session.turns_without_notes()
         ));
     }
+    let met = session.met_unknown();
+    if !met.is_empty() {
+        reminders.push(met_reminder(&met));
+    }
     block(&mut out, "НАПОМИНАНИЯ", &reminders);
     let found: Vec<String> = session
         .notes_matching(player_text, NoteLayer::Master)
@@ -978,6 +985,10 @@ pub fn update_request(
     if !prep.is_empty() {
         reminders.push(format!("подготовка новой игры: {}", prep.join("; ")));
     }
+    let met = session.named_unknown(narration);
+    if !met.is_empty() {
+        reminders.push(met_reminder(&met));
+    }
     let system = format!(
         r#"Ты — модуль учёта игрового движка D&D. Мастер уже рассказал ход игроку. Твоя задача — перевести рассказ в команды движка, чтобы состояние игры совпало с рассказом. Сам ничего не придумывай.
 
@@ -992,16 +1003,18 @@ pub fn update_request(
 - treasury: {{"cmd":"treasury","asset":"gp","location":"id места","quantity":-80,"reason":"..."}}; transfer: {{"cmd":"transfer","asset":"gp","quantity":N,"from":"id","to":"id","reason":"..."}}
 - scene: {{"cmd":"scene","time":"вечер","location":"..."}} ("day" — только вперёд, если рассказ прямо говорит о новом дне); move: {{"cmd":"move","character":"id","location":"..."}}
 - rest: {{"cmd":"rest","kind":"short"|"long"}} — только если в рассказе отряд отдыхает по заявке игрока.
-- note: {{"cmd":"note","layer":"player","title":"...","text":"..."}} — что герой узнал или решил; "layer":"master" — правда за событием, планы NPC. Вид "kind": event, secret, plan, timer (с "due_day").
+- note: {{"cmd":"note","layer":"player","title":"...","text":"...","card":"id"}} — что герой узнал или решил; "layer":"master" — только скрытая от героя правда: "kind" secret (тайна), plan (план NPC), timer (событие на день, с "due_day").
 - chronicle: {{"cmd":"chronicle","day":N,"text":"5–10 предложений о дне"}}
-- card: {{"cmd":"card","card":"id","status":"done"}}; new_card: {{"cmd":"new_card","layer":"master","section":"...","title":"...","summary":"..."}}
+- card: {{"cmd":"card","card":"id","status":"done"}}; new_card: {{"cmd":"new_card","layer":"player","section":"known","title":"Имя NPC","summary":"кто он и что о нём знает герой"}}; правка: {{"cmd":"edit_card","card":"id","summary":"..."}}
+- Разделы слоя игрока (видно игроку — только то, что знает герой): goals — Цели; personas — Личины (ТОЛЬКО обличья самого героя); secrets — Пароли и маршруты (пароль, условный знак, тайный ход); known — Известные NPC (каждый NPC, с которым герой встретился или о ком узнал); chronicle — Хроника; notes — Заметки (выводы, улики, зацепки). Слой master (schedule, threats, prisoners, secrets, journal) и world (npc, locations, factions, lore) — полная правда, в том числе неизвестная герою.
 - задание, поручение или цель, которую герой принял: {{"cmd":"new_card","layer":"player","section":"goals","title":"...","summary":"что сделать","giver":"кто поручил","reward":"...","due_day":N,"steps":["...","..."]}} — отдельная карточка цели, не просто note.
 - опыт: за бой, найденное, успешную проверку с последствиями, важное решение — {{"cmd":"xp_note","text":"за что","xp":N}} (N — оценка на каждого по таблице опыта правил). Начисление — только когда рассказ закрыл день, отряд отдыхает или игрок попросил: {{"cmd":"xp","each":N,"reason":"..."}}.
 - ход активной цели (см. «Активные цели героя»): {{"cmd":"goal","card":"id цели","step_done":1,"log":"что продвинулось"}}; "add_step":"..."; итог — "status":"done" или "failed". Если рассказ продвинул или закрыл цель — команда goal обязательна.
 
 Правила:
 - Только то, что в рассказе произошло. Броски уже сделаны — не добавляй roll.
-- После значимого события (новый NPC, улика, решение, сделка, бой) — две записи note: player и master.
+- Новый NPC в рассказе — карточка player/known (если её нет в «Карточках, созданных по ходу игры»); узнал о нём новое — edit_card этой карточки. Услышал пароль или тайный путь — player/secrets; важная улика или вывод — player/notes.
+- Запись игроку (note player) — одна на важный поворот сцены, не на каждую реплику. Запись мастеру — только тайна, план или таймер, не пересказ записи игрока.
 - Не дублируй команды, которые уже выполнены (см. журнал движка).
 
 Сейчас: День {}, {}, {}.
@@ -1039,6 +1052,16 @@ pub fn update_request(
     }
     turn.push_str("\nОтветь JSON {\"commands\":[...]}.");
     MasterRequest::new(vec![system], turn)
+}
+
+/// Напоминание о встреченных NPC без карточки игрока.
+fn met_reminder(met: &[String]) -> String {
+    format!(
+        "герой встретил: {} — у него нет их карточек в «Известных NPC»: заведи new_card \
+layer player, section known с тем, что герой о них знает (правда о них — в «Мире» и у мастера, \
+игроку её не пиши)",
+        met.join(", ")
+    )
 }
 
 /// Сколько карточек оглавления получает второй шаг.

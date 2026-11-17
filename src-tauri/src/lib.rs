@@ -974,6 +974,7 @@ async fn ai_chat(
             lock(&session)?.set_scene_now(&now);
         }
         let (text, written, no_changes) = dnd_master::narration_parts(&full);
+        lock(&session)?.note_met_in_narration(&text);
         reply.fabricated = dnd_master::fabricated_rolls(&text, &engine_faces, &player_text);
         reply.text = text;
         reply.written_commands = format!("{carried}{written}").trim().to_string();

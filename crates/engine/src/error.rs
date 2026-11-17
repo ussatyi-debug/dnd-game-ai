@@ -55,6 +55,8 @@ pub enum EngineError {
     DayInPast { current: u32, requested: u32 },
     /// Пустая запись в базу знаний.
     EmptyNote,
+    /// Событие в журнал мастера пересказывает запись игрока этого же хода.
+    JournalRetell(u64),
     /// Шага с таким номером у цели нет.
     GoalStep { step: usize, count: usize },
     /// Пересказ дня, которого ещё не было (или нулевого).
@@ -222,6 +224,11 @@ impl fmt::Display for EngineError {
                 "Сейчас День {current} — вернуться в День {requested} нельзя"
             ),
             Self::EmptyNote => write!(f, "Пустая запись: нужен заголовок или текст"),
+            Self::JournalRetell(id) => write!(
+                f,
+                "журнал мастера не пересказывает событие: оно уже записано игроку [запись {id}] — \
+в журнал только тайна, план или таймер (kind secret, plan, timer)"
+            ),
             Self::GoalStep { step, count } => {
                 write!(f, "У цели нет шага {step}: шагов {count}, нумерация с 1")
             }

@@ -473,8 +473,14 @@ export default function KnowledgeBase({
         : baseLayer.id === "world" && ownCampaign
           ? [...baseLayer.sections, STRANGE_SECTION]
           : baseLayer.sections;
-    return { ...baseLayer, sections };
-  }, [baseLayer]);
+    // В своей кампании слой игрока — знания её героя, а не сэра Никиса.
+    const hero = (party?.members.find((m) => m.id.startsWith("pc.")) ?? party?.members[0])?.name;
+    const description =
+      baseLayer.id === "player" && ownCampaign && hero
+        ? `Что знает ${hero}: цели, личины, пароли и маршруты, известные NPC, хроника и заметки.`
+        : baseLayer.description;
+    return { ...baseLayer, sections, description };
+  }, [baseLayer, party]);
 
   const hidden = !revealed.has(layerId);
   const searching = query.trim().length > 0 && !hidden;
