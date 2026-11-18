@@ -6,6 +6,9 @@
 //! Крейт общий для приложения (мастер на Gemini и других провайдерах) и веб-версии
 //! (мастер на Claude), поэтому правила мастера везде одинаковые.
 
+#[rustfmt::skip]
+#[path = "bestiary.generated.rs"]
+mod bestiary;
 mod combat;
 mod directives;
 mod rolls;

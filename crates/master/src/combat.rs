@@ -11,78 +11,32 @@
 //! Числа участника: свои `ac`/`hp` из команды, иначе лист отряда Стрэнджей (в своей кампании
 //! они NPC мира), иначе статблок бестиария по роли или имени (`data/rules/monsters.json`).
 
-use std::sync::OnceLock;
-
 use dnd_engine::{FighterStatus, NewFighter, Session, Side};
 use serde_json::Value;
 
-/// Бестиарий SRD 5.2.1 (тот же файл, что во вкладке «Бестиарий» справочника).
-const MONSTERS: &str = include_str!("../../../data/rules/monsters.json");
+use crate::bestiary as generated;
 
 /// Статблок для боя: только то, что нужно мастеру.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Statblock {
-    pub id: String,
-    pub name: String,
+    pub id: &'static str,
+    pub name: &'static str,
     pub ac: i32,
     pub hp: u32,
     pub xp: u32,
-    pub cr: String,
-    pub attacks: String,
+    pub cr: &'static str,
+    pub attacks: &'static str,
 }
 
-fn bestiary() -> &'static Vec<Statblock> {
-    static CELL: OnceLock<Vec<Statblock>> = OnceLock::new();
-    CELL.get_or_init(|| {
-        let Ok(root) = serde_json::from_str::<Value>(MONSTERS) else { return Vec::new() };
-        let Some(records) = root.get("records").and_then(Value::as_object) else {
-            return Vec::new();
-        };
-        records
-            .values()
-            .filter_map(|m| {
-                let ac = m.get("ac")?.as_array()?.first()?.get("value")?.as_i64()?;
-                let hp = m.get("hp")?.as_u64()?;
-                let attacks: Vec<String> = m
-                    .get("actions")
-                    .and_then(Value::as_array)
-                    .map(|a| {
-                        a.iter()
-                            .take(3)
-                            .filter_map(|x| {
-                                let name = x.get("name")?.as_str()?;
-                                let desc = x.get("desc")?.as_str()?;
-                                let short: String = desc.chars().take(110).collect();
-                                Some(format!("{name}: {short}"))
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let cr = match m.get("cr") {
-                    Some(Value::Number(n)) => match n.as_f64() {
-                        Some(v) if (v - 0.125).abs() < 1e-6 => "1/8".to_string(),
-                        Some(v) if (v - 0.25).abs() < 1e-6 => "1/4".to_string(),
-                        Some(v) if (v - 0.5).abs() < 1e-6 => "1/2".to_string(),
-                        Some(v) => format!("{}", v.round() as i64),
-                        None => String::new(),
-                    },
-                    _ => String::new(),
-                };
-                Some(Statblock {
-                    id: m.get("id")?.as_str()?.to_string(),
-                    name: m.get("name")?.as_str()?.to_string(),
-                    ac: i32::try_from(ac).ok()?,
-                    hp: u32::try_from(hp).ok()?,
-                    xp: m
-                        .get("xp")
-                        .and_then(Value::as_u64)
-                        .and_then(|x| u32::try_from(x).ok())
-                        .unwrap_or(0),
-                    cr,
-                    attacks: attacks.join("; "),
-                })
-            })
-            .collect()
+fn statblocks() -> impl Iterator<Item = Statblock> {
+    generated::BESTIARY.iter().map(|&(id, name, ac, hp, xp, cr, attacks)| Statblock {
+        id,
+        name,
+        ac,
+        hp,
+        xp,
+        cr,
+        attacks,
     })
 }
 
@@ -163,13 +117,12 @@ fn fold(text: &str) -> String {
 }
 
 /// Статблок по роли («простолюдин», «вышибала»), id («bandit») или русскому имени («Бандит»).
-pub(crate) fn statblock(role: &str) -> Option<&'static Statblock> {
+pub(crate) fn statblock(role: &str) -> Option<Statblock> {
     let key = fold(role);
     if key.is_empty() {
         return None;
     }
-    let all = bestiary();
-    if let Some(s) = all.iter().find(|s| s.id == key || fold(&s.name) == key) {
+    if let Some(s) = statblocks().find(|s| s.id == key || fold(s.name) == key) {
         return Some(s);
     }
     // Самое длинное подходящее начало роли: «капитан стражи» раньше «стражник».
@@ -182,7 +135,7 @@ pub(crate) fn statblock(role: &str) -> Option<&'static Statblock> {
         }
     }
     let id = best?.0;
-    all.iter().find(|s| s.id == id)
+    statblocks().find(|s| s.id == id)
 }
 
 fn text<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
@@ -234,7 +187,7 @@ fn fighters(session: &Session, list: &Value) -> Result<Vec<NewFighter>, String> 
             f.source = format!("бестиарий: {}", s.name);
             f.notes = format!("{} (ПО {}, {} ПО)", s.attacks, s.cr, s.xp);
             if f.role.is_empty() {
-                f.role = s.name.clone();
+                f.role = s.name.to_string();
             }
         } else if ac.is_some() || hp.is_some() {
             f.ac = ac;
