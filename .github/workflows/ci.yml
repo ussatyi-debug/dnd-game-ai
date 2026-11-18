@@ -356,8 +356,8 @@ jobs:
           version=$(node -p "require('./src-tauri/tauri.conf.json').version")
           "$tools/zipalign" -f -p 4 "$unsigned" aligned.apk
           mkdir -p apk
-          "$tools/apksigner" sign --ks release.jks --ks-pass "pass:$pass" --out "apk/dnd-game-ai-${version}.apk" aligned.apk
-          "$tools/apksigner" verify "apk/dnd-game-ai-${version}.apk"
+          "$tools/apksigner" sign --ks release.jks --ks-pass "pass:$pass" --out "apk/TLoTSH-${version}.apk" aligned.apk
+          "$tools/apksigner" verify "apk/TLoTSH-${version}.apk"
           rm -f release.jks
           ls -l apk
       - uses: actions/upload-artifact@v4
