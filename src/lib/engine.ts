@@ -1127,6 +1127,32 @@ export interface XpMember {
   /** Лист можно повысить (герой или спутник своей кампании). */
   can_level: boolean;
   reason: string;
+  /** Тот же класс повышается мастером создания (герой своей кампании с одним классом). */
+  wizard: boolean;
+}
+
+/** Магия растущего класса на новом уровне. */
+export interface LevelCasting {
+  spell_class: string;
+  ability: string;
+  progression: "full" | "half_2024" | "third" | "pact";
+  preparation: "known" | "prepared" | "spellbook";
+  max_cantrips: number;
+  max_known: number | null;
+  max_prepared: number | null;
+}
+
+/** Новый уровень в выбранном классе (тот же класс или мультикласс). */
+export interface LevelGain {
+  class: string;
+  class_name: string;
+  subclass: string | null;
+  hit_die: number;
+  hp_roll: number | null;
+  hp_bonus: number;
+  casting: LevelCasting | null;
+  features: { name: string; source: string; text: string; resource_id: null }[];
+  proficiencies: { kind: string; text: string; from_rules: boolean }[];
 }
 
 export interface XpStatus {
@@ -1143,6 +1169,11 @@ export function xpStatus(): Promise<XpStatus> {
 /** Повышение уровня по листу нового уровня; возвращает строку итога. */
 export function levelUp(spec: HeroSpec): Promise<string> {
   return call<string>("level_up", { spec });
+}
+
+/** Повышение уровня в выбранном классе: мультикласс и отряд «Дома Стрэндж». */
+export function levelUpClass(id: string, gain: LevelGain): Promise<string> {
+  return call<string>("level_up_class", { id, gain });
 }
 
 export function recruitInfo(): Promise<RecruitInfo> {

@@ -11,6 +11,7 @@
 use crate::character::{Ability, Character};
 use crate::error::EngineError;
 use crate::fixtures::demo_party;
+use crate::multiclass::{apply_class_level, reset_classes, LevelCasting};
 use crate::profile::{
     Attack, Attunement, Bonus, Feature, Proficiency, ProficiencyLine, Skill, SkillEntry,
 };
@@ -53,6 +54,19 @@ pub enum SheetEdit {
         #[cfg_attr(feature = "serde", serde(default))]
         remove: bool,
     },
+    /// Уровень в классе после повышения (мультикласс — новый класс): уровень класса, подкласс,
+    /// итог костей хитов этого вида и магия класса.
+    ClassLevel {
+        class: String,
+        name: String,
+        #[cfg_attr(feature = "serde", serde(default))]
+        subclass: Option<String>,
+        level: u32,
+        hit_die: u32,
+        hit_dice_total: u32,
+        #[cfg_attr(feature = "serde", serde(default))]
+        casting: Option<LevelCasting>,
+    },
 }
 
 impl SheetEdit {
@@ -67,6 +81,7 @@ impl SheetEdit {
             SheetEdit::Feature { name, .. } => format!("feature.{}", name.trim()),
             SheetEdit::Attunement { name, .. } => format!("attunement.{}", name.trim()),
             SheetEdit::Attack { attack, .. } => format!("attack.{}", attack.name.trim()),
+            SheetEdit::ClassLevel { class, .. } => format!("class.{}", class.trim()),
         }
     }
 
@@ -102,6 +117,7 @@ impl SheetEdit {
             SheetEdit::Attunement { name, .. } => format!("настройка «{name}»"),
             SheetEdit::Attack { attack, remove: true } => format!("убрать атаку «{}»", attack.name),
             SheetEdit::Attack { attack, .. } => format!("атака «{}»", attack.name),
+            SheetEdit::ClassLevel { name, level, .. } => format!("{name} {level}"),
         }
     }
 }
@@ -293,6 +309,26 @@ fn apply_edit(c: &mut Character, edit: &SheetEdit) -> Result<(), EngineError> {
                 None => p.attacks.push(attack.clone()),
             }
         }
+        SheetEdit::ClassLevel {
+            class,
+            name,
+            subclass,
+            level,
+            hit_die,
+            hit_dice_total,
+            casting,
+        } => {
+            apply_class_level(
+                c,
+                class,
+                name,
+                subclass.as_deref(),
+                *level,
+                *hit_die,
+                *hit_dice_total,
+                casting.as_ref(),
+            )?;
+        }
     }
     Ok(())
 }
@@ -315,6 +351,7 @@ fn reset_static(c: &mut Character, base: &Character) {
     profile.exhaustion = dynamic.2;
     profile.hit_dice = dynamic.3;
     c.profile = profile;
+    reset_classes(c, base);
 }
 
 /// Пересобирает постоянную часть листа: лист приложения + правки игрока.
@@ -334,6 +371,15 @@ pub(crate) fn rebuild(c: &mut Character) -> Vec<String> {
 }
 
 impl Character {
+    /// Применяет правку и запоминает её (правка с тем же ключом заменяет прежнюю).
+    pub(crate) fn apply_sheet_edit(&mut self, edit: SheetEdit) -> Result<(), EngineError> {
+        apply_edit(self, &edit)?;
+        let key = edit.key();
+        self.edits.retain(|e| e.key() != key);
+        self.edits.push(edit);
+        Ok(())
+    }
+
     /// Ключи полей, изменённых игроком.
     pub fn edited_keys(&self) -> Vec<String> {
         self.edits.iter().map(SheetEdit::key).collect()

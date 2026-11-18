@@ -14,10 +14,10 @@ use ai::{
 };
 use dnd_engine::{
     validate_hero as check_hero, Campaign, CardDraft, CastMethod, CastOutcome, CastRequest,
-    CharacterSheet, CustomCard, ExprRoll, HeroSpec, InventoryView, KbCard, KbOverride, LoadReport,
-    LuckyReroll, MasterNote, NewNote, NoteEdit, NoteKind, NoteLayer, PartyView, RestKind,
-    RestResult, SaveData, SaveState, Scene, Session, SheetDetails, SheetEdit, SheetProposal,
-    SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView, TreasuryView, UndoInfo,
+    CharacterSheet, CustomCard, ExprRoll, HeroSpec, InventoryView, KbCard, KbOverride, LevelGain,
+    LoadReport, LuckyReroll, MasterNote, NewNote, NoteEdit, NoteKind, NoteLayer, PartyView,
+    RestKind, RestResult, SaveData, SaveState, Scene, Session, SheetDetails, SheetEdit,
+    SheetProposal, SlotRef, SlotRestoreOutcome, SpellEntry, SpellbookView, TreasuryView, UndoInfo,
 };
 use tauri::{Manager, State};
 
@@ -310,6 +310,18 @@ fn level_up(spec: serde_json::Value, state: State<'_, SessionState>) -> Result<S
     let spec: HeroSpec =
         serde_json::from_value(spec).map_err(|e| format!("Лист героя не прочитан: {e}"))?;
     lock(&state)?.level_up(spec).map_err(|e| e.to_string())
+}
+
+/// Повышение уровня в выбранном классе: мультикласс и отряд «Дома Стрэндж».
+#[tauri::command]
+fn level_up_class(
+    id: String,
+    gain: serde_json::Value,
+    state: State<'_, SessionState>,
+) -> Result<String, String> {
+    let gain: LevelGain =
+        serde_json::from_value(gain).map_err(|e| format!("Новый уровень не прочитан: {e}"))?;
+    lock(&state)?.level_up_class(&id, gain).map_err(|e| e.to_string())
 }
 
 /// Живая сводка «что сейчас»: правка игроком.
@@ -1167,6 +1179,7 @@ pub fn run() {
             sheet_proposals,
             xp_status,
             level_up,
+            level_up_class,
             set_scene_now,
             recruit_info,
             recruit_requests,

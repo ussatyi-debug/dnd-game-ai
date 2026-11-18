@@ -612,6 +612,70 @@ mod tests {
     }
 
     #[test]
+    fn strange_level_up_in_chosen_class_survives_round_trip() {
+        use crate::multiclass::{LevelCasting, LevelGain};
+        use crate::profile::Feature;
+        use crate::resource::RestKind;
+        use crate::spellcasting::{Preparation, Progression};
+        use crate::spells::SpellClass;
+        let mut s = session();
+        let need = {
+            let m = s.xp_status().members.into_iter().find(|m| m.id == "pc.nikis").unwrap();
+            m.xp_next.unwrap() - m.xp
+        };
+        s.award_xp(need, "проба").unwrap();
+        s.take_rest(RestKind::Long);
+        let before = s.character("pc.nikis").unwrap().clone();
+        let gain = LevelGain {
+            class: "warlock".into(),
+            class_name: "Колдун".into(),
+            subclass: None,
+            hit_die: 8,
+            hp_roll: None,
+            hp_bonus: 0,
+            casting: Some(LevelCasting {
+                spell_class: SpellClass::Warlock,
+                ability: crate::character::Ability::Charisma,
+                progression: Progression::Pact,
+                preparation: Preparation::Known,
+                max_cantrips: 4,
+                max_known: Some(10),
+                max_prepared: None,
+            }),
+            features: vec![Feature {
+                name: "Покровитель (Колдун 10)".into(),
+                source: "Колдун 10".into(),
+                text: "Умение 10 уровня.".into(),
+                resource_id: None,
+            }],
+            proficiencies: Vec::new(),
+        };
+        let line = s.level_up_class("pc.nikis", gain).unwrap();
+        assert!(line.contains("13 уровень"), "{line}");
+        let after = s.character("pc.nikis").unwrap().clone();
+        assert_eq!(after.level(), 13);
+        let warlock = after.classes.iter().find(|c| c.class == "Колдун").unwrap();
+        assert_eq!(warlock.level, 10);
+        let con = before.abilities.modifier(crate::character::Ability::Constitution);
+        assert_eq!(after.hit_points.max, before.hit_points.max + (5 + con) as u32);
+        assert_eq!(after.profile.hit_dice[0].total, 13);
+        assert_eq!(after.spellcasting.as_ref().unwrap().casters[0].level, 10);
+        assert!(after.profile.features.iter().any(|f| f.name == "Покровитель (Колдун 10)"));
+        // Новый уровень переживает сохранение: лист «Дома Стрэндж» пересобирается из правок.
+        let save = round_trip(&s);
+        let mut loaded = Session::demo(Xoshiro256::from_seed(9));
+        let report = loaded.load(save).unwrap();
+        assert!(report.supplemented.is_empty(), "{:?}", report.supplemented);
+        let nikis = loaded.character("pc.nikis").unwrap();
+        assert_eq!(nikis.level(), 13);
+        assert_eq!(nikis.hit_points.max, after.hit_points.max);
+        assert_eq!(nikis.profile.hit_dice[0].total, 13);
+        assert_eq!(nikis.resource("pact.slots").unwrap().max(), 2);
+        // Повышение закрыто до следующего порога.
+        assert!(!loaded.xp_status().members.iter().find(|m| m.id == "pc.nikis").unwrap().open);
+    }
+
+    #[test]
     fn dynamic_state_survives_round_trip() {
         let mut s = session();
         s.change_hp("pc.nikis", HpChange::Damage(20)).unwrap();

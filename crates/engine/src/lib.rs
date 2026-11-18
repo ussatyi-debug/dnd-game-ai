@@ -32,6 +32,7 @@ pub mod fixtures;
 pub mod inventory;
 pub mod knowledge;
 pub mod master_ops;
+pub mod multiclass;
 pub mod notation;
 pub mod profile;
 pub mod recruit;
@@ -68,6 +69,7 @@ pub use knowledge::{
     NOTE_REMINDER_TURNS, TIMER_AUTO_DONE_TURNS,
 };
 pub use master_ops::{Checkpoint, HpChange, SceneChange, UndoInfo};
+pub use multiclass::{class_id_of, LevelCasting, LevelGain};
 pub use notation::{parse_player_roll, resolve_player_d20, PlayerRollInput};
 pub use profile::{
     Attack, AttackLine, Attunement, Bonus, Feature, HitDice, Proficiency, ProficiencyLine, Profile,

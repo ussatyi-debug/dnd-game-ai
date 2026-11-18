@@ -4,6 +4,7 @@ import ChatPanel, { type ChatMessage, type MasterMode } from "./components/ChatP
 import DiceDrawer from "./components/DiceDrawer";
 import KnowledgeBase from "./components/KnowledgeBase";
 import GoalsStrip from "./components/GoalsStrip";
+import LevelUpWindow from "./components/LevelUpWindow";
 import LoadWindow, { parseSave, type ParsedSave } from "./components/LoadWindow";
 import MiniPlayer from "./components/MiniPlayer";
 import SettingsWindow, { type SettingsTab } from "./components/SettingsWindow";
@@ -251,6 +252,8 @@ export default function App() {
   const [xp, setXp] = useState<XpStatus | null>(null);
   /** Повышение уровня: лист героя до повышения. */
   const [levelUpSpec, setLevelUpSpec] = useState<HeroSpec | null>(null);
+  /** Окно выбора класса при повышении уровня: id героя. */
+  const [levelUpId, setLevelUpId] = useState<string | null>(null);
   const [companionMode, setCompanionMode] = useState<CompanionMode | null>(null);
   const [creating, setCreating] = useState(false);
   /** Новая игра началась — мастер должен открыть её вступлением. */
@@ -1136,8 +1139,8 @@ export default function App() {
     }
   }
 
-  /** Окно повышения уровня: лист героя из сохранения своей кампании. */
-  async function openLevelUp(id: string) {
+  /** Мастер создания для уровня в своём классе: лист героя из сохранения своей кампании. */
+  async function openLevelUpWizard(id: string) {
     try {
       const spec = await heroSpec(id);
       if (!spec) throw new Error("Лист героя не найден в кампании.");
@@ -1151,6 +1154,12 @@ export default function App() {
   async function confirmLevelUp(_draft: Draft, spec: HeroSpec) {
     const line = await levelUp(spec);
     setLevelUpSpec(null);
+    await announceLevelUp(line);
+  }
+
+  /** Новый уровень принят движком: обновить экран и дать мастеру описать рост героя. */
+  async function announceLevelUp(line: string) {
+    setLevelUpId(null);
     await refresh();
     addMessage("system", `Повышение уровня — ${line}.`);
     if (masterReady && masterKnown) {
@@ -1326,7 +1335,7 @@ export default function App() {
             onAddMember={(req) => recruit && setCompanionMode({ maxLevel: recruit.max_level, request: req })}
             onDismissRecruit={(id) => void dismissRecruit(id).then(() => refresh())}
             xp={xp}
-            onLevelUp={(id) => void openLevelUp(id)}
+            onLevelUp={(id) => setLevelUpId(id)}
             onSceneNow={(text) => void setSceneNow(text).then(setParty).catch(() => undefined)}
           />
         </div>
@@ -1517,6 +1526,19 @@ export default function App() {
         />
       )}
       {creating && <CreationWizard onClose={() => setCreating(false)} onConfirm={startNewCampaign} />}
+      {levelUpId && (
+        <LevelUpWindow
+          id={levelUpId}
+          wizard={xp?.members.find((m) => m.id === levelUpId)?.wizard ?? false}
+          onClose={() => setLevelUpId(null)}
+          onOpenWizard={() => {
+            const id = levelUpId;
+            setLevelUpId(null);
+            void openLevelUpWizard(id);
+          }}
+          onDone={(line) => void announceLevelUp(line)}
+        />
+      )}
       {levelUpSpec && (
         <CreationWizard onClose={() => setLevelUpSpec(null)} onConfirm={confirmLevelUp} levelUp={levelUpSpec} />
       )}

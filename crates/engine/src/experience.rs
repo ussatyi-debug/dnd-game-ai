@@ -7,17 +7,20 @@
 //! - Порог пройден — повышение открывается на ближайшем длительном отдыхе.
 //! - Повышают уровень герои и спутники своей кампании (по правилам 2024 года): интерфейс
 //!   собирает лист нового уровня мастером создания, движок проверяет его и меняет лист,
-//!   сохраняя то, что менялось в игре. Отряд «Дома Стрэндж» (листы 2024 года, День 98) копит
-//!   опыт и видит пройденный порог; новый лист уровня для него собирается вручную: мастер
-//!   создания пока не повышает мультикласс (Никис) и не переносит предметы кампании.
+//!   сохраняя то, что менялось в игре. Новый уровень в другом классе (мультикласс) и повышение
+//!   отряда «Дома Стрэндж» — через [`LevelGain`]: выбранный класс, кость хитов, магия и умения
+//!   уровня (листы «Дома Стрэндж» получают их правками листа).
 
 use crate::character::Character;
 use crate::creation::{build_hero, HeroSpec, XP_THRESHOLDS};
 use crate::error::EngineError;
+use crate::multiclass::{check_multiclass, class_id_of, grow_spec, LevelGain};
+use crate::profile::ProficiencyLine;
 use crate::savegame::{
     apply_character, SavedCaster, SavedCharacter, SavedPool, SavedProfile, SavedSpellcasting,
 };
 use crate::session::Session;
+use crate::sheet_edits::SheetEdit;
 
 /// Наибольший уровень по правилам.
 pub const MAX_LEVEL: u32 = 20;
@@ -53,6 +56,9 @@ pub struct XpMember {
     pub can_level: bool,
     /// Почему повысить нельзя (пусто, если можно или порог не пройден).
     pub reason: String,
+    /// Тот же класс можно повысить мастером создания (герой своей кампании с одним классом);
+    /// иначе — окном выбора класса ([`LevelGain`]).
+    pub wizard: bool,
 }
 
 /// Журнал и опыт отряда.
@@ -122,17 +128,154 @@ impl Session {
     }
 
     fn level_up_block(&self, c: &Character) -> String {
+        if c.level() >= MAX_LEVEL {
+            return "20 уровень — наибольший".into();
+        }
         match &self.campaign {
-            None => "лист «Дома Стрэндж» повышается новым листом уровня (мультикласс и предметы \
-кампании мастер создания пока не переносит)"
-                .into(),
+            // Отряд «Дома Стрэндж» повышается правками листа.
+            None => String::new(),
             Some(campaign) => match campaign.heroes.iter().find(|h| h.id == c.id) {
                 None => "лист не из мастера создания".into(),
-                Some(h) if h.classes.len() > 1 => "мультикласс пока не поддерживается".into(),
-                Some(_) if c.level() >= MAX_LEVEL => "20 уровень — наибольший".into(),
                 Some(_) => String::new(),
             },
         }
+    }
+
+    /// Можно ли повысить тот же класс мастером создания.
+    fn wizard_level_up(&self, c: &Character) -> bool {
+        self.campaign.as_ref().is_some_and(|campaign| {
+            campaign.heroes.iter().any(|h| h.id == c.id && h.classes.len() == 1)
+        })
+    }
+
+    /// Общие проверки повышения: открыто, порог опыта пройден. Возвращает (индекс, уровень, опыт).
+    fn level_up_ready(&self, id: &str) -> Result<(usize, u32, u32), EngineError> {
+        let index = self
+            .party
+            .iter()
+            .position(|c| c.id == id)
+            .ok_or_else(|| EngineError::Experience(format!("нет члена отряда {id}")))?;
+        let c = &self.party[index];
+        let block = self.level_up_block(c);
+        if !block.is_empty() {
+            return Err(EngineError::Experience(block));
+        }
+        if !self.level_up_open.contains(&c.id) {
+            return Err(EngineError::Experience(
+                "повышение открывается на длительном отдыхе после порога опыта".into(),
+            ));
+        }
+        let level = c.level();
+        let xp = Self::xp_of(c);
+        if xp < threshold(level + 1) {
+            return Err(EngineError::Experience(format!(
+                "опыта {xp} меньше порога {} уровня ({})",
+                level + 1,
+                threshold(level + 1)
+            )));
+        }
+        Ok((index, level, xp))
+    }
+
+    /// Повышение уровня в выбранном классе: тот же класс или новый (мультикласс).
+    ///
+    /// Лист из мастера создания дописывается и пересобирается ([`Session::level_up`]); лист
+    /// «Дома Стрэндж» получает правки: уровень класса, максимум хитов, опыт до следующего
+    /// уровня, умения и владения.
+    pub fn level_up_class(&mut self, id: &str, gain: LevelGain) -> Result<String, EngineError> {
+        let prepared = (|| {
+            let class_id = gain.check()?;
+            let (index, level, xp) = self.level_up_ready(id)?;
+            let c = &self.party[index];
+            let names: Vec<&str> = c.classes.iter().map(|cl| cl.class.as_str()).collect();
+            let abilities = c.abilities;
+            let multiclass = check_multiclass(&names, &gain.class, |a| abilities.get(a))?;
+            Ok((class_id, index, level, xp, multiclass))
+        })();
+        let (class_id, index, level, xp, multiclass) = match prepared {
+            Ok(v) => v,
+            Err(e) => {
+                return self.logged(
+                    Err(e),
+                    |_: &String| String::new(),
+                    || "повышение уровня".into(),
+                );
+            }
+        };
+        let in_campaign = self
+            .campaign
+            .as_ref()
+            .and_then(|campaign| campaign.heroes.iter().find(|h| h.id == id).cloned());
+        if let Some(mut spec) = in_campaign {
+            grow_spec(&mut spec, &gain, class_id);
+            spec.draft = String::new();
+            return self.level_up(spec);
+        }
+        let result = (|| {
+            let old = self.party[index].clone();
+            let mut hero = old.clone();
+            let new_level = old
+                .classes
+                .iter()
+                .find(|cl| class_id_of(&cl.class) == Some(class_id))
+                .map_or(1, |cl| cl.level + 1);
+            let con = hero.abilities.modifier(crate::character::Ability::Constitution);
+            let gained = (gain.roll() as i32 + con).max(1) as u32 + gain.hp_bonus;
+            let dice_total =
+                old.profile.hit_dice.iter().find(|d| d.die == gain.hit_die).map_or(0, |d| d.total)
+                    + 1;
+            let mut edits = vec![
+                SheetEdit::ClassLevel {
+                    class: class_id.into(),
+                    name: gain.class_name.trim().into(),
+                    subclass: gain.subclass.clone().filter(|s| !s.trim().is_empty()),
+                    level: new_level,
+                    hit_die: gain.hit_die,
+                    hit_dice_total: dice_total,
+                    casting: gain.casting.clone(),
+                },
+                SheetEdit::Number {
+                    field: "hp_max".into(),
+                    value: i64::from(old.hit_points.max + gained),
+                },
+            ];
+            if let Some(next) = next_threshold(level + 1) {
+                edits.push(SheetEdit::Number { field: "xp_next".into(), value: i64::from(next) });
+            }
+            for f in &gain.features {
+                edits.push(SheetEdit::Feature {
+                    name: f.name.clone(),
+                    source: f.source.clone(),
+                    text: f.text.clone(),
+                });
+            }
+            for ProficiencyLine { kind, text, .. } in &gain.proficiencies {
+                edits.push(SheetEdit::Proficiency { kind: kind.clone(), text: text.clone() });
+            }
+            for edit in edits {
+                hero.apply_sheet_edit(edit)?;
+            }
+            // Новая кость хитов — заполненной, прибавка хитов — и к текущим.
+            if let Some(d) = hero.profile.hit_dice.iter_mut().find(|d| d.die == gain.hit_die) {
+                d.current = (d.current + 1).min(d.total);
+            }
+            hero.hit_points.current = (old.hit_points.current + gained).min(hero.hit_points.max);
+            hero.profile.xp = Some(xp);
+            let name = gain.class_name.trim();
+            let line = if multiclass {
+                format!("{}: {} уровень — мультикласс, {name} 1", hero.name, level + 1)
+            } else {
+                format!("{}: {} уровень — {name} {new_level}", hero.name, level + 1)
+            };
+            self.party[index] = hero;
+            self.level_up_open.retain(|x| x != id);
+            Ok(line)
+        })();
+        self.logged(
+            result,
+            |line| format!("Повышение уровня — {line}"),
+            || "повышение уровня".into(),
+        )
     }
 
     /// Опыт отряда и журнал мастера.
@@ -155,6 +298,7 @@ impl Session {
                     ready,
                     open: ready && self.level_up_open.contains(&c.id),
                     can_level: reason.is_empty(),
+                    wizard: self.wizard_level_up(c),
                     reason,
                 }
             })
@@ -269,33 +413,13 @@ impl Session {
     pub fn level_up(&mut self, mut spec: HeroSpec) -> Result<String, EngineError> {
         let result =
             (|| {
-                let index = self.party.iter().position(|c| c.id == spec.id).ok_or_else(|| {
-                    EngineError::Experience(format!("нет члена отряда {}", spec.id))
-                })?;
+                let (index, level, xp) = self.level_up_ready(&spec.id)?;
                 let old = &self.party[index];
-                let block = self.level_up_block(old);
-                if !block.is_empty() {
-                    return Err(EngineError::Experience(block));
-                }
-                if !self.level_up_open.contains(&old.id) {
-                    return Err(EngineError::Experience(
-                        "повышение открывается на длительном отдыхе после порога опыта".into(),
-                    ));
-                }
-                let level = old.level();
-                let xp = Self::xp_of(old);
                 if spec.level() != level + 1 {
                     return Err(EngineError::Experience(format!(
                         "новый лист {} уровня, а должен быть {}",
                         spec.level(),
                         level + 1
-                    )));
-                }
-                if xp < threshold(level + 1) {
-                    return Err(EngineError::Experience(format!(
-                        "опыта {xp} меньше порога {} уровня ({})",
-                        level + 1,
-                        threshold(level + 1)
                     )));
                 }
                 let campaign = self
@@ -368,8 +492,8 @@ mod tests {
         assert!(st.notes.is_empty());
         for (m, b) in st.members.iter().zip(before) {
             assert_eq!(m.xp, b + 400);
-            // Отряд Стрэнджей уровень пока не повышает.
-            assert!(!m.can_level);
+            // Отряд Стрэнджей повышается окном выбора класса, не мастером создания.
+            assert!(m.can_level && !m.wizard);
         }
         assert!(s.award_xp(0, "").is_err());
     }

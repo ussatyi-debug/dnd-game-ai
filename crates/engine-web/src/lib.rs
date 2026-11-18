@@ -13,8 +13,8 @@ use std::cell::RefCell;
 
 use dnd_engine::{
     validate_hero, Campaign, CardDraft, CardFact, CastMethod, CastRequest, HeroSpec, KbCard,
-    NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SaveData, Scene, Session, SheetEdit, SlotRef,
-    Xoshiro256,
+    LevelGain, NewNote, NoteEdit, NoteKind, NoteLayer, RestKind, SaveData, Scene, Session,
+    SheetEdit, SlotRef, Xoshiro256,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -177,6 +177,11 @@ pub enum Request {
     /// Повышение уровня по листу нового уровня.
     LevelUp {
         spec: Value,
+    },
+    /// Повышение уровня в выбранном классе (мультикласс, отряд «Дома Стрэндж»).
+    LevelUpClass {
+        id: String,
+        gain: Value,
     },
     /// Предложения мастера принять персонажа в отряд.
     RecruitRequests,
@@ -399,6 +404,11 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         Request::SetSceneNow { text } => {
             session.set_scene_now(&text);
             to_value(session.party_view())
+        }
+        Request::LevelUpClass { id, gain } => {
+            let gain: LevelGain = serde_json::from_value(gain)
+                .map_err(|e| format!("Новый уровень не прочитан: {e}"))?;
+            session.level_up_class(&id, gain).map_err(|e| e.to_string()).and_then(to_value)
         }
         Request::LevelUp { spec } => {
             let spec: HeroSpec =
