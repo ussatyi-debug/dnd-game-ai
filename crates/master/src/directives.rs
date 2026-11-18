@@ -588,7 +588,8 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
         "buy" => (|| -> Result<String, String> {
             let what = text_field(cmd, "item").or_else(|_| text_field(cmd, "what"))?;
             let price = text_field(cmd, "price")?;
-            let location = opt_text(cmd, "location").unwrap_or("purse");
+            // Без места — движок платит из того, что при себе (кошелёк, затем Кольцо Теневого Хранилища).
+            let location = opt_text(cmd, "location").unwrap_or("");
             engine(session.master_buy(what, price, location))?;
             Ok(last_log(session))
         })(),

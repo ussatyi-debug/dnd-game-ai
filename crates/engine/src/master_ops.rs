@@ -10,7 +10,11 @@ use crate::profile::SheetDetails;
 use crate::resource::{ResourcePool, RestKind};
 use crate::session::{Mood, Scene, Session};
 use crate::sheet_edits::SheetProposal;
-use crate::treasury::{Asset, AssetKind, Copper, EntrySource, NewEntry, Treasury};
+use crate::treasury::{Asset, AssetKind, Copper, EntrySource, Location, NewEntry, Treasury};
+
+/// Места хранения «при себе», откуда платят, если мастер не назвал место: кошелёк, затем
+/// Кольцо Теневого Хранилища (кампания «Дом Стрэндж»).
+const ON_HAND: [&str; 2] = ["purse", "shadow_ring"];
 
 /// Изменение хитов.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -444,7 +448,8 @@ impl Session {
 
     /// Покупка со сдачей: движок сам подбирает монеты и возвращает сдачу.
     ///
-    /// Мастер называет вещь, цену («1 см», «2 зм 5 см») и место хранения. Движок списывает
+    /// Мастер называет вещь, цену («1 см», «2 зм 5 см») и, если нужно, место хранения (без места —
+    /// кошелёк, а если там не хватает — Кольцо Теневого Хранилища). Движок списывает
     /// монеты, начиная с мелких; если мелочи не хватает, платит монетой покрупнее и записывает
     /// сдачу золотом, серебром и медью.
     pub fn master_buy(
@@ -456,7 +461,7 @@ impl Session {
         let result = (|| {
             let cost = crate::treasury::parse_price(price)
                 .ok_or_else(|| EngineError::UnknownAsset(format!("цена «{price}»")))?;
-            let place = self.treasury.find_location(location)?.clone();
+            let place = self.purchase_location(location, cost)?;
             let coins = self.treasury.coins_at(&place.id);
             let purse: Copper = coins.iter().map(|(.., value, qty)| value * qty).sum();
             if purse < cost {
@@ -544,6 +549,30 @@ impl Session {
             Ok(line)
         })();
         self.logged(result, |line| format!("Покупка: {line}"), || format!("покупка «{what}»"))
+    }
+
+    /// Откуда платить. Место названо — оно. Не названо («», «auto») — первое из мест «при себе»
+    /// (кошелёк, затем Кольцо Теневого Хранилища), где монет хватает на покупку; если не хватает
+    /// нигде — кошелёк (покупка не пройдёт с понятной ошибкой).
+    fn purchase_location(&self, location: &str, cost: Copper) -> Result<Location, EngineError> {
+        let query = location.trim();
+        if !query.is_empty() && !query.eq_ignore_ascii_case("auto") {
+            return Ok(self.treasury.find_location(query)?.clone());
+        }
+        let on_hand: Vec<&Location> = ON_HAND
+            .iter()
+            .filter_map(|id| self.treasury.locations().iter().find(|l| l.id == *id))
+            .collect();
+        let money = |place: &Location| -> Copper {
+            self.treasury.coins_at(&place.id).iter().map(|(.., value, qty)| value * qty).sum()
+        };
+        on_hand
+            .iter()
+            .find(|place| money(place) >= cost)
+            .or_else(|| on_hand.first())
+            .map(|place| (*place).clone())
+            .or_else(|| self.treasury.locations().first().cloned())
+            .ok_or_else(|| EngineError::UnknownLocation("место хранения".into()))
     }
 
     /// Перемещение ценности между местами хранения.
@@ -806,6 +835,26 @@ mod tests {
         // Непонятная цена и нехватка денег — отказ.
         assert!(s.master_buy("замок", "бесплатно", "purse").is_err());
         assert!(s.master_buy("замок", "1000000 зм", "purse").is_err());
+    }
+
+    #[test]
+    fn buying_without_location_pays_from_what_is_at_hand() {
+        let mut s = Session::demo(crate::rng::Xoshiro256::from_seed(7));
+        // Утром Дня 98 в кошеле нет монет: платит Кольцо Теневого Хранилища.
+        let ring = s.treasury().quantity("gp", "shadow_ring");
+        let line = s.master_buy("плащ", "5 зм", "").unwrap();
+        assert!(line.contains("Кольцо Теневого Хранилища"), "{line}");
+        assert_eq!(s.treasury().quantity("gp", "shadow_ring"), ring - 5);
+        // В кошеле появилось золото — теперь сначала платит он.
+        s.master_treasury_transfer("gp", 10, "shadow_ring", "purse", "На расходы").unwrap();
+        let line = s.master_buy("обед", "2 зм", "auto").unwrap();
+        assert!(line.contains("При себе"), "{line}");
+        assert_eq!(s.treasury().quantity("gp", "purse"), 8);
+        // На дорогую покупку кошеля не хватает — снова кольцо.
+        let line = s.master_buy("конь", "75 зм", "").unwrap();
+        assert!(line.contains("Кольцо"), "{line}");
+        // Не хватает нигде — понятный отказ.
+        assert!(s.master_buy("замок", "1000000 зм", "").is_err());
     }
 
     #[test]
