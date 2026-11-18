@@ -7456,202 +7456,10 @@
  ],
  "all_ids": [
   {
-   "id": "goal.coronation",
-   "layer": "player",
-   "section": "goals",
-   "title": "Коронация в Серебряном Шпиле"
-  },
-  {
-   "id": "goal.vacancies",
-   "layer": "player",
-   "section": "goals",
-   "title": "Заполнить вакансии Коронной Палаты"
-  },
-  {
-   "id": "goal.astrolabe",
-   "layer": "player",
-   "section": "goals",
-   "title": "Получить Княжескую Астролябию"
-  },
-  {
-   "id": "goal.orelie",
-   "layer": "player",
-   "section": "goals",
-   "title": "Проверка Мадам Орели"
-  },
-  {
-   "id": "goal.reparations",
-   "layer": "player",
-   "section": "goals",
-   "title": "Репарации Сената"
-  },
-  {
-   "id": "goal.werner_verdict",
-   "layer": "player",
-   "section": "goals",
-   "title": "Приговор Судье Вернеру"
-  },
-  {
-   "id": "goal.beatrix_cache",
-   "layer": "player",
-   "section": "goals",
-   "title": "Тайник вдовы Беатрис фон Вальд"
-  },
-  {
-   "id": "goal.sea_basilisk",
-   "layer": "player",
-   "section": "goals",
-   "title": "Поднять «Морских Василисков»"
-  },
-  {
-   "id": "goal.star_needle",
-   "layer": "player",
-   "section": "goals",
-   "title": "Чертежи «Звёздной Иглы»"
-  },
-  {
-   "id": "goal.ironclad",
-   "layer": "player",
-   "section": "goals",
-   "title": "Паровой адамантовый броненосец"
-  },
-  {
-   "id": "goal.shpil",
-   "layer": "player",
-   "section": "goals",
-   "title": "Вскрыть Серебряный Шпиль"
-  },
-  {
-   "id": "goal.blackwater",
-   "layer": "player",
-   "section": "goals",
-   "title": "Сокрушить Черноводье"
-  },
-  {
-   "id": "persona.nikis",
-   "layer": "player",
-   "section": "personas",
-   "title": "Сэр Никис Стрэндж"
-  },
-  {
-   "id": "persona.ghost",
-   "layer": "player",
-   "section": "personas",
-   "title": "Призрак Альт-Вардена («П.А.В.»)"
-  },
-  {
-   "id": "persona.consigliere",
-   "layer": "player",
-   "section": "personas",
-   "title": "Консильери Фубуа Фуатье"
-  },
-  {
-   "id": "persona.de_vaux",
-   "layer": "player",
-   "section": "personas",
-   "title": "Шевалье Адриан де Во"
-  },
-  {
-   "id": "persona.varr",
-   "layer": "player",
-   "section": "personas",
-   "title": "Адриан Варр"
-  },
-  {
-   "id": "persona.grimm",
-   "layer": "player",
-   "section": "personas",
-   "title": "Гримм"
-  },
-  {
-   "id": "secret.hecker_route",
-   "layer": "player",
-   "section": "secrets",
-   "title": "Тайный подход к усадьбе Хеккера"
-  },
-  {
-   "id": "secret.black_anchor",
-   "layer": "player",
-   "section": "secrets",
-   "title": "Пароль «Чёрного Якоря»"
-  },
-  {
-   "id": "secret.silk_noose",
-   "layer": "player",
-   "section": "secrets",
-   "title": "Вход в «Шёлковую Петлю»"
-  },
-  {
-   "id": "secret.pen_and_scales",
-   "layer": "player",
-   "section": "secrets",
-   "title": "Бункер Первого Призрака"
-  },
-  {
-   "id": "secret.signs",
-   "layer": "player",
-   "section": "secrets",
-   "title": "Знаки опознания"
-  },
-  {
-   "id": "secret.mountain_sluice",
-   "layer": "player",
-   "section": "secrets",
-   "title": "«Горный Шлюз»"
-  },
-  {
-   "id": "secret.rat_pipe",
-   "layer": "player",
-   "section": "secrets",
-   "title": "«Крысиная Труба»"
-  },
-  {
-   "id": "known.orelie",
-   "layer": "player",
-   "section": "known",
-   "title": "Мадам Орели"
-  },
-  {
-   "id": "known.lessing",
-   "layer": "player",
-   "section": "known",
-   "title": "Барон Оттокар фон Лессинг"
-  },
-  {
-   "id": "known.rauch",
-   "layer": "player",
-   "section": "known",
-   "title": "Великий Прокурор барон Магнус фон Раух"
-  },
-  {
-   "id": "known.klaus",
-   "layer": "player",
-   "section": "known",
-   "title": "Казначей Бернгард Клаус"
-  },
-  {
-   "id": "known.morelli",
-   "layer": "player",
-   "section": "known",
-   "title": "Сильвестр «Паук» Морелли"
-  },
-  {
-   "id": "known.caleb",
-   "layer": "player",
-   "section": "known",
-   "title": "Калеб-книгочей"
-  },
-  {
-   "id": "chron.prologue",
-   "layer": "player",
-   "section": "chronicle",
-   "title": "Пролог: от беглого вора к теневому эмиссару"
-  },
-  {
    "id": "chron.ch1",
    "layer": "player",
    "section": "chronicle",
-   "title": "Глава I: Гамбит в Вейденбурге"
+   "title": "Глава I: Гамбит в Вейденбурге и Тени Кроу-Рока"
   },
   {
    "id": "chron.ch2",
@@ -7684,10 +7492,316 @@
    "title": "Глава VI: Возвращение князя"
   },
   {
+   "id": "chron.prologue",
+   "layer": "player",
+   "section": "chronicle",
+   "title": "Пролог: от беглого вора к теневому эмиссару"
+  },
+  {
+   "id": "goal.alt_varden_economy",
+   "layer": "player",
+   "section": "goals",
+   "title": "Зерновой транзит из Мирры и чеканка талера"
+  },
+  {
+   "id": "goal.falcon_rings",
+   "layer": "player",
+   "section": "goals",
+   "title": "Завершить ковку 7-го «Соколиного Перстня Мысли»"
+  },
+  {
+   "id": "goal.krot_red_ravine",
+   "layer": "player",
+   "section": "goals",
+   "title": "Перевербовка банды Шрама и захват Ван дер Хольтов"
+  },
+  {
+   "id": "goal.st_julian_church",
+   "layer": "player",
+   "section": "goals",
+   "title": "Реставрация собора Св. Юлиана и нейтрализация Августина"
+  },
+  {
+   "id": "goal.shpil",
+   "layer": "player",
+   "section": "goals",
+   "title": "Вскрыть Серебряный Шпиль"
+  },
+  {
+   "id": "goal.coronation",
+   "layer": "player",
+   "section": "goals",
+   "title": "Коронация в Серебряном Шпиле"
+  },
+  {
+   "id": "goal.astrolabe",
+   "layer": "player",
+   "section": "goals",
+   "title": "Получить Княжескую Астролябию"
+  },
+  {
+   "id": "goal.orelie",
+   "layer": "player",
+   "section": "goals",
+   "title": "Проверка Мадам Орели"
+  },
+  {
+   "id": "goal.blackwater",
+   "layer": "player",
+   "section": "goals",
+   "title": "Сокрушить и интегрировать Черноводье"
+  },
+  {
+   "id": "goal.werner_verdict",
+   "layer": "player",
+   "section": "goals",
+   "title": "Судьба Судьи Вернера"
+  },
+  {
+   "id": "goal.vacancies",
+   "layer": "player",
+   "section": "goals",
+   "title": "Сформировать Коронную Палату («Пять Столпов»)"
+  },
+  {
+   "id": "goal.star_bridge_karak_dum",
+   "layer": "player",
+   "section": "goals",
+   "title": "Активировать 4-й терминал: Карак-Дум"
+  },
+  {
+   "id": "goal.sixth_pillar_key",
+   "layer": "player",
+   "section": "goals",
+   "title": "Добыть Третий Ключ к Шестому Столпу"
+  },
+  {
+   "id": "goal.star_bridge_sunken_island",
+   "layer": "player",
+   "section": "goals",
+   "title": "Найти 5-й терминал: Затонувший Остров"
+  },
+  {
+   "id": "goal.star_needle",
+   "layer": "player",
+   "section": "goals",
+   "title": "Чертежи «Звёздной Иглы» и свод артефактов"
+  },
+  {
+   "id": "goal.reparations",
+   "layer": "player",
+   "section": "goals",
+   "title": "Репарации Сената и разгром Валленштейна"
+  },
+  {
+   "id": "goal.beatrix_cache",
+   "layer": "player",
+   "section": "goals",
+   "title": "Тайник вдовы Беатрис фон Вальд"
+  },
+  {
+   "id": "goal.ironclad",
+   "layer": "player",
+   "section": "goals",
+   "title": "Первый паровой адамантовый броненосец"
+  },
+  {
+   "id": "goal.sea_basilisk",
+   "layer": "player",
+   "section": "goals",
+   "title": "Поднять «Морских Василисков»"
+  },
+  {
+   "id": "goal.mirra_conspiracy",
+   "layer": "player",
+   "section": "goals",
+   "title": "Разоблачение заговора аль-Джабари и Брагадина"
+  },
+  {
+   "id": "known.morten",
+   "layer": "player",
+   "section": "known",
+   "title": "Адмирал Альбрехт Мортен"
+  },
+  {
+   "id": "known.hecker",
+   "layer": "player",
+   "section": "known",
+   "title": "Вальтер Хеккер"
+  },
+  {
+   "id": "known.klaus",
+   "layer": "player",
+   "section": "known",
+   "title": "Казначей Бернгард Клаус"
+  },
+  {
+   "id": "known.bran",
+   "layer": "player",
+   "section": "known",
+   "title": "Корнелиус Бранд"
+  },
+  {
+   "id": "known.ludwig",
+   "layer": "player",
+   "section": "known",
+   "title": "Кривой Людвиг"
+  },
+  {
+   "id": "known.orelie",
+   "layer": "player",
+   "section": "known",
+   "title": "Мадам Орели"
+  },
+  {
+   "id": "known.krot",
+   "layer": "player",
+   "section": "known",
+   "title": "Папаша Крот"
+  },
+  {
+   "id": "known.caleb",
+   "layer": "player",
+   "section": "known",
+   "title": "Калеб-книгочей"
+  },
+  {
+   "id": "known.sternberg",
+   "layer": "player",
+   "section": "known",
+   "title": "Капитан Курт Штернберг"
+  },
+  {
+   "id": "known.kasim",
+   "layer": "player",
+   "section": "known",
+   "title": "Великий Дож Касим аль-Мансур"
+  },
+  {
+   "id": "known.mateo",
+   "layer": "player",
+   "section": "known",
+   "title": "Дон Матео де Сильва"
+  },
+  {
+   "id": "known.isabella",
+   "layer": "player",
+   "section": "known",
+   "title": "Капитан Изабелла дель Торро"
+  },
+  {
+   "id": "known.zuleika",
+   "layer": "player",
+   "section": "known",
+   "title": "Шейха Зулейка бинт-Рашид"
+  },
+  {
+   "id": "known.joachim",
+   "layer": "player",
+   "section": "known",
+   "title": "Архиепископ Иоахим"
+  },
+  {
+   "id": "known.lessing",
+   "layer": "player",
+   "section": "known",
+   "title": "Барон Оттокар фон Лессинг"
+  },
+  {
+   "id": "known.eleonora",
+   "layer": "player",
+   "section": "known",
+   "title": "Баронесса Элеонора фон Хольц"
+  },
+  {
+   "id": "known.rauch",
+   "layer": "player",
+   "section": "known",
+   "title": "Великий Прокурор барон Магнус фон Раух"
+  },
+  {
+   "id": "known.grandpre",
+   "layer": "player",
+   "section": "known",
+   "title": "Магистр Рено де Гранпре"
+  },
+  {
+   "id": "known.faber",
+   "layer": "player",
+   "section": "known",
+   "title": "Мастер Фабер"
+  },
+  {
+   "id": "known.vogel",
+   "layer": "player",
+   "section": "known",
+   "title": "Полковник Дитрих Фогель"
+  },
+  {
+   "id": "known.krause",
+   "layer": "player",
+   "section": "known",
+   "title": "Ротмистр Гельмут Краузе"
+  },
+  {
+   "id": "known.morelli",
+   "layer": "player",
+   "section": "known",
+   "title": "Сильвестр «Паук» Морелли"
+  },
+  {
+   "id": "known.hugo",
+   "layer": "player",
+   "section": "known",
+   "title": "Барон Гуго фон Сталь"
+  },
+  {
+   "id": "known.kornelius",
+   "layer": "player",
+   "section": "known",
+   "title": "Магистр Корнелий Скрытный"
+  },
+  {
+   "id": "known.morgan",
+   "layer": "player",
+   "section": "known",
+   "title": "Утопленник Морган"
+  },
+  {
+   "id": "note.deep_geomancy",
+   "layer": "player",
+   "section": "notes",
+   "title": "Глубинная геомантия и петрификация"
+  },
+  {
    "id": "note.jade_protocol",
    "layer": "player",
    "section": "notes",
    "title": "Протокол Нефритового заземления"
+  },
+  {
+   "id": "note.sixth_pillar_keys",
+   "layer": "player",
+   "section": "notes",
+   "title": "Три Ключа к Шестому Столпу"
+  },
+  {
+   "id": "note.falcon_network",
+   "layer": "player",
+   "section": "notes",
+   "title": "«Соколиная Сеть» ментальной связи"
+  },
+  {
+   "id": "note.shadow_ring_vault",
+   "layer": "player",
+   "section": "notes",
+   "title": "Архив Кольца Теневого Хранилища"
+  },
+  {
+   "id": "note.xavier_tools",
+   "layer": "player",
+   "section": "notes",
+   "title": "Спецсредства из трофеев Ксавьера"
   },
   {
    "id": "note.collegium_weak",
@@ -7696,10 +7810,208 @@
    "title": "Уязвимости «Старой Коллегии»"
   },
   {
-   "id": "note.xavier_tools",
+   "id": "note.treasury_ledgers",
    "layer": "player",
    "section": "notes",
-   "title": "Спецсредства из трофеев Ксавьера"
+   "title": "Распределение казны и резервов Дома Стрэндж"
+  },
+  {
+   "id": "note.alt_varden_economy",
+   "layer": "player",
+   "section": "notes",
+   "title": "Экономика, металлургия и валюта Княжества"
+  },
+  {
+   "id": "persona.varr",
+   "layer": "player",
+   "section": "personas",
+   "title": "Адриан Варр"
+  },
+  {
+   "id": "persona.nikis",
+   "layer": "player",
+   "section": "personas",
+   "title": "Сэр Никис Стрэндж"
+  },
+  {
+   "id": "persona.de_vaux",
+   "layer": "player",
+   "section": "personas",
+   "title": "Шевалье Адриан де Во"
+  },
+  {
+   "id": "persona.grimm",
+   "layer": "player",
+   "section": "personas",
+   "title": "Гримм"
+  },
+  {
+   "id": "persona.consigliere",
+   "layer": "player",
+   "section": "personas",
+   "title": "Консильери Фубуа Фуатье"
+  },
+  {
+   "id": "persona.ghost",
+   "layer": "player",
+   "section": "personas",
+   "title": "Призрак Альт-Вардена («П.А.В.»)"
+  },
+  {
+   "id": "secret.pen_and_scales",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Бункер Первого Призрака"
+  },
+  {
+   "id": "secret.silk_noose",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Вход в «Шёлковую Петлю»"
+  },
+  {
+   "id": "secret.black_anchor",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Пароль «Чёрного Якоря»"
+  },
+  {
+   "id": "secret.mountain_sluice",
+   "layer": "player",
+   "section": "secrets",
+   "title": "«Горный Шлюз»"
+  },
+  {
+   "id": "secret.rat_pipe",
+   "layer": "player",
+   "section": "secrets",
+   "title": "«Крысиная Труба»"
+  },
+  {
+   "id": "secret.willows_sluice",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Подземный шлюз особняка на ул. Зелёных Ив, 7"
+  },
+  {
+   "id": "secret.black_marshes_causeway",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Тайная гать через Чёрные топи"
+  },
+  {
+   "id": "secret.hecker_route",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Тайный подход к усадьбе Хеккера"
+  },
+  {
+   "id": "secret.signs",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Знаки опознания"
+  },
+  {
+   "id": "secret.triumvirate_price",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Цена Теневого Пакта"
+  },
+  {
+   "id": "journal.about",
+   "layer": "master",
+   "section": "journal",
+   "title": "Журнал импровизаций"
+  },
+  {
+   "id": "prisoner.eberhard",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Архивариус Матиас Эберхард и пленные агенты Черноводья"
+  },
+  {
+   "id": "prisoner.crow_rock",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Узники Кроу-Рока"
+  },
+  {
+   "id": "prisoner.lorenzi",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Синьор Фабрицио Лоренци и шпионы Таранто"
+  },
+  {
+   "id": "prisoner.south_captives",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Пленные враги Юга (Аль-Зубейр и клан Золотого Песка)"
+  },
+  {
+   "id": "prisoner.cassian",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Прелат Кассиан"
+  },
+  {
+   "id": "prisoner.werner",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Судья Вернер"
+  },
+  {
+   "id": "plan.karak_dum_and_gate",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Открытие 4-го и поиск 5-го терминалов Звёздного Моста"
+  },
+  {
+   "id": "plan.wolfrik_crypt",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Экспедиция в склеп Вольфрика Стрэнджа за Третьим Ключом"
+  },
+  {
+   "id": "plan.third_tranche_wallenstein",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Взыскание 3-го транша репараций и суд над Валленштейном"
+  },
+  {
+   "id": "plan.ironclad_keel",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Постройка первого парового адамантового броненосца"
+  },
+  {
+   "id": "plan.mirra_conspiracy_exposure",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Разоблачение заговора аль-Джабари и Брагадина перед Дожем Касимом"
+  },
+  {
+   "id": "plan.shram_and_holt",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Операция Папаши Крота: ватага Шрама и банкиры Ван дер Хольт"
+  },
+  {
+   "id": "plan.seventh_ring",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Получение 7-го «Соколиного Перстня Мысли»"
+  },
+  {
+   "id": "plan.st_julian_augustin",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Реставрация собора Св. Юлиана и нейтрализация отца Августина"
+  },
+  {
+   "id": "plan.vacancies",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Вакансии Коронной Палаты"
   },
   {
    "id": "plan.day82",
@@ -7729,25 +8041,79 @@
    "id": "plan.coronation",
    "layer": "master",
    "section": "schedule",
-   "title": "День 86 — Коронация"
+   "title": "День 86 — Великая Коронация"
   },
   {
-   "id": "plan.vacancies",
+   "id": "mystery.star_bridge_network",
    "layer": "master",
-   "section": "schedule",
-   "title": "Вакансии Коронной Палаты"
+   "section": "secrets",
+   "title": "Истинный статус Звёздного Моста и дезинформация Юга"
   },
   {
-   "id": "threat.blackwater_party",
+   "id": "mystery.sixth_pillar_rift",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Первопричина Падения Альт-Вардена и Шестой Столп"
+  },
+  {
+   "id": "mystery.xartas_amulet_burial",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Амулет Ксартаса под Корнем Кроу-Рока"
+  },
+  {
+   "id": "mystery.fubua_cuff_double",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Двойник Консильери Фубуа Фуатье"
+  },
+  {
+   "id": "mystery.adrian_varr_identity",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Истинная личность Адриана Варра"
+  },
+  {
+   "id": "mystery.ash_gorge_massacre",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Исчезновение отряда Ксавьера и гибель полка «Чёрного Грифа»"
+  },
+  {
+   "id": "secret.orelie_contacts",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Связи и разоблачение Мадам Орели"
+  },
+  {
+   "id": "mystery.eleonora_submission",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Тайное подчинение баронессы Элеоноры фон Хольц"
+  },
+  {
+   "id": "mystery.zuleika_alliance",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Тайный союз и связь с шейхой Зулейкой"
+  },
+  {
+   "id": "secret.iron_shroud",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Что скрывали «Врата Железного Савана»"
+  },
+  {
+   "id": "threat.taranto_mirra_cabal",
    "layer": "master",
    "section": "threats",
-   "title": "Остатки партии Черноводья в столице"
+   "title": "Заговор патриция аль-Джабари и Коллегии Навигаторов Таранто"
   },
   {
    "id": "threat.zubeir",
    "layer": "master",
    "section": "threats",
-   "title": "Эмират Аль-Зубейр"
+   "title": "Сапфировые Султанаты и Эмират Аль-Зубейр"
   },
   {
    "id": "threat.brock",
@@ -7756,46 +8122,28 @@
    "title": "Банк «Братья Брок»"
   },
   {
-   "id": "prisoner.werner",
+   "id": "threat.wallenstein",
    "layer": "master",
-   "section": "prisoners",
-   "title": "Судья Вернер"
+   "section": "threats",
+   "title": "Вице-канцлер герцог Отто фон Валленштейн"
   },
   {
-   "id": "prisoner.crow_rock",
+   "id": "threat.blackwater_party",
    "layer": "master",
-   "section": "prisoners",
-   "title": "Узники Кроу-Рока"
+   "section": "threats",
+   "title": "Остатки партии Черноводья и церковные интриги в столице"
   },
   {
-   "id": "prisoner.eberhard",
+   "id": "threat.sixth_pillar_rift",
    "layer": "master",
-   "section": "prisoners",
-   "title": "Архивариус Матиас Эберхард"
+   "section": "threats",
+   "title": "Разлом Шестого Столпа в Плане Теней"
   },
   {
-   "id": "secret.orelie_contacts",
+   "id": "threat.weidenburg_underground",
    "layer": "master",
-   "section": "secrets",
-   "title": "С кем говорит Мадам Орели"
-  },
-  {
-   "id": "secret.iron_shroud",
-   "layer": "master",
-   "section": "secrets",
-   "title": "Что скрывают «Врата Железного Савана»"
-  },
-  {
-   "id": "secret.triumvirate_price",
-   "layer": "master",
-   "section": "secrets",
-   "title": "Цена Теневого Пакта"
-  },
-  {
-   "id": "journal.about",
-   "layer": "master",
-   "section": "journal",
-   "title": "Журнал импровизаций"
+   "section": "threats",
+   "title": "Ростовщики Ван дер Хольт и ватага Шрама"
   },
   {
    "id": "loc.crow_rock",
