@@ -67,7 +67,8 @@ export function rollDetail(roll: RollResult): string {
   }
   // Два d20 — не сумма, а пара кубов: игрок сам выбирает больший или меньший.
   if (roll.die === "d20" && roll.values.length === 2) {
-    const [a, b] = roll.values;
+    const a = roll.values[0] ?? 0;
+    const b = roll.values[1] ?? 0;
     return `${a} и ${b} (больший ${Math.max(a, b)}, меньший ${Math.min(a, b)})`;
   }
   if (roll.values.length === 1) {
