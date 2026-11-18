@@ -766,7 +766,7 @@ impl Session {
     /// Очередь инициативы текущего боя: от большей к меньшей.
     pub fn initiative_order(&self) -> Vec<(String, i64)> {
         let mut order = self.initiative.clone();
-        order.sort_by(|a, b| b.1.cmp(&a.1));
+        order.sort_by_key(|(_, v)| std::cmp::Reverse(*v));
         order
     }
 

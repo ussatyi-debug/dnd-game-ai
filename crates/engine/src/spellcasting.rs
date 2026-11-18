@@ -739,8 +739,7 @@ impl Character {
     ) -> Result<(), EngineError> {
         let m = meta(spell_id)?;
         let name = self.name.clone();
-        let sc =
-            self.spellcasting.as_mut().ok_or_else(|| EngineError::NotASpellcaster(name.clone()))?;
+        let sc = self.spellcasting.as_mut().ok_or(EngineError::NotASpellcaster(name.clone()))?;
         if from_scroll {
             if let Some(i) = sc.scrolls.iter().position(|s| s.spell_id == m.id && s.count > 0) {
                 sc.scrolls[i].count -= 1;
@@ -753,7 +752,7 @@ impl Character {
             .casters
             .iter_mut()
             .find(|c| c.preparation == Preparation::Spellbook)
-            .ok_or_else(|| EngineError::NoSpellbook(name))?;
+            .ok_or(EngineError::NoSpellbook(name))?;
         c.known.push(m.id.to_string());
         Ok(())
     }
