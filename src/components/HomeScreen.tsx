@@ -5,6 +5,7 @@ import worldMap from "../assets/world-map.webp";
 import { portraitUrl } from "../data/rules/portraits.ts";
 import { ago, type AutosaveInfo } from "../lib/autosave";
 import type { CampaignInfo } from "../lib/campaigns";
+import { APP_NAME, APP_NAME_EN } from "../lib/appName";
 
 export type HomeAction = "continue" | "campaign" | "new" | "load" | "settings" | "reference" | "exit";
 
@@ -89,7 +90,8 @@ export default function HomeScreen({
       />
       <main className="relative mx-auto flex min-h-full max-w-md flex-col justify-center gap-6 px-5 py-10">
         <header className="text-center">
-          <h1 className="font-serif text-4xl text-gold drop-shadow">DnD Game AI</h1>
+          <h1 className="font-serif text-4xl text-gold drop-shadow">{APP_NAME}</h1>
+          <p className="text-xs uppercase tracking-widest text-parchment/60">{APP_NAME_EN}</p>
           <p className="mt-1 text-sm text-parchment/80">{campaignTitle}</p>
         </header>
 

@@ -133,6 +133,7 @@ import {
 import { loadTtsSettings, ttsPlayer, type TtsSettings } from "./lib/tts";
 import { loadMusicSettings, moodForScene, musicPlayer, type MusicSettings } from "./lib/music";
 import type { DieId, RollResult, TrayRoll } from "./lib/rolls";
+import { APP_NAME } from "./lib/appName";
 
 const MAX_ROLLS = 200;
 /** Раундов запросов бросков мастера за ход (как в движке). */
@@ -1292,7 +1293,7 @@ export default function App() {
       <header className="flex items-center justify-between gap-2 border-b border-edge px-3 py-2">
         <div className="flex items-center gap-3">
           <MainMenu onAction={menu} kbFresh={kbFresh} />
-          <h1 className="font-serif text-lg text-parchment">DnD Game AI</h1>
+          <h1 className="font-serif text-lg text-parchment">{APP_NAME}</h1>
         </div>
         <span className="text-right text-xs text-muted">
           {sinceAutosave !== null && (

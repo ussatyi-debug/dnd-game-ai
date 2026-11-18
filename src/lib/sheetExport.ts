@@ -11,6 +11,7 @@ import { getDownloads } from "./claude";
 import { characterDetails, characterSheet, saveState, type CharacterSheet, type SheetDetails } from "./engine";
 import type { HeroSpec } from "./heroSpec";
 import { sheetBlocks, sheetPdf } from "./sheetPdf";
+import { APP_NAME } from "./appName";
 
 export const SHEET_FORMAT = "dnd-game-ai.hero";
 export const SHEET_VERSION = 1;
@@ -134,7 +135,7 @@ ${rows([["Пассивная Внимательность", String(d.passive_per
 <h2>Умения</h2>
 ${d.features.map((x) => `<p class="feat"><b>${esc(x.name)}</b> <i>${esc(x.source)}</i>. ${esc(x.text).replace(/\n/g, "<br>")}</p>`).join("")}
 ${d.appearance ? `<h2>Внешность</h2><p>${esc(d.appearance)}</p>` : ""}
-<p class="sub" style="margin-top:16px">DnD Game AI · ${esc(new Date(f.exported_at).toLocaleDateString("ru-RU"))}</p>
+<p class="sub" style="margin-top:16px">${APP_NAME} · ${esc(new Date(f.exported_at).toLocaleDateString("ru-RU"))}</p>
 <!--${embedSheet(f)}-->
 </body></html>`;
 }
@@ -179,5 +180,5 @@ export function parseSheetFile(text: string): HeroSpec {
     return obj.spec;
   }
   if (typeof obj.name === "string" && Array.isArray(obj.classes) && obj.abilities) return obj as HeroSpec;
-  throw new Error("Файл не похож на лист героя DnD Game AI.");
+  throw new Error(`Файл не похож на лист героя игры «${APP_NAME}».`);
 }

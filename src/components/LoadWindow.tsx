@@ -11,6 +11,7 @@ import type { TrayRoll } from "../lib/rolls";
 import type { ChatMessage } from "./ChatPanel";
 import Modal from "./Modal";
 import SaveList from "./SaveList";
+import { APP_NAME } from "../lib/appName";
 
 /** Разобранный файл сохранения. */
 export interface ParsedSave {
@@ -54,7 +55,7 @@ export function parseSave(text: string): ParsedSave {
   if (typeof data !== "object" || data === null) throw new Error("Это не файл сохранения.");
   const root = data as Record<string, unknown>;
   if (root.app !== "dnd-game-ai" || typeof root.engine !== "object" || root.engine === null) {
-    throw new Error("Это не сохранение DnD Game AI.");
+    throw new Error(`Это не сохранение игры «${APP_NAME}».`);
   }
   const engine = root.engine as Record<string, unknown>;
   const scene = (engine.scene ?? {}) as Record<string, unknown>;

@@ -27,4 +27,4 @@ export function levelLabel(level: number): string {
 /** Атрибуция SRD 5.1 (CC-BY-4.0) — обязательна при показе текстов SRD. */
 export const SRD_ATTRIBUTION =
   "Содержит материалы System Reference Document 5.2.1 © Wizards of the Coast LLC, " +
-  "лицензия CC-BY-4.0 (creativecommons.org/licenses/by/4.0). Перевод — проект DnD Game AI.";
+  "лицензия CC-BY-4.0 (creativecommons.org/licenses/by/4.0). Перевод — проект «Наследие дома Стрэндж».";

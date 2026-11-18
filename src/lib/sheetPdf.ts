@@ -6,6 +6,7 @@
 // для импорта (комментарий-метка вне объектов — просмотрщики его не показывают).
 
 import type { SheetFile } from "./sheetExport";
+import { APP_NAME } from "./appName";
 
 export type SheetBlock =
   | { kind: "title"; text: string }
@@ -60,7 +61,7 @@ export function sheetBlocks(f: SheetFile): SheetBlock[] {
     out.push({ kind: "heading", text: "Внешность" });
     out.push({ kind: "para", text: d.appearance });
   }
-  out.push({ kind: "sub", text: `DnD Game AI · ${new Date(f.exported_at).toLocaleDateString("ru-RU")}` });
+  out.push({ kind: "sub", text: `${APP_NAME} · ${new Date(f.exported_at).toLocaleDateString("ru-RU")}` });
   return out;
 }
 

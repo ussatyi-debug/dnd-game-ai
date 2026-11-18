@@ -93,7 +93,7 @@ type Entry = { id: string; name: string; sub: string; data: Monster | Item | Fea
 
 const SRD_NOTE =
   "Содержит материалы System Reference Document 5.2.1 © Wizards of the Coast LLC, лицензия CC-BY-4.0 " +
-  "(creativecommons.org/licenses/by/4.0). Перевод — проект DnD Game AI.";
+  "(creativecommons.org/licenses/by/4.0). Перевод — проект «Наследие дома Стрэндж».";
 const PHB_NOTE = "Механика Книги игрока 2024 (вне SRD) пересказана своими словами.";
 const LEGACY_NOTE =
   "Подкласс кампании «Дом Стрэндж» вне книги 2024 года (дополнительная механика); механика пересказана своими словами.";
