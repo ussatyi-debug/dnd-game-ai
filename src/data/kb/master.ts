@@ -5,6 +5,7 @@
 // (`draft: true`) и ждёт утверждения гейм-мастером.
 // Временно слой открыт без пароля; вход по паролю будет добавлен позже.
 
+import { MASTER_GENERATED } from "./master.generated.ts";
 import type { KbEntry, KbLayerInfo } from "./types.ts";
 
 export const MASTER_LAYER: KbLayerInfo = {
@@ -26,7 +27,7 @@ const prisoner = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, la
 const secret = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, layer: "master", section: "secrets" });
 const journal = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, layer: "master", section: "journal" });
 
-export const MASTER_ENTRIES: KbEntry[] = [
+const MASTER_BASE: KbEntry[] = [
   // ───────────── Расписание ─────────────
   sched({
     id: "plan.day82",
@@ -235,3 +236,7 @@ export const MASTER_ENTRIES: KbEntry[] = [
     source: "Архитектура, раздел 5",
   }),
 ];
+
+/** Карточки слоя: ручные (MASTER_BASE) и из ответов Gemini — сгенерированная заменяет ручную с тем же id. */
+const generatedIds = new Set(MASTER_GENERATED.map((e) => e.id));
+export const MASTER_ENTRIES: KbEntry[] = [...MASTER_BASE.filter((e) => !generatedIds.has(e.id)), ...MASTER_GENERATED];

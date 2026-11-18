@@ -1,6 +1,7 @@
 // Слой «Игрок»: то, что знает сэр Никис. По документам «Заметки героя», «Хроника»,
 // «Персонажи», «Листы персонажей» на День 82.
 
+import { PLAYER_GENERATED } from "./player.generated.ts";
 import type { KbEntry, KbLayerInfo } from "./types.ts";
 
 export const PLAYER_LAYER: KbLayerInfo = {
@@ -24,7 +25,7 @@ const known = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, layer
 const chron = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, layer: "player", section: "chronicle" });
 const note = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, layer: "player", section: "notes" });
 
-export const PLAYER_ENTRIES: KbEntry[] = [
+const PLAYER_BASE: KbEntry[] = [
   // ───────────── Цели ─────────────
   goal({
     id: "goal.coronation",
@@ -509,3 +510,7 @@ export const PLAYER_ENTRIES: KbEntry[] = [
     source: "Заметки героя",
   }),
 ];
+
+/** Карточки слоя: ручные (PLAYER_BASE) и из ответов Gemini — сгенерированная заменяет ручную с тем же id. */
+const generatedIds = new Set(PLAYER_GENERATED.map((e) => e.id));
+export const PLAYER_ENTRIES: KbEntry[] = [...PLAYER_BASE.filter((e) => !generatedIds.has(e.id)), ...PLAYER_GENERATED];

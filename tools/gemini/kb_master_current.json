@@ -1,0 +1,1744 @@
+{
+ "layer": "master",
+ "cards": [
+  {
+   "id": "plan.day82",
+   "group": "Дни 82–86",
+   "title": "День 82 — кандидаты барона Гуго",
+   "summary": "Прибывают претенденты в Коронную Палату от «Стального Утёса» и Черноводья.",
+   "status": "planned",
+   "related": [
+    "goal.vacancies",
+    "npc.hugo"
+   ],
+   "source": "Заметки героя (День 82)",
+   "layer": "master",
+   "section": "schedule"
+  },
+  {
+   "id": "plan.day83",
+   "group": "Дни 82–86",
+   "title": "День 83 — кандидаты Вейденбурга",
+   "summary": "Претенденты от Старшины Хеккера и фактора Бранда.",
+   "status": "planned",
+   "related": [
+    "npc.hecker",
+    "npc.bran"
+   ],
+   "source": "Заметки героя (День 82)",
+   "layer": "master",
+   "section": "schedule"
+  },
+  {
+   "id": "plan.day84",
+   "group": "Дни 82–86",
+   "title": "День 84 — Нойштадт и первый транш репараций",
+   "summary": "Кандидаты от фон Хольц и фон Рауха прибывают вместе с обозом на 20 000 ЗМ.",
+   "status": "planned",
+   "facts": [
+    {
+     "label": "Обоз",
+     "value": "20 000 ЗМ из опечатанных имений Вальда"
+    },
+    {
+     "label": "Путь",
+     "value": "Нойштадт → тракт → Альт-Варден"
+    }
+   ],
+   "related": [
+    "goal.reparations",
+    "threat.blackwater_party"
+   ],
+   "source": "Заметки героя (День 82)",
+   "layer": "master",
+   "section": "schedule"
+  },
+  {
+   "id": "plan.day85",
+   "group": "Дни 82–86",
+   "title": "День 85 — Астролябия, Мирра и отчёт Крота",
+   "summary": "Халид завершает Астролябию; прибывают Дож Касим, Изабелла дель Торро и шейха Зулейка; Крот докладывает об Орели.",
+   "status": "planned",
+   "related": [
+    "art.astrolabe",
+    "npc.kasim",
+    "goal.orelie"
+   ],
+   "source": "Заметки героя (День 82)",
+   "layer": "master",
+   "section": "schedule"
+  },
+  {
+   "id": "plan.coronation",
+   "group": "Дни 82–86",
+   "title": "День 86 — Коронация",
+   "summary": "Торжественная коронация в Серебряном Шпиле и оглашение назначений Коронной Палаты.",
+   "status": "planned",
+   "body": [
+    {
+     "heading": "Гости",
+     "paragraphs": [
+      "Делегация Мирры, посол Сената граф фон Эйхенвальд (живёт в гостевых покоях Кроу-Рока под дозором Юссача), магистр Клаус фон Цайс, союзники Вейденбурга и Серпных Холмов."
+     ]
+    }
+   ],
+   "related": [
+    "goal.coronation",
+    "loc.silver_spire"
+   ],
+   "source": "Заметки героя; Персонажи (День 82)",
+   "layer": "master",
+   "section": "schedule"
+  },
+  {
+   "id": "plan.vacancies",
+   "group": "Двор",
+   "title": "Вакансии Коронной Палаты",
+   "summary": "Старший Казначей, Земский Бургомистр посадов Шпиля, Коронный Судья-Асессор, Церемониймейстер.",
+   "status": "open",
+   "related": [
+    "goal.vacancies",
+    "fac.house_strange"
+   ],
+   "source": "Заметки героя (День 81)",
+   "layer": "master",
+   "section": "schedule"
+  },
+  {
+   "id": "threat.blackwater_party",
+   "group": "Нойштадт",
+   "title": "Остатки партии Черноводья в столице",
+   "subtitle": "Граф фон Штайн отстранён, барон фон Таубе арестован",
+   "summary": "Покровители Вернера потеряли посты, но не всё влияние. Коронация и обоз репараций — заметные цели.",
+   "status": "enemy",
+   "draft": true,
+   "facts": [
+    {
+     "label": "Известно",
+     "value": "Две шпионские ячейки Нойштадта в Черноводье обезврежены (День 74)"
+    },
+    {
+     "label": "Часы угрозы",
+     "value": "Черновик: 2/6 — сбор людей и денег; на 6/6 — удар по обозу или Коронации"
+    }
+   ],
+   "related": [
+    "plan.day84",
+    "plan.coronation"
+   ],
+   "source": "Персонажи; Хроника, День 74 · ход фракции — черновик мастера",
+   "layer": "master",
+   "section": "threats"
+  },
+  {
+   "id": "threat.zubeir",
+   "group": "Море",
+   "title": "Эмират Аль-Зубейр",
+   "subtitle": "Война с Миррой за Багровый Пролив",
+   "summary": "Потерял эскадры и капитанов, но война продолжается; караваны руды и делегация Мирры уязвимы на море.",
+   "status": "enemy",
+   "draft": true,
+   "facts": [
+    {
+     "label": "Известно",
+     "value": "Пленён адмирал Тарик ибн-Халид; каперский патент и карта стоянок у князя"
+    },
+    {
+     "label": "Часы угрозы",
+     "value": "Черновик: 1/6 — разведка маршрута делегации к Дню 85"
+    }
+   ],
+   "related": [
+    "fac.sapphire",
+    "plan.day85"
+   ],
+   "source": "Персонажи; Листы · ход фракции — черновик мастера",
+   "layer": "master",
+   "section": "threats"
+  },
+  {
+   "id": "threat.brock",
+   "group": "Нойштадт",
+   "title": "Банк «Братья Брок»",
+   "subtitle": "Разорён, склады под арестом",
+   "summary": "Каспар Брок лишился депозитов (14 000 ЗМ вскрыл Вайгель) и бухгалтера — у банка есть мотив мстить.",
+   "status": "enemy",
+   "draft": true,
+   "related": [
+    "lore.alt_varden"
+   ],
+   "source": "Персонажи · мотив — черновик мастера",
+   "layer": "master",
+   "section": "threats"
+  },
+  {
+   "id": "prisoner.werner",
+   "group": "Черноводье",
+   "title": "Судья Вернер",
+   "subtitle": "Нижний каземат запечатанного Черноводья",
+   "summary": "На допросе (День 73) выдал секреты «Врат Железного Савана»; ждёт приговора после Коронации.",
+   "status": "prisoner",
+   "related": [
+    "npc.werner",
+    "goal.werner_verdict"
+   ],
+   "source": "Персонажи (День 82)",
+   "layer": "master",
+   "section": "prisoners"
+  },
+  {
+   "id": "prisoner.crow_rock",
+   "group": "Кроу-Рок",
+   "title": "Узники Кроу-Рока",
+   "subtitle": "Казематы цитадели",
+   "summary": "Брат Корв (бывший дозорный Малха), боевой маг Фальк, ротмистр Каспар Вейсс и снайпер Маркус.",
+   "status": "prisoner",
+   "facts": [
+    {
+     "label": "Брат Корв",
+     "value": "29 лет, скован в каторжном забое"
+    },
+    {
+     "label": "Маг Фальк",
+     "value": "31 год, пленный заклинатель"
+    },
+    {
+     "label": "Ротмистр Вейсс",
+     "value": "Командир охраны обоза Вернера (День 47)"
+    },
+    {
+     "label": "Снайпер Маркус",
+     "value": "Подчинён «Внушением» на «Трёх Дубах»"
+    }
+   ],
+   "related": [
+    "loc.crow_rock"
+   ],
+   "source": "Персонажи; Хроника",
+   "layer": "master",
+   "section": "prisoners"
+  },
+  {
+   "id": "prisoner.eberhard",
+   "group": "Вейденбург",
+   "title": "Архивариус Матиас Эберхард",
+   "subtitle": "Казематы Ратуши",
+   "summary": "Главный свидетель против Вернера: подписал кровью признание и носит клеймо «П.А.В.» на лбу.",
+   "status": "prisoner",
+   "source": "Персонажи",
+   "layer": "master",
+   "section": "prisoners"
+  },
+  {
+   "id": "secret.orelie_contacts",
+   "group": "Черновики мастера",
+   "title": "С кем говорит Мадам Орели",
+   "summary": "Черновик: среди её контактов есть человек Банка Броков. Это не измена князю, а страховка — она продаёт сведения обеим сторонам.",
+   "reveal": "hidden",
+   "draft": true,
+   "body": [
+    {
+     "heading": "Как может раскрыться",
+     "paragraphs": [
+      "Отчёт Папаши Крота в День 85: курьер «Бархатной Лилии» дважды заходил в Биржевой переулок. Проверка Проницательности при разговоре с Орели — намёк."
+     ]
+    }
+   ],
+   "related": [
+    "known.orelie",
+    "threat.brock"
+   ],
+   "source": "Черновик мастера — требует утверждения",
+   "layer": "master",
+   "section": "secrets"
+  },
+  {
+   "id": "secret.iron_shroud",
+   "group": "Черновики мастера",
+   "title": "Что скрывают «Врата Железного Савана»",
+   "summary": "Черновик: Вернер выдал не всё — за вратами был второй архив с именами столичных покупателей «сернистых пушек».",
+   "reveal": "hidden",
+   "draft": true,
+   "related": [
+    "prisoner.werner",
+    "threat.blackwater_party"
+   ],
+   "source": "Черновик мастера — требует утверждения",
+   "layer": "master",
+   "section": "secrets"
+  },
+  {
+   "id": "secret.triumvirate_price",
+   "group": "Черновики мастера",
+   "title": "Цена Теневого Пакта",
+   "summary": "Черновик: после Коронации Корнелий попросит восстановить До-Имперскую Юстицию — суд, неподвластный князю.",
+   "reveal": "hidden",
+   "draft": true,
+   "related": [
+    "fac.salt_triumvirate",
+    "npc.cornelius"
+   ],
+   "source": "Черновик мастера — требует утверждения",
+   "layer": "master",
+   "section": "secrets"
+  },
+  {
+   "id": "journal.about",
+   "group": "Как работает",
+   "title": "Журнал импровизаций",
+   "summary": "Сюда мастер записывает придуманное по ходу игры — имена, цены, детали, — чтобы через двадцать сессий ответ был тем же.",
+   "body": [
+    {
+     "paragraphs": [
+      "Записи появляются, когда мастер получит инструмент «записать импровизацию» в движке. Импровизации, которые стоит сделать каноном, гейм-мастер переносит в слой «Мир»."
+     ]
+    }
+   ],
+   "source": "Архитектура, раздел 5",
+   "layer": "master",
+   "section": "journal"
+  }
+ ],
+ "all_ids": [
+  {
+   "id": "goal.coronation",
+   "layer": "player",
+   "section": "goals",
+   "title": "Коронация в Серебряном Шпиле"
+  },
+  {
+   "id": "goal.vacancies",
+   "layer": "player",
+   "section": "goals",
+   "title": "Заполнить вакансии Коронной Палаты"
+  },
+  {
+   "id": "goal.astrolabe",
+   "layer": "player",
+   "section": "goals",
+   "title": "Получить Княжескую Астролябию"
+  },
+  {
+   "id": "goal.orelie",
+   "layer": "player",
+   "section": "goals",
+   "title": "Проверка Мадам Орели"
+  },
+  {
+   "id": "goal.reparations",
+   "layer": "player",
+   "section": "goals",
+   "title": "Репарации Сената"
+  },
+  {
+   "id": "goal.werner_verdict",
+   "layer": "player",
+   "section": "goals",
+   "title": "Приговор Судье Вернеру"
+  },
+  {
+   "id": "goal.beatrix_cache",
+   "layer": "player",
+   "section": "goals",
+   "title": "Тайник вдовы Беатрис фон Вальд"
+  },
+  {
+   "id": "goal.sea_basilisk",
+   "layer": "player",
+   "section": "goals",
+   "title": "Поднять «Морских Василисков»"
+  },
+  {
+   "id": "goal.star_needle",
+   "layer": "player",
+   "section": "goals",
+   "title": "Чертежи «Звёздной Иглы»"
+  },
+  {
+   "id": "goal.ironclad",
+   "layer": "player",
+   "section": "goals",
+   "title": "Паровой адамантовый броненосец"
+  },
+  {
+   "id": "goal.shpil",
+   "layer": "player",
+   "section": "goals",
+   "title": "Вскрыть Серебряный Шпиль"
+  },
+  {
+   "id": "goal.blackwater",
+   "layer": "player",
+   "section": "goals",
+   "title": "Сокрушить Черноводье"
+  },
+  {
+   "id": "persona.nikis",
+   "layer": "player",
+   "section": "personas",
+   "title": "Сэр Никис Стрэндж"
+  },
+  {
+   "id": "persona.ghost",
+   "layer": "player",
+   "section": "personas",
+   "title": "Призрак Альт-Вардена («П.А.В.»)"
+  },
+  {
+   "id": "persona.consigliere",
+   "layer": "player",
+   "section": "personas",
+   "title": "Консильери Фубуа Фуатье"
+  },
+  {
+   "id": "persona.de_vaux",
+   "layer": "player",
+   "section": "personas",
+   "title": "Шевалье Адриан де Во"
+  },
+  {
+   "id": "persona.varr",
+   "layer": "player",
+   "section": "personas",
+   "title": "Адриан Варр"
+  },
+  {
+   "id": "persona.grimm",
+   "layer": "player",
+   "section": "personas",
+   "title": "Гримм"
+  },
+  {
+   "id": "secret.hecker_route",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Тайный подход к усадьбе Хеккера"
+  },
+  {
+   "id": "secret.black_anchor",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Пароль «Чёрного Якоря»"
+  },
+  {
+   "id": "secret.silk_noose",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Вход в «Шёлковую Петлю»"
+  },
+  {
+   "id": "secret.pen_and_scales",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Бункер Первого Призрака"
+  },
+  {
+   "id": "secret.signs",
+   "layer": "player",
+   "section": "secrets",
+   "title": "Знаки опознания"
+  },
+  {
+   "id": "secret.mountain_sluice",
+   "layer": "player",
+   "section": "secrets",
+   "title": "«Горный Шлюз»"
+  },
+  {
+   "id": "secret.rat_pipe",
+   "layer": "player",
+   "section": "secrets",
+   "title": "«Крысиная Труба»"
+  },
+  {
+   "id": "known.orelie",
+   "layer": "player",
+   "section": "known",
+   "title": "Мадам Орели"
+  },
+  {
+   "id": "known.lessing",
+   "layer": "player",
+   "section": "known",
+   "title": "Барон Оттокар фон Лессинг"
+  },
+  {
+   "id": "known.rauch",
+   "layer": "player",
+   "section": "known",
+   "title": "Великий Прокурор барон Магнус фон Раух"
+  },
+  {
+   "id": "known.klaus",
+   "layer": "player",
+   "section": "known",
+   "title": "Казначей Бернгард Клаус"
+  },
+  {
+   "id": "known.morelli",
+   "layer": "player",
+   "section": "known",
+   "title": "Сильвестр «Паук» Морелли"
+  },
+  {
+   "id": "known.caleb",
+   "layer": "player",
+   "section": "known",
+   "title": "Калеб-книгочей"
+  },
+  {
+   "id": "chron.prologue",
+   "layer": "player",
+   "section": "chronicle",
+   "title": "Пролог: от беглого вора к теневому эмиссару"
+  },
+  {
+   "id": "chron.ch1",
+   "layer": "player",
+   "section": "chronicle",
+   "title": "Глава I: Гамбит в Вейденбурге"
+  },
+  {
+   "id": "chron.ch2",
+   "layer": "player",
+   "section": "chronicle",
+   "title": "Глава II: Тени над Вейденбургом"
+  },
+  {
+   "id": "chron.ch3",
+   "layer": "player",
+   "section": "chronicle",
+   "title": "Глава III: Теневой престол, переворот в Нойштадте и Мирра"
+  },
+  {
+   "id": "chron.ch4",
+   "layer": "player",
+   "section": "chronicle",
+   "title": "Глава IV: Сокрушение блокады и падение «Магистра Пепла»"
+  },
+  {
+   "id": "chron.ch5",
+   "layer": "player",
+   "section": "chronicle",
+   "title": "Глава V: Пепел и Пурпур"
+  },
+  {
+   "id": "chron.ch6",
+   "layer": "player",
+   "section": "chronicle",
+   "title": "Глава VI: Возвращение князя"
+  },
+  {
+   "id": "note.jade_protocol",
+   "layer": "player",
+   "section": "notes",
+   "title": "Протокол Нефритового заземления"
+  },
+  {
+   "id": "note.collegium_weak",
+   "layer": "player",
+   "section": "notes",
+   "title": "Уязвимости «Старой Коллегии»"
+  },
+  {
+   "id": "note.xavier_tools",
+   "layer": "player",
+   "section": "notes",
+   "title": "Спецсредства из трофеев Ксавьера"
+  },
+  {
+   "id": "plan.day82",
+   "layer": "master",
+   "section": "schedule",
+   "title": "День 82 — кандидаты барона Гуго"
+  },
+  {
+   "id": "plan.day83",
+   "layer": "master",
+   "section": "schedule",
+   "title": "День 83 — кандидаты Вейденбурга"
+  },
+  {
+   "id": "plan.day84",
+   "layer": "master",
+   "section": "schedule",
+   "title": "День 84 — Нойштадт и первый транш репараций"
+  },
+  {
+   "id": "plan.day85",
+   "layer": "master",
+   "section": "schedule",
+   "title": "День 85 — Астролябия, Мирра и отчёт Крота"
+  },
+  {
+   "id": "plan.coronation",
+   "layer": "master",
+   "section": "schedule",
+   "title": "День 86 — Коронация"
+  },
+  {
+   "id": "plan.vacancies",
+   "layer": "master",
+   "section": "schedule",
+   "title": "Вакансии Коронной Палаты"
+  },
+  {
+   "id": "threat.blackwater_party",
+   "layer": "master",
+   "section": "threats",
+   "title": "Остатки партии Черноводья в столице"
+  },
+  {
+   "id": "threat.zubeir",
+   "layer": "master",
+   "section": "threats",
+   "title": "Эмират Аль-Зубейр"
+  },
+  {
+   "id": "threat.brock",
+   "layer": "master",
+   "section": "threats",
+   "title": "Банк «Братья Брок»"
+  },
+  {
+   "id": "prisoner.werner",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Судья Вернер"
+  },
+  {
+   "id": "prisoner.crow_rock",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Узники Кроу-Рока"
+  },
+  {
+   "id": "prisoner.eberhard",
+   "layer": "master",
+   "section": "prisoners",
+   "title": "Архивариус Матиас Эберхард"
+  },
+  {
+   "id": "secret.orelie_contacts",
+   "layer": "master",
+   "section": "secrets",
+   "title": "С кем говорит Мадам Орели"
+  },
+  {
+   "id": "secret.iron_shroud",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Что скрывают «Врата Железного Савана»"
+  },
+  {
+   "id": "secret.triumvirate_price",
+   "layer": "master",
+   "section": "secrets",
+   "title": "Цена Теневого Пакта"
+  },
+  {
+   "id": "journal.about",
+   "layer": "master",
+   "section": "journal",
+   "title": "Журнал импровизаций"
+  },
+  {
+   "id": "loc.crow_rock",
+   "layer": "world",
+   "section": "locations",
+   "title": "Цитадель Кроу-Рок"
+  },
+  {
+   "id": "loc.steel_cliff",
+   "layer": "world",
+   "section": "locations",
+   "title": "Замок «Стальной Утёс»"
+  },
+  {
+   "id": "loc.silver_spire",
+   "layer": "world",
+   "section": "locations",
+   "title": "Серебряный Шпиль"
+  },
+  {
+   "id": "loc.mines",
+   "layer": "world",
+   "section": "locations",
+   "title": "Копи Семи Слёз"
+  },
+  {
+   "id": "loc.blackwater",
+   "layer": "world",
+   "section": "locations",
+   "title": "Черноводье"
+  },
+  {
+   "id": "loc.mirra",
+   "layer": "world",
+   "section": "locations",
+   "title": "Вольный Город Мирра"
+  },
+  {
+   "id": "npc.bran",
+   "layer": "world",
+   "section": "npc",
+   "title": "Корнелиус Бранд"
+  },
+  {
+   "id": "npc.zeiss",
+   "layer": "world",
+   "section": "npc",
+   "title": "Магистр Клаус фон Цайс"
+  },
+  {
+   "id": "rules.dice",
+   "layer": "world",
+   "section": "rules",
+   "title": "Священное правило кубов"
+  },
+  {
+   "id": "rules.lucky",
+   "layer": "world",
+   "section": "rules",
+   "title": "Нотация «- везунчик»"
+  },
+  {
+   "id": "rules.time",
+   "layer": "world",
+   "section": "rules",
+   "title": "Время и свобода игрока"
+  },
+  {
+   "id": "rules.style",
+   "layer": "world",
+   "section": "rules",
+   "title": "Язык и отыгрыш"
+  },
+  {
+   "id": "rules.xp",
+   "layer": "world",
+   "section": "rules",
+   "title": "Опыт и уровни"
+  },
+  {
+   "id": "rules.encounters",
+   "layer": "world",
+   "section": "rules",
+   "title": "Сложность встреч"
+  },
+  {
+   "id": "rules.homebrew",
+   "layer": "world",
+   "section": "rules",
+   "title": "Домашние правила и проекты"
+  },
+  {
+   "id": "map.world",
+   "layer": "world",
+   "section": "maps",
+   "title": "Генеральная карта известного мира"
+  },
+  {
+   "id": "map.sea",
+   "layer": "world",
+   "section": "maps",
+   "title": "Морской атлас: Вейденбург, Мирра и Султанаты"
+  },
+  {
+   "id": "map.region_ru",
+   "layer": "world",
+   "section": "maps",
+   "title": "Генеральная карта региона (на русском)"
+  },
+  {
+   "id": "map.region",
+   "layer": "world",
+   "section": "maps",
+   "title": "Карта региона Нойштадт — Вейденбург"
+  },
+  {
+   "id": "map.crow_rock",
+   "layer": "world",
+   "section": "maps",
+   "title": "План Цитадели Кроу-Рок и поместья"
+  },
+  {
+   "id": "map.alt_varden",
+   "layer": "world",
+   "section": "maps",
+   "title": "Карта долины и руин Альт-Вардена"
+  },
+  {
+   "id": "art.steam_ironclad",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Первый паровой адамантовый броненосец"
+  },
+  {
+   "id": "art.falcon_crown",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Венец Горного Сокола"
+  },
+  {
+   "id": "art.falcon_rings",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Соколиные Перстни Мысли"
+  },
+  {
+   "id": "art.ocular",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Великий Окуляр Фантомного Луча"
+  },
+  {
+   "id": "art.rod_pact_keeper",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Жезл Хранителя Договора +2"
+  },
+  {
+   "id": "art.sunset_blade",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Клинок Закатного Савана +3"
+  },
+  {
+   "id": "art.astrolabe",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Княжеская Астролябия Звёздного Моста"
+  },
+  {
+   "id": "art.star_shroud",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Латный Панцирь Звёздного Савана"
+  },
+  {
+   "id": "art.circlet_intellect",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Обруч Интеллекта"
+  },
+  {
+   "id": "art.jade_key",
+   "layer": "world",
+   "section": "artifacts",
+   "title": "Чёрный Нефритовый Ключ"
+  },
+  {
+   "id": "fac.silver_falcon",
+   "layer": "world",
+   "section": "factions",
+   "title": "«Орден Серебряного Сокола»"
+  },
+  {
+   "id": "fac.house_strange",
+   "layer": "world",
+   "section": "factions",
+   "title": "Дом Стрэндж"
+  },
+  {
+   "id": "fac.pillar",
+   "layer": "world",
+   "section": "factions",
+   "title": "Орден «Сокровенный Столб»"
+  },
+  {
+   "id": "fac.taranto_navigators",
+   "layer": "world",
+   "section": "factions",
+   "title": "Коллегия Семи Навигаторов Таранто"
+  },
+  {
+   "id": "fac.mirra_council",
+   "layer": "world",
+   "section": "factions",
+   "title": "Небесный Совет Семи Лож"
+  },
+  {
+   "id": "fac.sapphire",
+   "layer": "world",
+   "section": "factions",
+   "title": "Сапфировые Султанаты"
+  },
+  {
+   "id": "fac.grain_syndicate",
+   "layer": "world",
+   "section": "factions",
+   "title": "Зерновой Синдикат Вейденбурга"
+  },
+  {
+   "id": "fac.iron_hounds",
+   "layer": "world",
+   "section": "factions",
+   "title": "Клика патриция Штерна и «Железные Гончие»"
+  },
+  {
+   "id": "fac.helga_privateers",
+   "layer": "world",
+   "section": "factions",
+   "title": "Пиратская эскадра Хельги Однорукой"
+  },
+  {
+   "id": "fac.black_griffin",
+   "layer": "world",
+   "section": "factions",
+   "title": "Полк «Чёрного Грифа»"
+  },
+  {
+   "id": "fac.grey_wave",
+   "layer": "world",
+   "section": "factions",
+   "title": "Синдикат «Серой Волны»"
+  },
+  {
+   "id": "fac.grey_cloaks",
+   "layer": "world",
+   "section": "factions",
+   "title": "Синдикат Литейщиков и «Серые Плащи»"
+  },
+  {
+   "id": "fac.whistlers",
+   "layer": "world",
+   "section": "factions",
+   "title": "«Цех Свистунов»"
+  },
+  {
+   "id": "fac.black_anchor",
+   "layer": "world",
+   "section": "factions",
+   "title": "«Чёрный Якорь»"
+  },
+  {
+   "id": "fac.goldsmiths_guild",
+   "layer": "world",
+   "section": "factions",
+   "title": "Объединённый Цех Златокузнецов Вейденбурга"
+  },
+  {
+   "id": "fac.council_of_five",
+   "layer": "world",
+   "section": "factions",
+   "title": "Совет Пяти Вейденбурга"
+  },
+  {
+   "id": "fac.black_seal",
+   "layer": "world",
+   "section": "factions",
+   "title": "«Клика Чёрного Сургуча»"
+  },
+  {
+   "id": "fac.salt_triumvirate",
+   "layer": "world",
+   "section": "factions",
+   "title": "Триумвират Соли и Тлена"
+  },
+  {
+   "id": "loc.neustadt",
+   "layer": "world",
+   "section": "locations",
+   "title": "Нойштадт"
+  },
+  {
+   "id": "loc.glass_bay",
+   "layer": "world",
+   "section": "locations",
+   "title": "Бухта Битового Стекла"
+  },
+  {
+   "id": "loc.black_tooth_bay",
+   "layer": "world",
+   "section": "locations",
+   "title": "Бухта Чёрного Зуба"
+  },
+  {
+   "id": "loc.weidenburg_shipyards",
+   "layer": "world",
+   "section": "locations",
+   "title": "Верфи Вейденбурга и Сухой док № 1"
+  },
+  {
+   "id": "loc.weidenburg",
+   "layer": "world",
+   "section": "locations",
+   "title": "Вольный город Вейденбург"
+  },
+  {
+   "id": "loc.golden_pheasant",
+   "layer": "world",
+   "section": "locations",
+   "title": "Гранд-отель «Золотой Фазан»"
+  },
+  {
+   "id": "loc.mole_hole",
+   "layer": "world",
+   "section": "locations",
+   "title": "Катакомбы под Старым Мостом («Кротовая Нора»)"
+  },
+  {
+   "id": "loc.red_ravine",
+   "layer": "world",
+   "section": "locations",
+   "title": "Красный Яр"
+  },
+  {
+   "id": "loc.northern_star_manufactory",
+   "layer": "world",
+   "section": "locations",
+   "title": "Мануфактура «Северная Звезда»"
+  },
+  {
+   "id": "loc.grey_stone_cape",
+   "layer": "world",
+   "section": "locations",
+   "title": "Маяк на мысе Серого Камня"
+  },
+  {
+   "id": "loc.mirra_embassy",
+   "layer": "world",
+   "section": "locations",
+   "title": "Посольство Республики Мирра (Соловьиный Холм)"
+  },
+  {
+   "id": "loc.black_anchor_piers",
+   "layer": "world",
+   "section": "locations",
+   "title": "Склады «Чёрного Якоря» и элеваторы Нижней Гавани"
+  },
+  {
+   "id": "loc.onuphrius",
+   "layer": "world",
+   "section": "locations",
+   "title": "Склеп Святого Онуфрия и Соляное Сердце"
+  },
+  {
+   "id": "loc.st_julian_cathedral",
+   "layer": "world",
+   "section": "locations",
+   "title": "Собор Святого Юлиана"
+  },
+  {
+   "id": "loc.nightingale_hill",
+   "layer": "world",
+   "section": "locations",
+   "title": "Соловьиный Холм и Посольство Республики Мирра"
+  },
+  {
+   "id": "loc.third_pier",
+   "layer": "world",
+   "section": "locations",
+   "title": "Третий пирс и склады «Чёрного Якоря»"
+  },
+  {
+   "id": "loc.willows",
+   "layer": "world",
+   "section": "locations",
+   "title": "Улица Зелёных Ив, 7"
+  },
+  {
+   "id": "loc.iron_gates",
+   "layer": "world",
+   "section": "locations",
+   "title": "Застава «Железные Врата»"
+  },
+  {
+   "id": "loc.stone_ford",
+   "layer": "world",
+   "section": "locations",
+   "title": "Переправа «Каменный Брод»"
+  },
+  {
+   "id": "loc.three_oaks",
+   "layer": "world",
+   "section": "locations",
+   "title": "Почтовая застава «Три Дуба»"
+  },
+  {
+   "id": "loc.black_marshes_causeway",
+   "layer": "world",
+   "section": "locations",
+   "title": "Тайная гать через Чёрные топи и Торфяная заимка"
+  },
+  {
+   "id": "loc.drowned_monk",
+   "layer": "world",
+   "section": "locations",
+   "title": "Трактир «Утонувший Монах»"
+  },
+  {
+   "id": "lore.five_pillars_state",
+   "layer": "world",
+   "section": "lore",
+   "title": "Государственное устройство «Пять Столпов Альт-Вардена»"
+  },
+  {
+   "id": "lore.alt_varden",
+   "layer": "world",
+   "section": "lore",
+   "title": "Падение и возрождение Альт-Вардена"
+  },
+  {
+   "id": "lore.xartas",
+   "layer": "world",
+   "section": "lore",
+   "title": "Ксартас"
+  },
+  {
+   "id": "lore.five_nodes",
+   "layer": "world",
+   "section": "lore",
+   "title": "Сеть Пяти Хтонических Узлов"
+  },
+  {
+   "id": "lore.sixth_pillar",
+   "layer": "world",
+   "section": "lore",
+   "title": "Шестой Столп и Разлом Плана Теней"
+  },
+  {
+   "id": "lore.star_bridge",
+   "layer": "world",
+   "section": "lore",
+   "title": "Звёздный Мост"
+  },
+  {
+   "id": "lore.moon_silver",
+   "layer": "world",
+   "section": "lore",
+   "title": "Лунное Адамантовое Серебро"
+  },
+  {
+   "id": "lore.industry_alt_varden",
+   "layer": "world",
+   "section": "lore",
+   "title": "Промышленность и торговля Альт-Вардена"
+  },
+  {
+   "id": "lore.sovereign_thaler",
+   "layer": "world",
+   "section": "lore",
+   "title": "Суверенный талер «Княжеский Сокол»"
+  },
+  {
+   "id": "npc.adrian_varr",
+   "layer": "world",
+   "section": "npc",
+   "title": "Адриан Варр"
+  },
+  {
+   "id": "npc.konrad_stahl",
+   "layer": "world",
+   "section": "npc",
+   "title": "Барон Конрад фон Сталь"
+  },
+  {
+   "id": "npc.wolfrik_strange",
+   "layer": "world",
+   "section": "npc",
+   "title": "Вольфрик Стрэндж («Чёрный Ворон»)"
+  },
+  {
+   "id": "npc.klara_mirbach",
+   "layer": "world",
+   "section": "npc",
+   "title": "Госпожа Клара фон Мирбах"
+  },
+  {
+   "id": "npc.bran_centurion",
+   "layer": "world",
+   "section": "npc",
+   "title": "Десятник Бран"
+  },
+  {
+   "id": "npc.aldrik_strange",
+   "layer": "world",
+   "section": "npc",
+   "title": "Князь Альдрик Стрэндж («Первый Сокол»)"
+  },
+  {
+   "id": "npc.gordon",
+   "layer": "world",
+   "section": "npc",
+   "title": "Маркшейдер Гордон"
+  },
+  {
+   "id": "npc.johann_bauer",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Иоганн Бауэр"
+  },
+  {
+   "id": "npc.erich_kreutz",
+   "layer": "world",
+   "section": "npc",
+   "title": "Рыцарь Эрих фон Кройц"
+  },
+  {
+   "id": "npc.sebastian_brand",
+   "layer": "world",
+   "section": "npc",
+   "title": "Себастьян Бранд"
+  },
+  {
+   "id": "npc.tariq_walid",
+   "layer": "world",
+   "section": "npc",
+   "title": "Эмир Тарик ибн-Валид"
+  },
+  {
+   "id": "npc.morten",
+   "layer": "world",
+   "section": "npc",
+   "title": "Адмирал Альбрехт Мортен"
+  },
+  {
+   "id": "npc.hecker",
+   "layer": "world",
+   "section": "npc",
+   "title": "Вальтер Хеккер"
+  },
+  {
+   "id": "npc.fogt",
+   "layer": "world",
+   "section": "npc",
+   "title": "Генрих Фогт"
+  },
+  {
+   "id": "npc.linz",
+   "layer": "world",
+   "section": "npc",
+   "title": "Готфрид Линц"
+  },
+  {
+   "id": "npc.klaus",
+   "layer": "world",
+   "section": "npc",
+   "title": "Казначей Бернгард Клаус"
+  },
+  {
+   "id": "npc.baltazar",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Бальтазар"
+  },
+  {
+   "id": "npc.otto_beck",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Отто Бек"
+  },
+  {
+   "id": "npc.khalid",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Халид аль-Басри"
+  },
+  {
+   "id": "npc.khalid_basri",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Халид аль-Басри"
+  },
+  {
+   "id": "npc.eberhard",
+   "layer": "world",
+   "section": "npc",
+   "title": "Матиас Эберхард"
+  },
+  {
+   "id": "npc.augustin",
+   "layer": "world",
+   "section": "npc",
+   "title": "Отец Августин"
+  },
+  {
+   "id": "npc.krot",
+   "layer": "world",
+   "section": "npc",
+   "title": "Папаша Крот"
+  },
+  {
+   "id": "npc.van_der_holt",
+   "layer": "world",
+   "section": "npc",
+   "title": "Семья Ван дер Хольт"
+  },
+  {
+   "id": "npc.port_staff",
+   "layer": "world",
+   "section": "npc",
+   "title": "Служащие Ратуши и «Чёрного Якоря» (Фогель, Борис, Горт, Ганс)"
+  },
+  {
+   "id": "npc.shram",
+   "layer": "world",
+   "section": "npc",
+   "title": "Шрам"
+  },
+  {
+   "id": "npc.eligor",
+   "layer": "world",
+   "section": "npc",
+   "title": "Элигор"
+  },
+  {
+   "id": "npc.weigel",
+   "layer": "world",
+   "section": "npc",
+   "title": "Аудитор Вайгель"
+  },
+  {
+   "id": "npc.falk_mage",
+   "layer": "world",
+   "section": "npc",
+   "title": "Боевой маг Фальк"
+  },
+  {
+   "id": "npc.korv",
+   "layer": "world",
+   "section": "npc",
+   "title": "Брат Корв"
+  },
+  {
+   "id": "npc.caleb",
+   "layer": "world",
+   "section": "npc",
+   "title": "Калеб-книгочей"
+  },
+  {
+   "id": "npc.sternberg",
+   "layer": "world",
+   "section": "npc",
+   "title": "Капитан Курт Штернберг"
+  },
+  {
+   "id": "npc.geoffrey",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Жофрей"
+  },
+  {
+   "id": "npc.thorvald",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Торвальд"
+  },
+  {
+   "id": "npc.thorin_whisper",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Торин «Каменный Шёпот»"
+  },
+  {
+   "id": "npc.kaspar_weiss",
+   "layer": "world",
+   "section": "npc",
+   "title": "Ротмистр Каспар Вейсс"
+  },
+  {
+   "id": "npc.vargan",
+   "layer": "world",
+   "section": "npc",
+   "title": "Сержант Варган"
+  },
+  {
+   "id": "npc.markus_sniper",
+   "layer": "world",
+   "section": "npc",
+   "title": "Снайпер Маркус"
+  },
+  {
+   "id": "npc.martin_well",
+   "layer": "world",
+   "section": "npc",
+   "title": "Староста Мартин-колодезник"
+  },
+  {
+   "id": "npc.erik_ear",
+   "layer": "world",
+   "section": "npc",
+   "title": "Эрик «Ухо»"
+  },
+  {
+   "id": "npc.kryvoi_ludwig",
+   "layer": "world",
+   "section": "npc",
+   "title": "Кривой Людвиг"
+  },
+  {
+   "id": "npc.cornelius",
+   "layer": "world",
+   "section": "npc",
+   "title": "Магистр Корнелий Скрытный"
+  },
+  {
+   "id": "npc.mokritsa",
+   "layer": "world",
+   "section": "npc",
+   "title": "Матушка Мокрица"
+  },
+  {
+   "id": "npc.morgan",
+   "layer": "world",
+   "section": "npc",
+   "title": "Утопленник Морган"
+  },
+  {
+   "id": "npc.kasim",
+   "layer": "world",
+   "section": "npc",
+   "title": "Великий Дож Касим аль-Мансур"
+  },
+  {
+   "id": "npc.malik_jabari",
+   "layer": "world",
+   "section": "npc",
+   "title": "Верховный Патриций Малик аль-Джабари"
+  },
+  {
+   "id": "npc.jafar",
+   "layer": "world",
+   "section": "npc",
+   "title": "Джафар аль-Вазир"
+  },
+  {
+   "id": "npc.mateo_silva",
+   "layer": "world",
+   "section": "npc",
+   "title": "Дон Матео де Сильва"
+  },
+  {
+   "id": "npc.isabella",
+   "layer": "world",
+   "section": "npc",
+   "title": "Капитан Изабелла дель Торро"
+  },
+  {
+   "id": "npc.suleiman",
+   "layer": "world",
+   "section": "npc",
+   "title": "Магистр Сулейман аль-Джаззари"
+  },
+  {
+   "id": "npc.malik_hadid",
+   "layer": "world",
+   "section": "npc",
+   "title": "Малик аль-Хадид"
+  },
+  {
+   "id": "npc.omar_kadim",
+   "layer": "world",
+   "section": "npc",
+   "title": "Омар аль-Кадим"
+  },
+  {
+   "id": "npc.nazir",
+   "layer": "world",
+   "section": "npc",
+   "title": "Посол Назир аль-Джамал"
+  },
+  {
+   "id": "npc.farid_nur",
+   "layer": "world",
+   "section": "npc",
+   "title": "Фарид ан-Нур"
+  },
+  {
+   "id": "npc.zuleika",
+   "layer": "world",
+   "section": "npc",
+   "title": "Шейха Зулейка бинт-Рашид"
+  },
+  {
+   "id": "npc.bashir_hadid",
+   "layer": "world",
+   "section": "npc",
+   "title": "Эмир Башир аль-Хадид"
+  },
+  {
+   "id": "npc.joachim",
+   "layer": "world",
+   "section": "npc",
+   "title": "Архиепископ Иоахим"
+  },
+  {
+   "id": "npc.ludwig_althaus",
+   "layer": "world",
+   "section": "npc",
+   "title": "Барон Людвиг фон Альтхаус"
+  },
+  {
+   "id": "npc.lessing",
+   "layer": "world",
+   "section": "npc",
+   "title": "Барон Оттокар фон Лессинг"
+  },
+  {
+   "id": "npc.ulrich_taube",
+   "layer": "world",
+   "section": "npc",
+   "title": "Барон Ульрих фон Таубе"
+  },
+  {
+   "id": "npc.eleonora",
+   "layer": "world",
+   "section": "npc",
+   "title": "Баронесса Элеонора фон Хольц"
+  },
+  {
+   "id": "npc.torin_neustadt",
+   "layer": "world",
+   "section": "npc",
+   "title": "Бронник Торин"
+  },
+  {
+   "id": "npc.magnus_rauch",
+   "layer": "world",
+   "section": "npc",
+   "title": "Великий Прокурор барон Магнус фон Раух"
+  },
+  {
+   "id": "npc.bredow",
+   "layer": "world",
+   "section": "npc",
+   "title": "Вице-консул Гаральд фон Бредов"
+  },
+  {
+   "id": "npc.wallenstein",
+   "layer": "world",
+   "section": "npc",
+   "title": "Герцог Отто фон Валленштейн"
+  },
+  {
+   "id": "npc.konrad_stein",
+   "layer": "world",
+   "section": "npc",
+   "title": "Граф Конрад фон Штайн"
+  },
+  {
+   "id": "npc.beatrix_wald",
+   "layer": "world",
+   "section": "npc",
+   "title": "Графиня Беатрис фон Вальд"
+  },
+  {
+   "id": "npc.camilla_stein",
+   "layer": "world",
+   "section": "npc",
+   "title": "Леди Камилла фон Штейн"
+  },
+  {
+   "id": "npc.valerius",
+   "layer": "world",
+   "section": "npc",
+   "title": "Магистр Валериус"
+  },
+  {
+   "id": "npc.grandpre",
+   "layer": "world",
+   "section": "npc",
+   "title": "Магистр Рено де Гранпре"
+  },
+  {
+   "id": "npc.faber",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Фабер"
+  },
+  {
+   "id": "npc.kaspar_brock",
+   "layer": "world",
+   "section": "npc",
+   "title": "Патриций Каспар Брок"
+  },
+  {
+   "id": "npc.vogel",
+   "layer": "world",
+   "section": "npc",
+   "title": "Полковник Дитрих Фогель"
+  },
+  {
+   "id": "npc.cassian",
+   "layer": "world",
+   "section": "npc",
+   "title": "Прелат Кассиан"
+  },
+  {
+   "id": "npc.eichenwald",
+   "layer": "world",
+   "section": "npc",
+   "title": "Сенатор барон Людвиг фон Эйхенвальд"
+  },
+  {
+   "id": "npc.morelli",
+   "layer": "world",
+   "section": "npc",
+   "title": "Сильвестр «Паук» Морелли"
+  },
+  {
+   "id": "npc.tobias_kranz",
+   "layer": "world",
+   "section": "npc",
+   "title": "Тобиас Кранц"
+  },
+  {
+   "id": "npc.franz_keller",
+   "layer": "world",
+   "section": "npc",
+   "title": "Франц фон Келлер"
+  },
+  {
+   "id": "npc.kronen",
+   "layer": "world",
+   "section": "npc",
+   "title": "«Стервятник» Кронен"
+  },
+  {
+   "id": "npc.edelhart",
+   "layer": "world",
+   "section": "npc",
+   "title": "Барон Эдельхарт"
+  },
+  {
+   "id": "npc.helmut_bauer",
+   "layer": "world",
+   "section": "npc",
+   "title": "Гельмут Бауэр"
+  },
+  {
+   "id": "npc.reichen",
+   "layer": "world",
+   "section": "npc",
+   "title": "Готфрид фон Райхен"
+  },
+  {
+   "id": "npc.baumann",
+   "layer": "world",
+   "section": "npc",
+   "title": "Густав Бауманн"
+  },
+  {
+   "id": "npc.malakor",
+   "layer": "world",
+   "section": "npc",
+   "title": "Дознаватель Малакор и брат Доминик"
+  },
+  {
+   "id": "npc.waldemar_wald",
+   "layer": "world",
+   "section": "npc",
+   "title": "Канцлер граф Вальдемар фон Вальд"
+  },
+  {
+   "id": "npc.dorn",
+   "layer": "world",
+   "section": "npc",
+   "title": "Капитан Дорн"
+  },
+  {
+   "id": "npc.xavier",
+   "layer": "world",
+   "section": "npc",
+   "title": "Ксавьер «Магистр Пепла»"
+  },
+  {
+   "id": "npc.falk",
+   "layer": "world",
+   "section": "npc",
+   "title": "Курьер Фальк"
+  },
+  {
+   "id": "npc.orelie",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мадам Орели"
+  },
+  {
+   "id": "npc.mordechai",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мордехай Скупой"
+  },
+  {
+   "id": "npc.oscar_irontooth",
+   "layer": "world",
+   "section": "npc",
+   "title": "Оскар Железнозуб"
+  },
+  {
+   "id": "npc.malch",
+   "layer": "world",
+   "section": "npc",
+   "title": "Отец Малх"
+  },
+  {
+   "id": "npc.stern",
+   "layer": "world",
+   "section": "npc",
+   "title": "Патриций Штерн"
+  },
+  {
+   "id": "npc.lorenzi",
+   "layer": "world",
+   "section": "npc",
+   "title": "Синьор Фабрицио Лоренци"
+  },
+  {
+   "id": "npc.helga",
+   "layer": "world",
+   "section": "npc",
+   "title": "Хельга Однорукая и Маркус «Фитиль»"
+  },
+  {
+   "id": "npc.hugo",
+   "layer": "world",
+   "section": "npc",
+   "title": "Барон Гуго фон Сталь"
+  },
+  {
+   "id": "npc.barnaby",
+   "layer": "world",
+   "section": "npc",
+   "title": "Старик Барнаби"
+  },
+  {
+   "id": "npc.roderick",
+   "layer": "world",
+   "section": "npc",
+   "title": "Сэр Родерик"
+  },
+  {
+   "id": "npc.volkmar",
+   "layer": "world",
+   "section": "npc",
+   "title": "Комендант Фолькмар"
+  },
+  {
+   "id": "npc.wolfgang_stihl",
+   "layer": "world",
+   "section": "npc",
+   "title": "Мастер Вольфганг Штиль"
+  },
+  {
+   "id": "npc.werner",
+   "layer": "world",
+   "section": "npc",
+   "title": "Судья Вернер"
+  },
+  {
+   "id": "npc.bragadin",
+   "layer": "world",
+   "section": "npc",
+   "title": "Адмирал-принцепс Витторио Брагадин"
+  },
+  {
+   "id": "npc.tariq_khalid",
+   "layer": "world",
+   "section": "npc",
+   "title": "Командующий Тарик ибн-Халид"
+  }
+ ]
+}
