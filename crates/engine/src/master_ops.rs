@@ -53,6 +53,7 @@ pub struct Checkpoint {
     campaign: Option<crate::creation::Campaign>,
     xp_log: Vec<crate::experience::XpNote>,
     level_up_open: Vec<String>,
+    combat: Option<crate::combat::Combat>,
 }
 
 /// Отменяемый ход мастера.
@@ -125,6 +126,7 @@ impl Session {
             campaign: self.campaign.clone(),
             xp_log: self.xp_log.clone(),
             level_up_open: self.level_up_open.clone(),
+            combat: self.combat.clone(),
         }
     }
 
@@ -142,11 +144,13 @@ impl Session {
         self.campaign = c.campaign;
         self.xp_log = c.xp_log;
         self.level_up_open = c.level_up_open;
+        self.combat = c.combat;
     }
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
         self.turns_since_time += 1;
+        self.tick_combat();
         self.cool_down_battle();
         // Бой кончился (победой, бегством, переговорами) — нужна пометка опыта.
         if self.scene.mood == Mood::Battle {
@@ -158,7 +162,7 @@ impl Session {
         self.age_due_timers();
         self.age_met_unknown();
         // Бой кончился — очередь инициативы больше не нужна.
-        if self.scene.mood != Mood::Battle && !self.initiative_noted {
+        if self.scene.mood != Mood::Battle && !self.initiative_noted && self.combat.is_none() {
             self.initiative.clear();
         }
         self.initiative_noted = false;
@@ -644,6 +648,8 @@ impl Session {
             return Err(EngineError::ZeroAmount);
         }
         let moved = change.location.is_some() || change.day.is_some();
+        let (day_before, time_before, place_before) =
+            (self.scene.day, self.scene.time.clone(), self.scene.location.clone());
         if let Some(day) = change.day {
             if day < self.scene.day {
                 let e = EngineError::DayInPast { current: self.scene.day, requested: day };
@@ -675,6 +681,24 @@ impl Session {
         if let Some(situation) = change.situation {
             self.scene.situation = situation.trim().to_string();
         }
+        // Явный признак конца боя: новое место, новый день, время ушло больше чем на час,
+        // мастер сменил настроение с боя на другое.
+        if self.combat.is_some() {
+            let reason = if self.scene.day != day_before {
+                Some("новый день")
+            } else if self.scene.location != place_before {
+                Some("новое место")
+            } else if crate::combat::time_jump(time_before.as_deref(), self.scene.time.as_deref()) {
+                Some("прошло больше часа")
+            } else if matches!(change.mood, Some(m) if m != Mood::Battle) {
+                Some("мастер сменил настроение сцены")
+            } else {
+                None
+            };
+            if let Some(r) = reason {
+                self.close_combat_if(r);
+            }
+        }
         match change.mood {
             Some(mood) => self.scene.mood = mood,
             // Новое место или новый день — бой и дорога позади, пока мастер не скажет иначе.
@@ -697,7 +721,8 @@ impl Session {
     /// герой сбежал, враги отступили, стороны договорились.
     fn cool_down_battle(&mut self) {
         const QUIET_TURNS: u8 = 3;
-        if self.scene.mood != Mood::Battle {
+        // Идёт бой командой combat: музыка и бой закрываются только явным концом.
+        if self.scene.mood != Mood::Battle || self.combat.is_some() {
             self.turn_damage = false;
             self.quiet_battle_turns = 0;
             return;
@@ -738,6 +763,7 @@ impl Session {
 
     /// Отдых отряда с записью в журнал.
     pub fn master_rest(&mut self, kind: RestKind) -> Vec<String> {
+        self.close_combat_if("отдых");
         if self.scene.mood == Mood::Battle {
             self.scene.mood = Mood::Calm;
         }

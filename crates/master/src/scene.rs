@@ -59,7 +59,7 @@ const PROTOCOL: &str = r#"
 const CHEAT_SHEET: &str = "Механика — только командами в блоке ```engine (по одной JSON-строке): \
 броски за NPC, противников и спутников и их урон — выражения пула [[1d20+4]], [[1d8+2 > id]], тайные — [[1d20+3 ?]]; \
 отдельный бросок с модификатором из листа — roll (числа только от движка), хиты — hp, ресурсы — resource, состояния — condition, \
-заклинания — cast, предметы — item, деньги — treasury/transfer, сцена и время — scene, отдых — rest, \
+заклинания — cast, предметы — item, деньги — treasury/transfer, сцена и время — scene, отдых — rest, начало, участники и конец боя — combat (start с foes, add, set, end), \
 записи — note (layer player и master), новое задание или цель героя — new_card (player, goals), её ход и итог — goal, \
 пересказ дня — chronicle, недостающие сведения — query. \
 Без команды изменение не сохранится.";
@@ -534,6 +534,9 @@ fn scene_system(session: &mut Session, short: bool) -> MasterMemo {
 
 /// Подсказка движка по словам заявки: какие команды, скорее всего, понадобятся.
 pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
+    if out_of_game(player_text) {
+        return vec!["вне игры: ответ без хода мира и команд"];
+    }
     let t = player_text.to_lowercase().replace('ё', "е");
     let has = |words: &[&str]| words.iter().any(|w| t.contains(w));
     let mut out = Vec::new();
@@ -586,6 +589,42 @@ pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
         out.push("перемещение: scene location (и time), спутники — move");
     }
     out
+}
+
+/// Заявка — разговор вне игры: «((…))» или «вне игры: …». Время мира стоит, бой не затихает.
+pub fn out_of_game(player_text: &str) -> bool {
+    let t = player_text.trim_start().to_lowercase();
+    t.starts_with("((") || t.starts_with("вне игры") || t.starts_with("(вне игры")
+}
+
+/// Признаки нападения в заявке игрока: «атакую», «бью», «пинок», «стреляю», «режу»,
+/// «кинжалом в…», бросок атаки или урона.
+pub fn attack_signs(player_text: &str) -> bool {
+    let t = player_text.to_lowercase().replace('ё', "е");
+    [
+        "атак",
+        "бью ",
+        "ударю",
+        "ударяю",
+        "пина",
+        "пинок",
+        "пинаю",
+        "стреля",
+        "выстрел",
+        "режу",
+        "рублю",
+        "колю",
+        "кинжалом в",
+        "мечом в",
+        "нападаю",
+        "напада",
+        "бросаюсь на",
+        "заколоть",
+        "убиваю",
+        "душу ",
+    ]
+    .iter()
+    .any(|w| t.contains(w))
 }
 
 /// Сколько значений каждого куба движок кладёт в пул хода.
@@ -683,9 +722,38 @@ fn turn_message(
         ));
     }
     if session.battle_unrewarded() {
-        reminders.push(
+        let hint = match session.combat_xp_hint() {
+            0 => String::new(),
+            xp => format!(" (по бестиарию за противников всего {xp} ПО)"),
+        };
+        reminders.push(format!(
             "бой окончен — оставь пометку опыта xp_note за противников: опыт по их опасности (ПО) по таблице \
-из кодекса, поделённый на членов отряда; бегство и переговоры тоже засчитываются по замыслу сцены"
+из кодекса{hint}, поделённый на членов отряда; бегство и переговоры тоже засчитываются по замыслу сцены. \
+За проверки навыков опыт не даётся"
+        ));
+    }
+    let ooc = out_of_game(player_text);
+    if !session.in_combat() && !ooc {
+        let rolls_say_fight = session.last_turn_rolls().iter().any(|r| {
+            let r = r.to_lowercase();
+            r.contains("атака:") || r.contains("урон:")
+        });
+        if attack_signs(player_text)
+            || rolls_say_fight
+            || session.scene().mood == dnd_engine::Mood::Battle
+        {
+            reminders.push(
+                "заявка похожа на нападение — если начинается бой, начни его командой \
+{\"cmd\":\"combat\",\"start\":true,\"foes\":[{\"name\":\"…\",\"role\":\"простолюдин\",\"surprised\":true}]}: \
+реши, кто застигнут врасплох, попроси у игрока инициативу героя и брось инициативу остальным"
+                    .to_string(),
+            );
+        }
+    }
+    if session.combat_quiet_reminder() {
+        reminders.push(
+            "бой затих — если он кончился, закрой его {\"cmd\":\"combat\",\"end\":true,\"outcome\":\"…\"}; \
+если бой идёт — продолжай по очереди"
                 .to_string(),
         );
     }
@@ -748,6 +816,25 @@ fn turn_message(
         out.push_str(
             "Выражения [[1d20+4 | атака: Вор → Оттокар]], [[1d8+2 > id | урон: Вор]], [[1d20+3 ? | Внимательность: Вор]] — \
 движок берёт кубы отсюда по порядку и подставляет итог; после «|» — чей бросок и зачем.\n\n",
+        );
+    }
+    if ooc {
+        out.push_str(
+            "[ВНЕ ИГРЫ]\nИгрок говорит с тобой вне игры (правила, механика, уточнения). Ответь как мастер за \
+столом: без хода мира, без бросков и команд, время сцены не двигай.\n\n",
+        );
+    }
+    let fight = session.combat_lines();
+    if !fight.is_empty() {
+        out.push_str("[БОЙ]\n");
+        for line in &fight {
+            out.push_str(line);
+            out.push('\n');
+        }
+        out.push_str(
+            "Хиты и КД противников знаешь только ты; игроку называй их состояние словами (цел, ранен, тяжело \
+ранен, при смерти). Урон больше оставшихся хитов — противник без сознания или мёртв: скажи прямо и отметь \
+combat set. Бой кончился — combat end с исходом.\n\n",
         );
     }
     let order = session.initiative_order();
@@ -854,6 +941,7 @@ pub fn master_request_narrated(
     narration: &str,
 ) -> MasterRequest {
     let memo = scene_system(session, short_sheet);
+    session.set_turn_out_of_game(out_of_game(player_text));
     session.deal_dice_pool(POOL_PER_DIE);
     let turn = turn_message(session, &memo, player_text, kb_extra, two_step, narration);
     let fixed = format!("{}{}", codex(session), party_sheets(session, short_sheet));
@@ -1026,7 +1114,8 @@ pub fn update_request(
 - card: {{"cmd":"card","card":"id","status":"done"}}; new_card: {{"cmd":"new_card","layer":"player","section":"known","title":"Имя NPC","summary":"кто он и что о нём знает герой"}}; правка: {{"cmd":"edit_card","card":"id","summary":"..."}}
 - Разделы слоя игрока (видно игроку — только то, что знает герой): goals — Цели; personas — Личины (ТОЛЬКО обличья самого героя); secrets — Пароли и маршруты (пароль, условный знак, тайный ход); known — Известные NPC (каждый NPC, с которым герой встретился или о ком узнал); chronicle — Хроника; notes — Заметки (выводы, улики, зацепки). Слой master (schedule, threats, prisoners, secrets, journal) и world (npc, locations, factions, lore) — полная правда, в том числе неизвестная герою.
 - задание, поручение или цель, которую герой принял: {{"cmd":"new_card","layer":"player","section":"goals","title":"...","summary":"что сделать","giver":"кто поручил","reward":"...","due_day":N,"steps":["...","..."]}} — отдельная карточка цели, не просто note.
-- опыт: за бой, найденное, успешную проверку с последствиями, важное решение — {{"cmd":"xp_note","text":"за что","xp":N}} (N — оценка на каждого по таблице опыта правил). Начисление — только когда рассказ закрыл день, отряд отдыхает или игрок попросил: {{"cmd":"xp","each":N,"reason":"..."}}.
+- бой: начался — {{"cmd":"combat","start":true,"foes":[{{"name":"Нелла","role":"простолюдин","surprised":true}}]}} (role — роль безымянного NPC из бестиария); выбыл участник — {{"cmd":"combat","set":{{"name":"…","status":"down|dead|fled|surrendered"}}}}; бой кончился — {{"cmd":"combat","end":true,"outcome":"…"}}. Только если рассказ прямо начал или закончил бой.
+- опыт: за бой, найденное, испытание, важное решение (не за проверки навыков) — {{"cmd":"xp_note","text":"за что","xp":N}} (N — оценка на каждого по таблице опыта правил). Начисление — только когда рассказ закрыл день, отряд отдыхает или игрок попросил: {{"cmd":"xp","each":N,"reason":"..."}}.
 - ход активной цели (см. «Активные цели героя»): {{"cmd":"goal","card":"id цели","step_done":1,"log":"что продвинулось"}}; "add_step":"..."; итог — "status":"done" или "failed". Если рассказ продвинул или закрыл цель — команда goal обязательна.
 
 Правила:

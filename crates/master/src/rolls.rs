@@ -6,7 +6,7 @@
 //! В итоговом ответе движок ищет броски d20, которых не делал, и помечает их.
 
 use crate::directives::{commands, find_character, split};
-use dnd_engine::{DiceExpr, Session};
+use dnd_engine::{CharacterKind, CombatRollKind, DiceExpr, Session};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -142,6 +142,89 @@ fn check_modifier(
     Ok((c.name.clone(), skill.total, skill.name.to_lowercase()))
 }
 
+/// Герой игрока: id и имя.
+fn hero(session: &Session) -> Option<(String, String)> {
+    session
+        .party()
+        .iter()
+        .find(|c| c.kind == CharacterKind::Player)
+        .map(|c| (c.id.clone(), c.name.clone()))
+}
+
+/// Имя — герой игрока (полностью, первым словом или id).
+pub(crate) fn is_hero(session: &Session, name: &str) -> bool {
+    let key = name.trim().to_lowercase().replace('ё', "е");
+    if key.chars().count() < 3 {
+        return false;
+    }
+    let Some((id, full)) = hero(session) else { return false };
+    let full = full.to_lowercase().replace('ё', "е");
+    let first = full.split_whitespace().next().unwrap_or("");
+    key == full
+        || key == id.to_lowercase()
+        || id.rsplit('.').next() == Some(key.as_str())
+        || key.split_whitespace().next() == Some(first)
+}
+
+fn hero_refusal(name: &str) -> String {
+    format!(
+        "бросок героя ({name}) делает игрок — попроси его бросить в лотке и дождись числа; \
+итог игрока записывай числом: [[17 | атака: {name} → цель]], [[9 > цель | урон: {name}]]"
+    )
+}
+
+/// Подпись броска: «атака: Вор → Оттокар, преимущество».
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Label {
+    pub kind: CombatRollKind,
+    pub actor: String,
+    pub target: String,
+    pub adv: bool,
+    pub dis: bool,
+    /// Подпись — проверка или спасбросок (не атака и не урон).
+    pub check: bool,
+}
+
+pub(crate) fn parse_label(label: &str) -> Label {
+    let label = label.trim();
+    let (head, rest) = match label.split_once(':') {
+        Some((h, r)) => (h.trim().to_lowercase(), r.trim()),
+        None => (String::new(), label),
+    };
+    let mut parts = rest.split(',');
+    let who = parts.next().unwrap_or("").trim();
+    let mut adv = false;
+    let mut dis = false;
+    for flag in parts.map(|p| p.trim().to_lowercase()) {
+        if flag.starts_with("внезапн") || flag.starts_with("помех") || flag.starts_with("застигнут")
+        {
+            dis = true;
+        } else if flag.starts_with("преимущ")
+            || flag.starts_with("засад")
+            || flag.starts_with("скрыт")
+        {
+            adv = true;
+        }
+    }
+    let (actor, target) = match who.split_once('→').or_else(|| who.split_once("->")) {
+        Some((a, t)) => (a.trim().to_string(), t.trim().to_string()),
+        None => (who.to_string(), String::new()),
+    };
+    let kind = if head.starts_with("атак") {
+        CombatRollKind::Attack
+    } else if head.starts_with("урон") {
+        CombatRollKind::Damage
+    } else if head.starts_with("спас") {
+        CombatRollKind::Save
+    } else if head.starts_with("инициатив") {
+        CombatRollKind::Initiative
+    } else {
+        CombatRollKind::Other
+    };
+    let check = matches!(kind, CombatRollKind::Save | CombatRollKind::Other) && !head.is_empty();
+    Label { kind, actor, target, adv, dis, check }
+}
+
 /// Бросок одной команды `roll`.
 fn roll_one(session: &mut Session, cmd: &Value) -> Result<MasterRoll, String> {
     let mut who = text(cmd, "who").unwrap_or_else(|| "Мастер".into());
@@ -151,6 +234,9 @@ fn roll_one(session: &mut Session, cmd: &Value) -> Result<MasterRoll, String> {
         Some(check) => {
             let character = text(cmd, "character").unwrap_or_else(|| who.clone());
             let (name, modifier, label) = check_modifier(session, &character, &check)?;
+            if is_hero(session, &name) {
+                return Err(hero_refusal(&name));
+            }
             who = name;
             if what.is_empty() {
                 what = label;
@@ -160,7 +246,13 @@ fn roll_one(session: &mut Session, cmd: &Value) -> Result<MasterRoll, String> {
                 m => format!("1d20{m:+}"),
             }
         }
-        None => text(cmd, "dice").ok_or("нет поля «dice» (например 1d20+5) или «check»")?,
+        None => {
+            let dice = text(cmd, "dice").ok_or("нет поля «dice» (например 1d20+5) или «check»")?;
+            if is_hero(session, &who) && dice.contains("d20") {
+                return Err(hero_refusal(&who));
+            }
+            dice
+        }
     };
     let hidden = cmd.get("hidden").and_then(Value::as_bool).unwrap_or(false);
     let adv = cmd.get("adv").and_then(Value::as_bool).unwrap_or(false);
@@ -329,6 +421,8 @@ pub struct PoolTurn {
     /// Команды урона по членам отряда (`[[1d8+3 > pc.nikis]]`) блоком ```engine; пусто, если
     /// урона нет или его учтёт второй шаг.
     pub commands: String,
+    /// Отклонённые броски: мастер бросил за героя.
+    pub refused: Vec<String>,
 }
 
 /// Выражения пула кубов в рассказе мастера: `[[1d20+5]]` — бросок, `[[2d6+3 > pc.nikis]]` —
@@ -340,6 +434,7 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
     let mut out = String::with_capacity(text.len());
     let mut rolls = Vec::new();
     let mut commands = Vec::new();
+    let mut refused = Vec::new();
     let mut rest = text;
     while let Some(start) = rest.find("[[") {
         let Some(len) = rest[start + 2..].find("]]") else { break };
@@ -376,6 +471,22 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
                 }
             }
         }
+        let parsed = label.map(parse_label);
+        // Бросок героя делает игрок: кубы за героя движок не бросает, мастеру — отказ.
+        let hero_actor = parsed
+            .as_ref()
+            .filter(|l| l.kind != CombatRollKind::Initiative || expression.parse::<i64>().is_err())
+            .filter(|l| is_hero(session, &l.actor))
+            .map(|l| l.actor.clone());
+        if let Some(name) = hero_actor.filter(|_| expression.parse::<i64>().is_err()) {
+            let reason = hero_refusal(&name);
+            session.log(format!("Отказ (бросок мастера): {reason}"));
+            if !hidden {
+                out.push_str("(бросок за игроком)");
+            }
+            refused.push(reason);
+            continue;
+        }
         // Инициатива участника боя: брошена раньше — не перебрасывается, число то же.
         let initiative = label.and_then(initiative_name);
         if let Some((name, value)) =
@@ -400,7 +511,62 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
             session.note_master_roll(&line);
             continue;
         }
-        let Ok(roll) = session.roll_from_pool(expression) else {
+        // Число вместо выражения с подписью — итог игрока (урон, атака героя): не бросается.
+        if let (Some(l), Ok(value)) = (parsed.as_ref(), expression.parse::<i64>()) {
+            if !hidden {
+                out.push_str(&value.to_string());
+            }
+            let target_name = match target {
+                Some(t) => find_character(session, t)
+                    .ok()
+                    .and_then(|id| session.character(&id).ok().map(|c| c.name.clone()))
+                    .unwrap_or_else(|| t.to_string()),
+                None => l.target.clone(),
+            };
+            let line = format!("{} — {}: {value}", l.actor, label.unwrap_or(""));
+            session.note_master_roll(&line);
+            session.note_combat_roll(l.kind, &l.actor, &target_name, value, &line);
+            continue;
+        }
+        // Внезапность и засада по правилам 2024: застигнутый бросает с помехой, скрытый — с
+        // преимуществом (по подписи или по участнику боя).
+        let (mut adv, mut dis) = parsed.as_ref().map_or((false, false), |l| (l.adv, l.dis));
+        if let Some(l) = parsed.as_ref().filter(|l| l.kind == CombatRollKind::Initiative) {
+            if let Some(f) = session.combat().and_then(|c| c.find(&l.actor).map(|i| &c.fighters[i]))
+            {
+                dis |= f.surprised;
+                adv |= f.hidden;
+            }
+        }
+        if adv && dis {
+            adv = false;
+            dis = false;
+        }
+        let pair = if (adv || dis) && expression.contains("d20") {
+            match (session.roll_from_pool(expression), session.roll_from_pool(expression)) {
+                (Ok(a), Ok(b)) => {
+                    let face = |r: &dnd_engine::ExprRoll| {
+                        r.groups
+                            .iter()
+                            .find(|g| g.sides == 20)
+                            .and_then(|g| g.values.first().copied())
+                    };
+                    let (fa, fb) = (face(&a).unwrap_or(0), face(&b).unwrap_or(0));
+                    let take_b = if adv { fb > fa } else { fb < fa };
+                    let kind = if adv { "преимущество" } else { "помеха" };
+                    let (kept, other) = if take_b { (fb, fa) } else { (fa, fb) };
+                    Some((if take_b { b } else { a }, format!(" ({kind}: {kept} и {other})")))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let (roll, adv_note) = match pair {
+            Some((r, note)) => (Ok(r), note),
+            None => (session.roll_from_pool(expression), String::new()),
+        };
+        let Ok(roll) = roll else {
             // Не выражение — оставляем текст без скобок, игрок не увидит служебной разметки.
             out.push_str(inner);
             continue;
@@ -416,10 +582,11 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
         let d20 =
             roll.groups.iter().find(|g| g.sides == 20).and_then(|g| g.values.first().copied());
         let member = target.and_then(|t| find_character(session, t).ok());
+        let actor = parsed.as_ref().map(|l| l.actor.clone()).filter(|a| !a.is_empty());
         let who = match (&member, target) {
             (Some(id), _) => session.character(id).map_or_else(|_| id.clone(), |c| c.name.clone()),
             (None, Some(t)) => t.to_string(),
-            (None, None) => "Мастер".to_string(),
+            (None, None) => actor.unwrap_or_else(|| "Мастер".to_string()),
         };
         let what = match (label, hidden, target.is_some()) {
             (Some(l), true, _) => format!("тайный бросок, {l}"),
@@ -429,8 +596,21 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
             (None, false, false) => "бросок".into(),
         };
         let values: Vec<String> = dice.iter().map(u32::to_string).collect();
-        let line =
-            format!("{who} — {what}: {} → [{}] = {total}", roll.expression, values.join(", "));
+        let line = format!(
+            "{who} — {what}: {} → [{}] = {total}{adv_note}",
+            roll.expression,
+            values.join(", ")
+        );
+        if let Some(l) = parsed.as_ref() {
+            let target_name = match (&member, target) {
+                (Some(id), _) => {
+                    session.character(id).map_or_else(|_| id.clone(), |c| c.name.clone())
+                }
+                (None, Some(t)) => t.to_string(),
+                (None, None) => l.target.clone(),
+            };
+            session.note_combat_roll(l.kind, &l.actor, &target_name, total, &line);
+        }
         if let (Some(id), true, false) = (&member, apply_damage, hidden) {
             commands.push(json!({ "cmd": "hp", "character": id, "damage": total }).to_string());
         }
@@ -454,7 +634,7 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
     } else {
         format!("```engine\n{}\n```", commands.join("\n"))
     };
-    PoolTurn { text: out, rolls, commands }
+    PoolTurn { text: out, rolls, commands, refused }
 }
 
 /// Имя участника из подписи «инициатива: Арбалетчик».
@@ -463,7 +643,8 @@ fn initiative_name(label: &str) -> Option<&str> {
         .trim()
         .strip_prefix("инициатива")
         .or_else(|| label.trim().strip_prefix("Инициатива"))?;
-    let name = rest.trim_start_matches([':', ' ', '—', '-']).trim();
+    let name = rest.trim_start_matches([':', ' ', '—', '-']);
+    let name = name.split(',').next().unwrap_or("").trim();
     (!name.is_empty()).then_some(name)
 }
 
@@ -509,12 +690,77 @@ pub fn fabricated_rolls(text: &str, rolled: &[u32], player_text: &str) -> Vec<St
             }
         }
     }
+    // «получает **1** на кубе», «выпало 17», «на кубе — 3».
+    for marker in ["на кубе", "выпало", "выбрасывает", "выбросил", "выкинул", "выпадает"]
+    {
+        for (at, _) in lower.match_indices(marker) {
+            let before: String = lower[..at].chars().rev().take(12).collect::<String>();
+            let after: String = lower[at + marker.len()..].chars().take(12).collect();
+            for (value, _) in
+                [first_number(&after), first_number_rev(&before)].into_iter().flatten()
+            {
+                if (1..=20).contains(&value) && !allowed.contains(&value) {
+                    let line = format!("куб {value}");
+                    if !found.contains(&line) {
+                        found.push(line);
+                    }
+                }
+            }
+        }
+    }
+    // «спасбросок: 16», «инициатива — 17», «Инициатива рабочих: 13».
+    for marker in ["спасбросок", "инициатива", "инициативу"] {
+        for (at, _) in lower.match_indices(marker) {
+            let tail: String = lower[at + marker.len()..].chars().take(28).collect();
+            let Some(sep) = tail.find([':', '—', '=']) else { continue };
+            let between = &tail[..sep];
+            // «спасбросок Ловкости КС 13» — это сложность, а не результат.
+            if between.contains("кс") || between.contains("сл ") || between.contains('\n') {
+                continue;
+            }
+            let after = &tail[sep..];
+            let after = after.trim_start_matches([':', '—', '=', ' ', '*', '\u{a0}']);
+            if !after.starts_with(|c: char| c.is_ascii_digit()) {
+                continue;
+            }
+            let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+            let Ok(value) = digits.parse::<u32>() else { continue };
+            if (1..=40).contains(&value) && !allowed.contains(&value) {
+                let line = format!("{marker} {value}");
+                if !found.contains(&line) {
+                    found.push(line);
+                }
+            }
+        }
+    }
     found
+}
+
+/// Первое число после маркера: «**17**», « — 3».
+fn first_number(text: &str) -> Option<(u32, usize)> {
+    let t = text.trim_start_matches([' ', ':', '—', '-', '*', '\u{a0}', '(']);
+    let digits: String = t.chars().take_while(char::is_ascii_digit).collect();
+    let value = digits.parse().ok()?;
+    // «выпало 17 и 3» — первое число; «на кубе 2d6» — формула.
+    let next = t[digits.len()..].chars().next();
+    (!matches!(next, Some('d' | 'д' | 'к'))).then_some((value, digits.len()))
+}
+
+/// Число прямо перед маркером («получает **1** на кубе»); `rev` — текст задом наперёд.
+fn first_number_rev(rev: &str) -> Option<(u32, usize)> {
+    let t = rev.trim_start_matches([' ', '*', '\u{a0}']);
+    let digits: String = t.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    let value: String = digits.chars().rev().collect();
+    Some((value.parse().ok()?, digits.len()))
 }
 
 /// Значения кубов из бросков мастера.
 pub fn rolled_faces(rolls: &[MasterRoll]) -> Vec<u32> {
-    rolls.iter().flat_map(|r| r.dice.iter().copied()).collect()
+    // Итоги тоже: «инициатива — 17» называет итог броска движка.
+    rolls.iter().flat_map(|r| r.dice.iter().copied().chain(u32::try_from(r.total).ok())).collect()
 }
 
 fn numbers(text: &str) -> impl Iterator<Item = u32> + '_ {
@@ -676,5 +922,59 @@ mod tests {
             fabricated_rolls("Урон: допустим, выпало средне ~10-12", &[], ""),
             vec!["результат предположен, а не брошен".to_string()]
         );
+    }
+
+    #[test]
+    fn master_cannot_roll_for_the_hero() {
+        let mut s = session();
+        s.deal_dice_pool(8);
+        let hero = s.party().iter().find(|c| c.kind == CharacterKind::Player).unwrap().name.clone();
+        let first = hero.split_whitespace().next().unwrap().to_string();
+        let text =
+            format!("[[1d20+5 | проверка Скрытности: {first}]] и [[18 | инициатива: {first}]]");
+        let turn = resolve_pool(&mut s, &text, true);
+        assert_eq!(turn.refused.len(), 1, "{:?}", turn);
+        assert!(
+            turn.text.contains("(бросок за игроком)") && turn.text.contains("18"),
+            "{}",
+            turn.text
+        );
+        let cmd =
+            format!("```engine\n{{\"cmd\":\"roll\",\"who\":\"{first}\",\"dice\":\"1d20+5\"}}\n```");
+        let round = run_rolls(&mut s, &cmd).unwrap();
+        assert!(round.rolls.is_empty());
+        assert!(round.feedback.contains("делает игрок"), "{}", round.feedback);
+    }
+
+    #[test]
+    fn surprise_label_takes_lower_d20_and_damage_is_counted() {
+        let mut s = session();
+        let pool = s.deal_dice_pool(8).clone();
+        let d20 = pool.remaining(20).to_vec();
+        crate::combat::run_combat(
+            &mut s,
+            &json!({"cmd":"combat","start":true,"foes":[{"name":"Нелла","role":"простолюдин"}]}),
+        )
+        .unwrap();
+        let turn = resolve_pool(&mut s, "[[1d20+2 | инициатива: Нелла, внезапность]]", true);
+        let low = i64::from(d20[0].min(d20[1])) + 2;
+        assert_eq!(turn.text, low.to_string());
+        assert!(turn.rolls[0].line.contains("помеха"), "{}", turn.rolls[0].line);
+        resolve_pool(&mut s, "[[17 | атака: Никис → Нелла]] [[9 | урон: Никис]]", true);
+        let lines = s.combat_lines().join("\n");
+        assert!(lines.contains("хиты 0/4"), "{lines}");
+    }
+
+    #[test]
+    fn invented_numbers_in_words_are_found() {
+        let found = fabricated_rolls(
+            "Рабочий получает **1** на кубе. Инициатива рабочих — 17, спасбросок: 16. Спасбросок Ловкости КС 13.",
+            &[],
+            "",
+        );
+        assert!(found.contains(&"куб 1".to_string()), "{found:?}");
+        assert!(found.contains(&"инициатива 17".to_string()), "{found:?}");
+        assert!(found.contains(&"спасбросок 16".to_string()), "{found:?}");
+        assert!(!found.iter().any(|f| f.contains("13")), "{found:?}");
     }
 }

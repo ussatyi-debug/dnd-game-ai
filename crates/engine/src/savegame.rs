@@ -112,6 +112,12 @@ pub struct SaveData {
     pub xp_log: Vec<crate::experience::XpNote>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub level_up_open: Vec<String>,
+    /// Текущий бой (0.10.1); старые сейвы — без боя.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub combat: Option<crate::combat::Combat>,
+    /// Очередь инициативы текущего боя.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub initiative: Vec<crate::combat::InitiativeEntry>,
 }
 
 /// Итог загрузки.
@@ -532,7 +538,11 @@ impl Session {
         self.repair_player_sections();
         self.turn_note_start = u64::MAX;
         self.met_unknown.clear();
-        self.initiative.clear();
+        // Бой и очередь инициативы восстанавливаются: загрузка посреди боя продолжает его.
+        self.initiative = save.initiative.into_iter().map(|e| (e.name, e.value)).collect();
+        self.combat = save.combat;
+        self.combat_reports.clear();
+        self.turn_out_of_game = false;
         self.turn_rolls.clear();
         self.last_turn_rolls.clear();
         self.chronicle_from = self.scene.day;
@@ -608,6 +618,8 @@ mod tests {
             campaign: state.campaign,
             xp_log: state.xp_log,
             level_up_open: state.level_up_open,
+            combat: state.combat,
+            initiative: state.initiative,
         }
     }
 

@@ -24,6 +24,7 @@
 
 pub mod character;
 pub mod check;
+pub mod combat;
 pub mod creation;
 pub mod error;
 pub mod experience;
@@ -52,6 +53,10 @@ pub use character::{
     CharacterKind, CharacterSheet, ClassLevel, HitPoints,
 };
 pub use check::{player_d20, roll_d20, AttackResult, D20Roll, Modifier, RollMode, RollSource};
+pub use combat::{
+    Combat, CombatRollKind, Fighter, FighterStatus, InitiativeEntry, NewFighter, Side, TargetLink,
+    COMBAT_QUIET_TURNS,
+};
 pub use creation::{
     build_hero, build_party, level_for_xp, starting_treasury, validate_hero, Campaign, HeroSpec,
     SpecClass, SpecHp, SpecItem, SpecResource, MAX_HERO_LEVEL, XP_THRESHOLDS,

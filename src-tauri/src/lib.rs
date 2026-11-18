@@ -990,6 +990,10 @@ async fn ai_chat(
     // Числа пула мастер видел заранее и мог назвать прямо («d20 14 из пула») — это не выдумка.
     let mut engine_faces = dnd_master::rolled_faces(&reply.rolls);
     engine_faces.extend(lock(&session)?.dice_pool().faces());
+    // Очередь инициативы: мастер называет её числа («инициатива — 17») — это не выдумка.
+    engine_faces.extend(
+        lock(&session)?.initiative_order().iter().filter_map(|(_, v)| u32::try_from(*v).ok()),
+    );
     if two_step {
         let now = dnd_master::scene_now(&full);
         if !now.is_empty() {

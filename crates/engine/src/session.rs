@@ -174,6 +174,10 @@ pub struct SaveState {
     pub xp_log: Vec<crate::experience::XpNote>,
     /// Кому открыто повышение уровня (после длительного отдыха).
     pub level_up_open: Vec<String>,
+    /// Текущий бой.
+    pub combat: Option<crate::combat::Combat>,
+    /// Очередь инициативы текущего боя.
+    pub initiative: Vec<crate::combat::InitiativeEntry>,
 }
 
 /// Состояние сессии.
@@ -247,6 +251,14 @@ pub struct Session {
     /// Пул кубов хода: движок бросает его заранее и показывает мастеру; выражения мастера
     /// `[[1d8+3]]` считаются из него по порядку (в сохранение не попадает).
     pub(crate) dice_pool: DicePool,
+    /// Текущий бой (пак 0.10.1): участники, журнал, счёт урона. Идёт в сохранение.
+    pub(crate) combat: Option<crate::combat::Combat>,
+    /// Ход — разговор вне игры (счётчик затихшего боя стоит).
+    pub(crate) turn_out_of_game: bool,
+    /// Отчёты о счёте урона за ход — уходят мастеру.
+    pub(crate) combat_reports: Vec<String>,
+    /// Опыт за противников последнего закрытого боя по бестиарию.
+    pub(crate) combat_xp_hint: u32,
 }
 
 /// Кубы пула хода: d20, d12, d10, d8, d6, d4.
@@ -366,6 +378,10 @@ impl Session {
             initiative: Vec::new(),
             initiative_noted: false,
             dice_pool: DicePool::default(),
+            combat: None,
+            turn_out_of_game: false,
+            combat_reports: Vec::new(),
+            combat_xp_hint: 0,
         }
     }
 
@@ -759,6 +775,8 @@ impl Session {
     /// Запомнить инициативу участника (повтор не перезаписывает первое значение).
     pub fn note_initiative(&mut self, name: &str, value: i64) {
         self.initiative_noted = true;
+        // Инициатива без команды боя — черновой бой, мастеру напоминание указать состав.
+        self.ensure_draft_combat(name);
         if self.initiative_of(name).is_none() && !name.trim().is_empty() {
             self.initiative.push((name.trim().to_string(), value));
         }
@@ -858,6 +876,8 @@ impl Session {
             campaign: self.campaign.clone(),
             xp_log: self.xp_log.clone(),
             level_up_open: self.level_up_open.clone(),
+            combat: self.combat.clone(),
+            initiative: self.initiative_entries(),
         }
     }
 }

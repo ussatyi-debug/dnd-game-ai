@@ -595,6 +595,19 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
         })(),
         "xp_note" => (|| -> Result<String, String> {
             let xp = int_field(cmd, "xp").and_then(|v| u32::try_from(v).ok()).unwrap_or(0);
+            // Опыт — по таблице за противников и испытания по замыслу сцены, не за проверки.
+            let note = text_field(cmd, "text")?.to_lowercase();
+            if ["проверк", "спасброс", "скрытност", "анализ", "внимательност", "бросок "]
+                .iter()
+                .any(|w| note.contains(w))
+                && !["бой", "противник", "враг", "побе", "одолел"].iter().any(|w| note.contains(w))
+            {
+                return Err(
+                    "опыт за проверки не даётся: пометка — за противников (ПО по таблице), \
+испытание или веху сцены"
+                        .into(),
+                );
+            }
             engine(session.note_xp(text_field(cmd, "text")?, xp))?;
             Ok(last_log(session))
         })(),
@@ -616,6 +629,7 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             engine(session.update_goal(text_field(cmd, "card")?, edit))?;
             Ok(last_log(session))
         })(),
+        "combat" => crate::combat::run_combat(session, cmd),
         "card" => (|| -> Result<String, String> {
             let card = text_field(cmd, "card")?;
             let status = text_field(cmd, "status")?;

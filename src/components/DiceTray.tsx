@@ -121,8 +121,33 @@ export default function DiceTray({ enabled, lucky, onRoll, onLuckyChange, onSend
     }
   }
 
+  /** Преимущество или помеха для любого героя: второй d20, итог — больший или меньший куб. */
+  async function pair(mode: "adv" | "dis") {
+    if (!last) return;
+    setRolling(true);
+    setError(null);
+    try {
+      const result = await rollDice(1, 20);
+      const second = result.groups[0]?.values[0] ?? result.total;
+      await animate([{ kind: "d20", value: second }]);
+      const first = last.total;
+      const kept = mode === "adv" ? Math.max(first, second) : Math.min(first, second);
+      const entry = { die: "d20" as const, values: [kept], total: kept, pairMode: mode, pairFrom: first, pairSecond: second };
+      setLast(entry);
+      onRoll(entry);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setRolling(false);
+    }
+  }
+
   const canReroll =
-    last !== null && last.die === "d20" && last.values.length === 1 && last.luckyFrom === undefined;
+    last !== null &&
+    last.die === "d20" &&
+    last.values.length === 1 &&
+    last.luckyFrom === undefined &&
+    last.pairMode === undefined;
   const luckyLeft = lucky?.current ?? 0;
 
   return (
@@ -207,6 +232,26 @@ export default function DiceTray({ enabled, lucky, onRoll, onLuckyChange, onSend
           {rolling ? "Кубы катятся…" : "Бросить"}
         </button>
         {canReroll && (
+          <div className="flex w-full gap-2 sm:w-auto">
+            <button
+              type="button"
+              disabled={rolling}
+              onClick={() => void pair("adv")}
+              className="flex-1 rounded-md border border-edge px-3 py-2 text-sm text-parchment hover:border-gold disabled:opacity-40"
+            >
+              С преимуществом
+            </button>
+            <button
+              type="button"
+              disabled={rolling}
+              onClick={() => void pair("dis")}
+              className="flex-1 rounded-md border border-edge px-3 py-2 text-sm text-parchment hover:border-gold disabled:opacity-40"
+            >
+              С помехой
+            </button>
+          </div>
+        )}
+        {canReroll && lucky && (
           <button
             type="button"
             disabled={rolling || luckyLeft === 0}

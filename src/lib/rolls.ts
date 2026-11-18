@@ -24,6 +24,16 @@ export interface RollResult {
   luckyFrom?: number;
   /** «Везунчик»: второй куб; итог — больший из двух. */
   luckySecond?: number;
+  /** Бросок с преимуществом или помехой (кнопки лотка): итог — больший или меньший куб. */
+  pairMode?: "adv" | "dis";
+  /** Первый куб пары. */
+  pairFrom?: number;
+  /** Второй куб пары. */
+  pairSecond?: number;
+}
+
+function pairLabel(mode: "adv" | "dis"): string {
+  return mode === "adv" ? "преимущество" : "помеха";
 }
 
 /** Запись лога. */
@@ -41,7 +51,9 @@ export function rollTitle(roll: RollResult & { master?: TrayRoll["master"] }): s
   if (roll.master?.hidden) return "🔒 Тайный бросок мастера";
   if (roll.master) return `Мастер · ${roll.master.who}${roll.master.what ? ` — ${roll.master.what}` : ""}`;
   const base = roll.values.length === 1 ? roll.die : `${roll.values.length}${roll.die}`;
-  return roll.luckyFrom !== undefined ? `${base} — Везунчик` : base;
+  if (roll.luckyFrom !== undefined) return `${base} — Везунчик`;
+  if (roll.pairMode) return `${base} — ${roll.pairMode === "adv" ? "с преимуществом" : "с помехой"}`;
+  return base;
 }
 
 /** Подробности для лога. */
@@ -49,6 +61,14 @@ export function rollDetail(roll: RollResult): string {
   if (roll.luckyFrom !== undefined) {
     const second = roll.luckySecond ?? roll.total;
     return `${roll.total} (преимущество: ${roll.luckyFrom} и ${second})`;
+  }
+  if (roll.pairMode) {
+    return `${roll.total} (${pairLabel(roll.pairMode)}: ${roll.pairFrom} и ${roll.pairSecond})`;
+  }
+  // Два d20 — не сумма, а пара кубов: игрок сам выбирает больший или меньший.
+  if (roll.die === "d20" && roll.values.length === 2) {
+    const [a, b] = roll.values;
+    return `${a} и ${b} (больший ${Math.max(a, b)}, меньший ${Math.min(a, b)})`;
   }
   if (roll.values.length === 1) {
     return String(roll.total);
@@ -60,6 +80,12 @@ export function rollDetail(roll: RollResult): string {
 export function rollCopyText(roll: RollResult): string {
   if (roll.luckyFrom !== undefined) {
     return `${roll.total} - везунчик`;
+  }
+  if (roll.pairMode) {
+    return `${roll.total} - ${pairLabel(roll.pairMode)} (${roll.pairFrom} и ${roll.pairSecond})`;
+  }
+  if (roll.die === "d20" && roll.values.length === 2) {
+    return `2d20: ${roll.values[0]} и ${roll.values[1]}`;
   }
   if (roll.values.length === 1) {
     return String(roll.total);
