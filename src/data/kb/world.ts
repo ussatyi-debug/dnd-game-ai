@@ -2,6 +2,7 @@
 // «Правила для Мастера». Состояние — на День 82 (правило: по миру берутся самые поздние сведения).
 
 import type { KbEntry, KbLayerInfo } from "./types.ts";
+import { WORLD_GENERATED } from "./world.generated.ts";
 
 export const WORLD_LAYER: KbLayerInfo = {
   id: "world",
@@ -26,7 +27,7 @@ const art = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, layer: 
 const rule = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, layer: "world", section: "rules" });
 const map = (e: Omit<KbEntry, "layer" | "section">): KbEntry => ({ ...e, layer: "world", section: "maps" });
 
-export const WORLD_ENTRIES: KbEntry[] = [
+const WORLD_BASE: KbEntry[] = [
   // ───────────── Локации ─────────────
   loc({
     id: "loc.neustadt",
@@ -1052,3 +1053,7 @@ export const WORLD_ENTRIES: KbEntry[] = [
     source: "Google Диск",
   }),
 ];
+
+/** Карточки «Мира»: ручные (WORLD_BASE) и из ответов Gemini — сгенерированная заменяет ручную с тем же id. */
+const generatedIds = new Set(WORLD_GENERATED.map((e) => e.id));
+export const WORLD_ENTRIES: KbEntry[] = [...WORLD_BASE.filter((e) => !generatedIds.has(e.id)), ...WORLD_GENERATED];
