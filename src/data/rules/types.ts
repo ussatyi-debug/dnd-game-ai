@@ -106,6 +106,15 @@ export interface SubclassData {
   spellcasting?: SpellcastingRule;
   /** Заклинания, зависящие от выбора в подклассе (местность Круга земли): id варианта → уровень → заклинания. */
   spellsByOption?: { choice: string; spells: Record<string, Record<number, string[]>> };
+  /** Постоянные владения подкласса с 3-го уровня (Коллегия доблести, Воин милосердия, Убийца)
+   * и защита без доспехов (Коллегия танца: 10 + ЛОВ + ХАР). */
+  grants?: {
+    skills?: SkillId[];
+    tools?: string[];
+    armor?: ("light" | "medium" | "heavy" | "shield")[];
+    martialWeapons?: boolean;
+    unarmoredAbility?: AbilityId;
+  };
   features: Feature[];
 }
 

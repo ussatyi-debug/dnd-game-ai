@@ -167,6 +167,7 @@ pub(crate) static SPELLS: &[SpellMeta] = &[
     SpellMeta { id: "forbiddance", name: "Запрет", level: 6, ritual: true, concentration: false, classes: C_CLERIC, srd: true, mech: "10 минут; 5d10" },
     SpellMeta { id: "forcecage", name: "Силовая клетка", level: 7, ritual: false, concentration: true, classes: C_BARD | C_WARLOCK | C_WIZARD, srd: true, mech: "Действие; спасбросок Харизмы" },
     SpellMeta { id: "foresight", name: "Предвидение", level: 9, ritual: false, concentration: false, classes: C_BARD | C_DRUID | C_WARLOCK | C_WIZARD, srd: true, mech: "1 минута" },
+    SpellMeta { id: "fount-of-moonlight", name: "Источник лунного света", level: 4, ritual: false, concentration: true, classes: C_BARD | C_DRUID, srd: false, mech: "1 действие; спасбросок Телосложения; 2d6" },
     SpellMeta { id: "freedom-of-movement", name: "Свобода перемещения", level: 4, ritual: false, concentration: false, classes: C_BARD | C_CLERIC | C_DRUID | C_RANGER, srd: true, mech: "Действие" },
     SpellMeta { id: "freezing-sphere", name: "Леденящая сфера", level: 6, ritual: false, concentration: false, classes: C_SORCERER | C_WIZARD, srd: true, mech: "Действие; спасбросок Телосложения; 10d6; выше круга: 1d6" },
     SpellMeta { id: "friends", name: "Дружба", level: 0, ritual: false, concentration: true, classes: C_BARD | C_SORCERER | C_WARLOCK | C_WIZARD, srd: false, mech: "1 действие; спасбросок Мудрости" },

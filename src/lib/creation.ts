@@ -788,6 +788,7 @@ export function skillProficiencies(d: Draft, withExpertise = true): SpecSkill[] 
       if (f.level > d.level) continue;
       for (const c of f.choices ?? []) if (c.kind === "skill") for (const s of pick(d, c.id)) add(s, f.name);
     }
+    for (const s of r.subclass?.grants?.skills ?? []) add(s, r.subclass!.name);
   }
   for (const slot of featSlots(d)) {
     const feat = slotFeat(d, slot);
@@ -844,6 +845,11 @@ function tools(d: Draft): string[] {
   if (r.cls?.id === "druid") set.add("Набор травника");
   for (const t of pick(d, "monk.tool")) set.add(t);
   for (const t of pick(d, "bard.instruments")) set.add(t);
+  for (const f of [...(r.cls?.features ?? []), ...(r.subclass?.features ?? [])]) {
+    if (f.level > d.level) continue;
+    for (const c of f.choices ?? []) if (c.kind === "tool") for (const t of pick(d, c.id)) set.add(t);
+  }
+  for (const t of r.subclass?.grants?.tools ?? []) set.add(t);
   for (const slot of featSlots(d)) {
     const feat = slotFeat(d, slot);
     for (const c of feat?.choices ?? []) if (c.kind === "tool") for (const t of pick(d, `${slot.key}:${c.id}`)) set.add(t);
@@ -1010,7 +1016,10 @@ export function armorClass(d: Draft): { total: number; parts: { label: string; v
   const worn = items.map((i) => ARMOR_BY_NAME.get(i)).filter((a) => a && a.type !== "shield");
   const armor = worn.sort((a, b) => b!.ac - a!.ac)[0];
   const featTraining = armorTrainingFromFeats(d);
-  const trained = (t: string) => (r.cls?.armorTraining.includes(t as never) ?? false) || featTraining.has(t);
+  const trained = (t: string) =>
+    (r.cls?.armorTraining.includes(t as never) ?? false) ||
+    featTraining.has(t) ||
+    (r.subclass?.grants?.armor?.includes(t as never) ?? false);
   const shield = items.includes("Щит") && trained("shield") && r.cls?.id !== "monk";
   let parts: { label: string; value: number }[];
   if (armor && trained(armor.type)) {
@@ -1026,6 +1035,10 @@ export function armorClass(d: Draft): { total: number; parts: { label: string; v
     if (r.cls?.id === "barbarian") parts.push({ label: "ТЕЛ", value: modifier(ab.constitution) });
     if (r.cls?.id === "monk" && !items.includes("Щит")) parts.push({ label: "МДР", value: modifier(ab.wisdom) });
     if (r.subclass?.id === "draconic") parts.push({ label: "ХАР", value: modifier(ab.charisma) });
+    const unarmored = r.subclass?.grants?.unarmoredAbility;
+    if (unarmored && !items.includes("Щит")) {
+      parts.push({ label: ABILITY_SHORT[unarmored], value: modifier(ab[unarmored]) });
+    }
   }
   if (shield) parts.push({ label: "Щит", value: 2 });
   const magic = kitMagicItems(d);
@@ -1593,13 +1606,24 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
   // Владения.
   const proficiencies: HeroSpec["proficiencies"] = [];
   if (cls) {
+    const armorName = (t: string) =>
+      ({ light: "лёгкие доспехи", medium: "средние доспехи", heavy: "тяжёлые доспехи", shield: "щиты" })[t] ?? t;
     const extraArmor = [...armorTrainingFromFeats(d)]
       .filter((t) => !cls.armorTraining.includes(t as never))
-      .map((t) => ({ light: "лёгкие доспехи", medium: "средние доспехи", heavy: "тяжёлые доспехи", shield: "щиты" })[t] ?? t);
-    const armorText = [cls.armor, ...extraArmor.map((t) => `${t} (талант)`)].filter((x) => x && x !== "Нет").join(", ");
+      .map((t) => `${armorName(t)} (талант)`);
+    const subArmor = (r.subclass?.grants?.armor ?? [])
+      .filter((t) => !cls.armorTraining.includes(t) && !armorTrainingFromFeats(d).has(t))
+      .map((t) => `${armorName(t)} (подкласс)`);
+    const armorText = [cls.armor, ...extraArmor, ...subArmor].filter((x) => x && x !== "Нет").join(", ");
     proficiencies.push({ kind: "Доспехи", text: armorText || cls.armor, from_rules: true });
     const martial = slotFeatIds(d).includes("martial_weapon_training") && !/воинск/i.test(cls.weapons);
-    proficiencies.push({ kind: "Оружие", text: martial ? `${cls.weapons}, воинское оружие (талант)` : cls.weapons, from_rules: true });
+    const subMartial = r.subclass?.grants?.martialWeapons && !/воинск/i.test(cls.weapons);
+    const weaponText = subMartial
+      ? `${cls.weapons}, воинское оружие (подкласс)`
+      : martial
+        ? `${cls.weapons}, воинское оружие (талант)`
+        : cls.weapons;
+    proficiencies.push({ kind: "Оружие", text: weaponText, from_rules: true });
   }
   const toolList = tools(d);
   if (toolList.length) proficiencies.push({ kind: "Инструменты", text: toolList.join(", "), from_rules: true });
