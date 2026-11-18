@@ -567,12 +567,12 @@ mod tests {
         let r = call(&mut s, json!({ "cmd": "character_sheet", "id": "pc.nikis" }));
         let sheet = &r["ok"];
         assert_eq!(sheet["name"], "Сэр Никис Стрэндж");
-        assert_eq!(sheet["level"], 11);
-        assert_eq!(sheet["proficiency_bonus"], 4);
+        assert_eq!(sheet["level"], 12);
+        assert_eq!(sheet["proficiency_bonus"], 5);
         assert_eq!(sheet["abilities"][3]["label"], "ИНТ");
         assert_eq!(sheet["abilities"][3]["modifier"], 4);
         assert_eq!(sheet["resources"][0]["id"], "feat.lucky");
-        assert_eq!(sheet["resources"][0]["current"], 3);
+        assert_eq!(sheet["resources"][0]["current"], 5);
     }
 
     #[test]
@@ -581,20 +581,20 @@ mod tests {
         let r = call(&mut s, json!({ "cmd": "lucky_reroll" }));
         let value = r["ok"]["value"].as_u64().unwrap();
         assert!((1..=20).contains(&value));
-        assert_eq!(r["ok"]["lucky"]["current"], 2);
+        assert_eq!(r["ok"]["lucky"]["current"], 4);
 
         let rested = call(&mut s, json!({ "cmd": "take_rest", "kind": "long" }));
         let nikis = &rested["ok"]["characters"][0];
         assert_eq!(nikis["id"], "pc.nikis");
         assert!(nikis["restored"].as_array().unwrap().iter().any(|v| v == "Везунчик"));
         let sheet = call(&mut s, json!({ "cmd": "character_sheet", "id": "pc.nikis" }));
-        assert_eq!(sheet["ok"]["resources"][0]["current"], 3);
+        assert_eq!(sheet["ok"]["resources"][0]["current"], 5);
     }
 
     #[test]
     fn lucky_without_charges_is_an_error() {
         let mut s = session();
-        for _ in 0..3 {
+        for _ in 0..5 {
             assert!(call(&mut s, json!({ "cmd": "lucky_reroll" }))["ok"].is_object());
         }
         let r = call(&mut s, json!({ "cmd": "lucky_reroll" }));
@@ -663,19 +663,19 @@ mod tests {
         let mut s = session();
         let party = call(&mut s, json!({ "cmd": "party" }));
         assert_eq!(party["ok"]["members"].as_array().unwrap().len(), 6);
-        assert_eq!(party["ok"]["scene"]["day"], 82);
+        assert_eq!(party["ok"]["scene"]["day"], 98);
         let treasury = call(&mut s, json!({ "cmd": "treasury" }));
         assert_eq!(treasury["ok"]["total"], party["ok"]["treasury_total"]);
         assert!(treasury["ok"]["entries"].as_array().unwrap().len() > 20);
         let save = call(&mut s, json!({ "cmd": "save_state" }));
-        assert_eq!(save["ok"]["format_version"], 9);
+        assert_eq!(save["ok"]["format_version"], 10);
         assert_eq!(save["ok"]["party"][1]["id"], "npc.corvus");
         let added = call(
             &mut s,
             json!({
                 "cmd": "treasury_add_manual",
                 "assetId": "gp",
-                "locationId": "purse",
+                "locationId": "shadow_ring",
                 "quantity": -5,
                 "reason": "Подаяние"
             }),
@@ -756,7 +756,7 @@ mod tests {
             .find(|r| r["id"] == "feat.lucky")
             .unwrap()
             .clone();
-        assert_eq!(lucky["current"], 2);
+        assert_eq!(lucky["current"], 4);
         let bad = call(&mut other, json!({ "cmd": "load_state", "save": { "format_version": 4 } }));
         assert!(bad["err"].as_str().unwrap().contains("повреждён"));
     }

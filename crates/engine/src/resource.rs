@@ -71,9 +71,10 @@ impl ResourcePool {
         Ok(Self { id: id.into(), name, current, max, recovery })
     }
 
-    /// Черта «Везунчик»: 3 заряда, восстановление только на длительном отдыхе.
-    pub fn lucky() -> Self {
-        Self::new("feat.lucky", "Везунчик", 3, Recovery::LongRest)
+    /// Черта «Везунчик» (правила 2024 года): очков удачи столько, каков бонус мастерства,
+    /// восстановление только на длительном отдыхе.
+    pub fn lucky(points: u32) -> Self {
+        Self::new("feat.lucky", "Везунчик", points, Recovery::LongRest)
     }
 
     pub fn id(&self) -> &str {
@@ -177,7 +178,7 @@ mod tests {
 
     #[test]
     fn lucky_spends_down_to_zero_then_errors() {
-        let mut lucky = ResourcePool::lucky();
+        let mut lucky = ResourcePool::lucky(3);
         assert_eq!(lucky.to_string(), "Везунчик 3/3");
         assert_eq!(lucky.spend(1), Ok(2));
         assert_eq!(lucky.spend(1), Ok(1));
@@ -205,7 +206,7 @@ mod tests {
 
     #[test]
     fn lucky_recovers_only_on_long_rest() {
-        let mut lucky = ResourcePool::lucky();
+        let mut lucky = ResourcePool::lucky(3);
         lucky.spend(2).unwrap();
         assert!(!lucky.apply_rest(RestKind::Short));
         assert_eq!(lucky.current(), 1);
@@ -250,7 +251,7 @@ mod tests {
 
     #[test]
     fn full_pool_does_not_report_recovery() {
-        let mut lucky = ResourcePool::lucky();
+        let mut lucky = ResourcePool::lucky(3);
         assert!(!lucky.apply_rest(RestKind::Long));
     }
 
@@ -261,7 +262,7 @@ mod tests {
         assert_eq!(pool.current(), 1);
         assert!(ResourcePool::with_current("x", "X", 4, 3, Recovery::Manual).is_err());
 
-        let mut lucky = ResourcePool::lucky();
+        let mut lucky = ResourcePool::lucky(3);
         assert_eq!(lucky.spend(0), Err(EngineError::ZeroAmount));
         assert_eq!(lucky.restore(0), Err(EngineError::ZeroAmount));
     }

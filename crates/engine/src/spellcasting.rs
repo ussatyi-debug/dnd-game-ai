@@ -1378,20 +1378,21 @@ mod tests {
     fn slot_tables() {
         let nikis = member("pc.nikis");
         let sc = nikis.spellcasting.as_ref().unwrap();
-        assert_eq!(sc.pact_level(), 4);
+        assert_eq!(sc.pact_level(), 5);
         assert_eq!(nikis.resource(PACT_SLOTS_ID).unwrap().max(), 2);
         assert!(nikis.resource("slots.1").is_none());
 
         let valeria = member("npc.valeria");
         let maxes: Vec<u32> =
-            (1..=4).map(|l| valeria.resource(&slot_id(l)).unwrap().max()).collect();
-        assert_eq!(maxes, vec![4, 3, 3, 2]);
-        assert!(valeria.resource("slots.5").is_none());
+            (1..=5).map(|l| valeria.resource(&slot_id(l)).unwrap().max()).collect();
+        assert_eq!(maxes, vec![4, 3, 3, 3, 2]);
+        assert!(valeria.resource("slots.6").is_none());
 
         let gunther = member("npc.gunther");
-        assert_eq!(gunther.spellcasting.as_ref().unwrap().caster_level(), 4);
-        assert_eq!(gunther.resource("slots.1").unwrap().max(), 4);
-        assert_eq!(gunther.resource("slots.2").unwrap().max(), 3);
+        assert_eq!(gunther.spellcasting.as_ref().unwrap().caster_level(), 5);
+        let maxes: Vec<u32> =
+            (1..=3).map(|l| gunther.resource(&slot_id(l)).unwrap().max()).collect();
+        assert_eq!(maxes, vec![4, 3, 2]);
     }
 
     #[test]
@@ -1426,27 +1427,29 @@ mod tests {
         let nikis = member("pc.nikis");
         let book = nikis.spellbook().unwrap();
         assert_eq!(book.casters[0].save_dc, 17);
-        assert_eq!(book.casters[0].attack_bonus, 8);
+        assert_eq!(book.casters[0].attack_bonus, 9);
         let valeria = member("npc.valeria").spellbook().unwrap();
-        assert_eq!(valeria.casters[0].save_dc, 16);
-        assert_eq!(valeria.casters[0].prepared_limit, Some(13));
+        assert_eq!(valeria.casters[0].save_dc, 17);
+        assert_eq!(valeria.casters[0].attack_bonus, 10);
+        assert_eq!(valeria.casters[0].prepared_limit, Some(15));
         let gunther = member("npc.gunther").spellbook().unwrap();
-        assert_eq!(gunther.casters[0].save_dc, 13);
-        assert_eq!(gunther.casters[0].prepared_limit, Some(6));
+        assert_eq!(gunther.casters[0].save_dc, 15);
+        assert_eq!(gunther.casters[0].attack_bonus, 7);
+        assert_eq!(gunther.casters[0].prepared_limit, Some(9));
     }
 
     #[test]
     fn warlock_casts_with_pact_slots_at_pact_level() {
         let mut nikis = member("pc.nikis");
-        let out = nikis.cast_spell(&CastRequest::new("misty-step")).unwrap();
+        let out = nikis.cast_spell(&CastRequest::new("far-step")).unwrap();
         assert_eq!(out.method, CastMethod::Pact);
-        assert_eq!(out.cast_level, 4);
+        assert_eq!(out.cast_level, 5);
         assert_eq!(out.spent.as_ref().unwrap().current(), 1);
-        assert!(out.summary.contains("«Туманный шаг» (4 круг)"));
+        assert!(out.summary.contains("«Далёкий шаг» (5 круг)"));
 
         assert_eq!(
             nikis.cast_spell(&CastRequest::new("scorching-ray").at_level(2)),
-            Err(EngineError::PactSlotLevel { pact_level: 4, requested: 2 })
+            Err(EngineError::PactSlotLevel { pact_level: 5, requested: 2 })
         );
         nikis.cast_spell(&CastRequest::new("scorching-ray")).unwrap();
         assert!(matches!(
@@ -1508,9 +1511,9 @@ mod tests {
         let free = nikis.cast_spell(&CastRequest::new("cause-fear")).unwrap();
         assert_eq!((free.method, free.cast_level), (CastMethod::Granted, 1));
         assert_eq!(nikis.resource(PACT_SLOTS_ID).unwrap().current(), 2);
-        // Бесплатное применение потрачено — дальше ячейкой договора на 4 круге.
+        // Бесплатное применение потрачено — дальше ячейкой договора на 5 круге.
         let slot = nikis.cast_spell(&CastRequest::new("cause-fear")).unwrap();
-        assert_eq!((slot.method, slot.cast_level), (CastMethod::Pact, 4));
+        assert_eq!((slot.method, slot.cast_level), (CastMethod::Pact, 5));
         assert_eq!(slot.save_dc, Some(17));
         assert_eq!(nikis.resource(PACT_SLOTS_ID).unwrap().current(), 1);
         // Явный выбор ячейки, пока бесплатное применение ещё есть.
@@ -1562,7 +1565,9 @@ mod tests {
         let blight = cleric.spells.iter().find(|s| s.id == "blight").unwrap();
         assert!(blight.always);
         assert_eq!(blight.tag.as_deref(), Some("Домен Могилы"));
-        assert_eq!(cleric.prepared_count, Some(13));
+        assert_eq!(cleric.prepared_count, Some(15));
+        assert!(cleric.spells.iter().any(|s| s.id == "raise-dead" && s.always));
+        assert!(cleric.spells.iter().any(|s| s.id == "sending" && !s.always));
         valeria.cast_spell(&CastRequest::new("blight")).unwrap();
     }
 
@@ -1570,7 +1575,7 @@ mod tests {
     fn ritual_casting_rules() {
         let mut valeria = member("npc.valeria");
         let out = valeria
-            .cast_spell(&CastRequest::new("detect-magic").with_method(CastMethod::Ritual))
+            .cast_spell(&CastRequest::new("divination").with_method(CastMethod::Ritual))
             .unwrap();
         assert!(out.spent.is_none());
         assert!(out.summary.contains("ритуалом"));
@@ -1654,8 +1659,8 @@ mod tests {
             Err(EngineError::NotOnClassList { .. })
         ));
         assert!(matches!(
-            valeria.prepare_spells("cleric", &strings(&["flame-strike"])),
-            Err(EngineError::SpellLevelTooHigh { level: 5, max: 4, .. })
+            valeria.prepare_spells("cleric", &strings(&["heal"])),
+            Err(EngineError::SpellLevelTooHigh { level: 6, max: 5, .. })
         ));
         assert!(matches!(
             valeria.prepare_spells("cleric", &strings(&["guidance"])),
@@ -1666,15 +1671,15 @@ mod tests {
             .unwrap()
             .into_iter()
             .filter(|e| !e.always)
-            .take(14)
+            .take(16)
             .map(|e| e.id)
             .collect();
         assert_eq!(
             valeria.prepare_spells("cleric", &too_many),
-            Err(EngineError::PreparedLimit { limit: 13, requested: 14 })
+            Err(EngineError::PreparedLimit { limit: 15, requested: 16 })
         );
         // Всегда подготовленные не считаются в лимит.
-        let mut with_domain = too_many[..13].to_vec();
+        let mut with_domain = too_many[..15].to_vec();
         with_domain.push("blight".into());
         valeria.prepare_spells("cleric", &with_domain).unwrap();
 
@@ -1690,14 +1695,15 @@ mod tests {
     }
 
     #[test]
-    fn gunther_sheet_is_over_limit_and_flagged() {
+    fn gunther_sheet_fits_2024_limit() {
         let gunther = member("npc.gunther").spellbook().unwrap();
         let paladin = &gunther.casters[0];
-        assert_eq!(paladin.prepared_count, Some(7));
-        assert!(paladin.over_limit);
+        assert_eq!(paladin.prepared_count, Some(9));
+        assert!(!paladin.over_limit);
         let options = member("npc.gunther").preparation_options("paladin").unwrap();
-        assert!(options.iter().all(|e| e.level <= 2));
+        assert!(options.iter().all(|e| e.level <= 3));
         assert!(options.iter().any(|e| e.id == "hold-person" && e.always));
+        assert!(options.iter().any(|e| e.id == "haste" && e.always));
     }
 
     #[test]
@@ -1705,7 +1711,7 @@ mod tests {
         let mut nikis = member("pc.nikis");
         assert_eq!(
             nikis.change_slot(SlotRef::Pact, false).unwrap_err(),
-            EngineError::SlotFull("Ячейки договора (4 круг)".into())
+            EngineError::SlotFull("Ячейки договора (5 круг)".into())
         );
         assert_eq!(nikis.change_slot(SlotRef::Pact, true).unwrap().current(), 1);
         assert!(matches!(
@@ -1720,6 +1726,10 @@ mod tests {
             nikis.restore_slot_with("item.pact_rod.slot", SlotRef::Pact),
             Err(EngineError::ResourceDepleted { .. })
         ));
+        // Магическое коварство: половина ячеек договора (1 из 2) раз в длительный отдых.
+        let out = nikis.restore_slot_with("warlock.magical_cunning", SlotRef::Pact).unwrap();
+        assert_eq!(out.slot.current(), 2);
+        assert_eq!(out.item.current(), 0);
 
         let mut valeria = member("npc.valeria");
         valeria.change_slot(SlotRef::Level(4), true).unwrap();

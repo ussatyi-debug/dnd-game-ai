@@ -627,7 +627,7 @@ mod tests {
         assert_eq!(round.rolls[0].expression, "1d20+1");
         assert_eq!(round.rolls[0].who, "Сестра Валерия «Пепельная Дева»");
         assert_eq!(round.rolls[0].what, "инициатива");
-        assert_eq!(round.rolls[1].expression, "1d20+8");
+        assert_eq!(round.rolls[1].expression, "1d20+9");
         assert_eq!(round.rolls[2].expression, "1d20+9");
         assert_eq!(round.rolls[3].expression, "1d20+10");
         let bad = run_rolls(&mut s, "```engine\n{\"cmd\":\"roll\",\"character\":\"npc.valeria\",\"check\":\"attack:Погребальный\"}\n```").unwrap();

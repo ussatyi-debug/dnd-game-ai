@@ -1,8 +1,8 @@
 //! Разбор заявок игрока о бросках с настоящих кубов.
 //!
-//! Правило кодекса: запись «12 - везунчик» означает, что игрок УЖЕ перебросил куб
-//! чертой «Везунчик», и 12 — итоговое значение на кубе. Движок не предлагает и не
-//! делает переброс сам, а только списывает заряд.
+//! Правило кодекса (черта «Везунчик» по правилам 2024 года): запись «17 - везунчик» означает,
+//! что игрок УЖЕ бросил d20 с преимуществом за очко удачи и взял больший куб, 17 — итоговое
+//! значение на кубе. Движок не предлагает и не делает бросок сам, а только списывает очко.
 //!
 //! Допустимые формы: `16`, `16 - везунчик`, `12-Везунчик`, `нат 20`, `17 (везунчик)`,
 //! `14 lucky`.
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn lucky_charge_is_spent_and_roll_is_flagged() {
-        let mut lucky = ResourcePool::lucky();
+        let mut lucky = ResourcePool::lucky(3);
         let roll = resolve_player_d20(
             "16 - везунчик",
             RollMode::Normal,
@@ -127,7 +127,7 @@ mod tests {
 
     #[test]
     fn plain_roll_does_not_touch_lucky() {
-        let mut lucky = ResourcePool::lucky();
+        let mut lucky = ResourcePool::lucky(3);
         let roll = resolve_player_d20("9", RollMode::Normal, vec![], 20, &mut lucky).unwrap();
         assert!(!roll.lucky_used);
         assert_eq!(lucky.current(), 3);
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn lucky_without_charges_fails_without_side_effects() {
-        let mut lucky = ResourcePool::lucky();
+        let mut lucky = ResourcePool::lucky(3);
         lucky.spend(3).unwrap();
         let err = resolve_player_d20("12 - везунчик", RollMode::Normal, vec![], 20, &mut lucky)
             .unwrap_err();
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn invalid_input_never_spends_charge() {
-        let mut lucky = ResourcePool::lucky();
+        let mut lucky = ResourcePool::lucky(3);
         assert!(
             resolve_player_d20("25 - везунчик", RollMode::Normal, vec![], 20, &mut lucky).is_err()
         );

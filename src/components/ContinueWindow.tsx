@@ -1,4 +1,4 @@
-// Сохранения кампании «Дом Стрэндж»: продолжить из автосохранения или начать с Дня 82.
+// Сохранения кампании «Дом Стрэндж»: продолжить из автосохранения или начать с Дня 98.
 
 import { useState } from "react";
 import { listAutosaves, readAutosave, type AutosaveInfo } from "../lib/autosave";
@@ -11,7 +11,7 @@ interface ContinueWindowProps {
   onContinue: (saveText: string) => void;
   onNewGame: () => void;
   onClose: () => void;
-  /** Начать с Дня 82 можно, только пока игра в этом запуске не начата. */
+  /** Начать с Дня 98 можно, только пока игра в этом запуске не начата. */
   canStartNew: boolean;
 }
 
@@ -42,10 +42,10 @@ export default function ContinueWindow({ autosaves: initial, onContinue, onNewGa
         {error && <p className="text-fumble">{error}</p>}
         {canStartNew ? (
           <button type="button" onClick={onNewGame} className="w-full rounded-md border border-edge px-3 py-2 hover:border-gold">
-            Начать с Дня 82
+            Начать с Дня 98
           </button>
         ) : (
-          <p className="text-xs text-muted">Чтобы начать заново с Дня 82, перезапустите приложение.</p>
+          <p className="text-xs text-muted">Чтобы начать заново с Дня 98, перезапустите приложение.</p>
         )}
       </div>
     </Modal>

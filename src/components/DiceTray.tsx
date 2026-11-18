@@ -100,14 +100,17 @@ export default function DiceTray({ enabled, lucky, onRoll, onLuckyChange, onSend
     setRolling(true);
     setError(null);
     try {
+      // «Везунчик» по правилам 2024 года: второй куб, берётся больший.
       const result = await luckyReroll();
       onLuckyChange(result.lucky);
       await animate([{ kind: "d20", value: result.value }]);
+      const best = Math.max(last.total, result.value);
       const entry = {
         die: "d20" as const,
-        values: [result.value],
-        total: result.value,
+        values: [best],
+        total: best,
         luckyFrom: last.total,
+        luckySecond: result.value,
       };
       setLast(entry);
       onRoll(entry);
@@ -210,7 +213,7 @@ export default function DiceTray({ enabled, lucky, onRoll, onLuckyChange, onSend
             onClick={() => void reroll()}
             className="w-full rounded-md border border-gold px-4 py-2 text-sm text-gold hover:bg-gold/10 disabled:opacity-40 sm:w-auto"
           >
-            Перебросить — Везунчик ({luckyLeft}/{lucky?.max ?? 3})
+            Преимущество — Везунчик ({luckyLeft}/{lucky?.max ?? luckyLeft})
           </button>
         )}
       </div>

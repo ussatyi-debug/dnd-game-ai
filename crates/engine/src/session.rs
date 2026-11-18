@@ -28,8 +28,8 @@ use crate::treasury::{EntrySource, NewEntry, Treasury, TreasuryView};
 /// ID ресурса черты «Везунчик».
 pub const LUCKY_ID: &str = "feat.lucky";
 
-/// Версия формата сохранения.
-pub const SAVE_FORMAT_VERSION: u32 = 9;
+/// Версия формата сохранения (10 — листы «Дома Стрэндж» по правилам 2024 года, День 98).
+pub const SAVE_FORMAT_VERSION: u32 = 10;
 
 /// Самый старый формат, который загружается (сохранения 0.5.0).
 pub const MIN_SAVE_FORMAT: u32 = 3;
@@ -93,11 +93,12 @@ pub struct Scene {
     pub mood: Mood,
 }
 
-/// Результат переброса d20 чертой «Везунчик».
+/// Второй куб d20 чертой «Везунчик» (правила 2024 года — преимущество: из двух кубов берётся
+/// больший; сравнивает интерфейс, у которого есть первый бросок).
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LuckyReroll {
-    /// Новое значение на кубе d20.
+    /// Значение второго куба d20.
     pub value: u32,
     /// Состояние зарядов после переброса.
     pub lucky: ResourcePool,
@@ -425,7 +426,7 @@ impl Session {
         self.campaign.as_ref()
     }
 
-    /// Сессия с демо-данными кампании на День 82 (до появления импорта).
+    /// Сессия кампании «Дом Стрэндж» на утро Дня 98.
     pub fn demo(rng: Xoshiro256) -> Self {
         Self::new(rng, demo_scene(), demo_party(), demo_treasury())
     }
@@ -792,8 +793,8 @@ impl Session {
         Ok(expr.roll(&mut self.rng, critical))
     }
 
-    /// Переброс d20 чертой «Везунчик» персонажа игрока: сначала списывается заряд,
-    /// затем бросается куб. Без зарядов бросок не выполняется.
+    /// Преимущество чертой «Везунчик» персонажа игрока: сначала списывается очко удачи,
+    /// затем бросается второй куб. Без очков бросок не выполняется.
     pub fn lucky_reroll(&mut self) -> Result<LuckyReroll, EngineError> {
         let lucky = self.player_mut()?.resource_mut(LUCKY_ID)?;
         lucky.spend(1)?;
@@ -882,14 +883,14 @@ mod tests {
     #[test]
     fn lucky_reroll_spends_charges_until_empty() {
         let mut s = session(3);
-        for expected in [2, 1, 0] {
+        for expected in [4, 3, 2, 1, 0] {
             let r = s.lucky_reroll().unwrap();
             assert!((1..=20).contains(&r.value));
             assert_eq!(r.lucky.current(), expected);
         }
         assert!(matches!(
             s.lucky_reroll(),
-            Err(EngineError::ResourceDepleted { current: 0, max: 3, .. })
+            Err(EngineError::ResourceDepleted { current: 0, max: 5, .. })
         ));
         assert_eq!(lucky_current(&s), 0);
     }
@@ -901,28 +902,29 @@ mod tests {
         let short = s.take_rest(RestKind::Short);
         let nikis = short.characters.iter().find(|c| c.id == "pc.nikis").unwrap();
         assert!(!nikis.restored.contains(&"Везунчик".to_string()));
-        assert_eq!(lucky_current(&s), 2);
+        assert_eq!(lucky_current(&s), 4);
         let long = s.take_rest(RestKind::Long);
         let nikis = long.characters.iter().find(|c| c.id == "pc.nikis").unwrap();
         assert!(nikis.restored.contains(&"Везунчик".to_string()));
-        assert_eq!(lucky_current(&s), 3);
+        assert_eq!(lucky_current(&s), 5);
     }
 
     #[test]
     fn party_view_marks_who_is_in_scene() {
         let s = session(1);
         let view = s.party_view();
-        assert_eq!(view.scene.day, 82);
+        assert_eq!(view.scene.day, 98);
         assert_eq!(view.members.len(), 6);
         let by_id = |id: &str| view.members.iter().find(|m| m.id == id).unwrap();
-        assert_eq!(view.scene.location, "Цитадель Кроу-Рок");
-        assert!(view.scene.situation.contains("Пять Столпов"));
+        assert_eq!(view.scene.location, "Вейденбург, ул. Зелёных Ив, 7");
+        assert!(view.scene.situation.contains("Багряной отмели"));
         assert!(by_id("pc.nikis").in_scene);
-        assert!(by_id("npc.valeria").in_scene);
-        assert!(by_id("npc.yussach").in_scene);
-        assert!(!by_id("npc.corvus").in_scene);
+        assert!(by_id("npc.corvus").in_scene);
+        assert!(!by_id("npc.valeria").in_scene);
         assert!(!by_id("npc.gunther").in_scene);
-        assert_eq!(by_id("npc.corvus").summary, "Монах 8");
+        assert!(!by_id("npc.brokk").in_scene);
+        assert!(!by_id("npc.yussach").in_scene);
+        assert_eq!(by_id("npc.corvus").summary, "Монах 10");
         assert_eq!(by_id("npc.yussach").summary, "Исчадие (квазит)");
         assert!(by_id("pc.nikis").key_resources.len() <= 3);
         assert_eq!(view.treasury_total, s.treasury_view().total);
@@ -932,8 +934,8 @@ mod tests {
     fn sheets_for_companions() {
         let s = session(1);
         let gunther = s.sheet("npc.gunther").unwrap();
-        assert_eq!(gunther.level, 8);
-        assert_eq!(gunther.proficiency_bonus, 3);
+        assert_eq!(gunther.level, 10);
+        assert_eq!(gunther.proficiency_bonus, 4);
         assert_eq!(gunther.abilities[0].modifier, 4);
         assert!(matches!(s.sheet("npc.nobody"), Err(EngineError::CharacterNotFound(_))));
     }
@@ -950,7 +952,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(roll.total, 18);
-        assert_eq!(lucky_current(&s), 2);
+        assert_eq!(lucky_current(&s), 4);
     }
 
     #[test]
@@ -972,7 +974,7 @@ mod tests {
         let save = s.save_state();
         assert_eq!(save.format_version, SAVE_FORMAT_VERSION);
         assert_eq!(save.party.len(), 6);
-        assert_eq!(save.party[0].resource(LUCKY_ID).unwrap().current(), 2);
+        assert_eq!(save.party[0].resource(LUCKY_ID).unwrap().current(), 4);
         assert!(!save.treasury.entries().is_empty());
     }
 
@@ -980,20 +982,21 @@ mod tests {
     fn manual_treasury_entries_are_marked_and_validated() {
         let mut s = session(1);
         let before = s.treasury_view().total;
-        let view =
-            s.add_manual_treasury_entry("gp", "purse", -80, "  Ужин в «Золотом Фазане» ").unwrap();
+        let view = s
+            .add_manual_treasury_entry("gp", "shadow_ring", -80, "  Ужин в «Золотом Фазане» ")
+            .unwrap();
         assert_eq!(view.total, before - 8_000);
         assert_eq!(view.entries[0].source, EntrySource::Manual);
-        assert_eq!(view.entries[0].day, 82);
+        assert_eq!(view.entries[0].day, 98);
         assert_eq!(view.entries[0].reason, "Ужин в «Золотом Фазане»");
-        assert!(s.add_manual_treasury_entry("gp", "purse", -10_000, "").is_err());
+        assert!(s.add_manual_treasury_entry("gp", "shadow_ring", -10_000, "").is_err());
         assert!(s.add_manual_treasury_entry("gp", "nowhere", 1, "").is_err());
     }
 
     #[test]
     fn spell_actions_are_logged_with_reasons() {
         let mut s = session(1);
-        let out = s.cast_spell("pc.nikis", &CastRequest::new("misty-step")).unwrap();
+        let out = s.cast_spell("pc.nikis", &CastRequest::new("far-step")).unwrap();
         assert_eq!(s.engine_log().last(), Some(&out.summary));
         assert!(s.cast_spell("pc.nikis", &CastRequest::new("cone-of-cold")).is_err());
         let refusal = s.engine_log().last().unwrap();
@@ -1017,6 +1020,6 @@ mod tests {
         assert!(s.roll_expression("2d7", false).is_err());
         assert!(s.roll_check(RollMode::Normal, vec![], 1).is_err());
         assert!(s.submit_player_roll("30", RollMode::Normal, vec![], 20).is_err());
-        assert_eq!(lucky_current(&s), 3);
+        assert_eq!(lucky_current(&s), 5);
     }
 }

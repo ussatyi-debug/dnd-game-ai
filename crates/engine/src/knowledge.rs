@@ -1858,13 +1858,13 @@ mod tests {
         let note = s
             .create_note(NewNote {
                 kind: NoteKind::Timer,
-                due_day: Some(83),
+                due_day: Some(99),
                 card: Some("Соглядатай в серо-бурой робе".into()),
                 ..NewNote::new(NoteLayer::Master, "Хвост на тракте", "Сообщники выслеживают князя")
             })
             .unwrap();
         assert!(s.due_notes().is_empty());
-        s.change_scene(crate::master_ops::SceneChange { day: Some(83), ..Default::default() })
+        s.change_scene(crate::master_ops::SceneChange { day: Some(99), ..Default::default() })
             .unwrap();
         assert_eq!(s.due_notes().len(), 1);
         s.update_note(note, NoteEdit { done: Some(true), ..NoteEdit::default() }).unwrap();

@@ -450,7 +450,7 @@ mod tests {
             SheetEdit::Save { ability: Ability::Strength, proficient: true },
         )
         .unwrap();
-        assert_eq!(s.details("npc.gunther").unwrap().saves[0].total, 9);
+        assert_eq!(s.details("npc.gunther").unwrap().saves[0].total, 11);
         s.edit_sheet(
             "npc.gunther",
             SheetEdit::Proficiency {
@@ -465,7 +465,7 @@ mod tests {
         assert_eq!(g.hit_points.current, 60);
         assert_eq!(g.edited_keys().len(), 3);
         s.revert_sheet_edit("npc.gunther", "save.СИЛ").unwrap();
-        assert_eq!(s.details("npc.gunther").unwrap().saves[0].total, 6);
+        assert_eq!(s.details("npc.gunther").unwrap().saves[0].total, 7);
         let g = s.character("npc.gunther").unwrap();
         assert_eq!(g.hit_points.max, 60, "другие правки остаются");
         assert!(g.profile.proficiencies.iter().any(|l| l.text == "Общий, дварфский"));

@@ -9,7 +9,7 @@
 use crate::character::{Character, HitPoints};
 use crate::creation::{build_party, Campaign};
 use crate::error::EngineError;
-use crate::fixtures::{demo_party, VALERIA_PREPARED};
+use crate::fixtures::{demo_party, GUNTHER_PREPARED, VALERIA_PREPARED};
 use crate::inventory::{Inventory, NewItem, ON_PERSON};
 use crate::knowledge::{CustomCard, KbOverride, MasterNote};
 use crate::profile::HitDice;
@@ -313,6 +313,145 @@ fn migrate_to_v7(party: &mut [Character]) -> Vec<String> {
     vec!["Никис: 11 уровень (Колдун 8) — хиты и кость хитов по новому листу (0.9.1)".into()]
 }
 
+/// Максимумы пулов листов «Дома Стрэндж» до перевода на правила 2024 года (формат 9, 0.9.13).
+const V9_POOL_MAX: &[(&str, &str, u32)] = &[
+    ("pc.nikis", "feat.lucky", 3),
+    ("pc.nikis", "warlock.dark_ones_luck", 2),
+    ("pc.nikis", "rogue.wails_from_the_grave", 4),
+    ("pc.nikis", "feat.metamagic_adept", 2),
+    ("pc.nikis", "item.pact_rod.slot", 1),
+    ("pc.nikis", "item.ocular.hadar", 1),
+    ("pc.nikis", "feat.shadow_touched.invisibility", 1),
+    ("pc.nikis", "feat.shadow_touched.fear", 1),
+    ("pc.nikis", "pact.slots", 2),
+    ("npc.corvus", "monk.ki", 8),
+    ("npc.corvus", "monk.wholeness_of_body", 1),
+    ("npc.corvus", "item.ki_beads", 1),
+    ("npc.gunther", "paladin.lay_on_hands", 40),
+    ("npc.gunther", "paladin.channel_divinity", 1),
+    ("npc.gunther", "slots.1", 4),
+    ("npc.gunther", "slots.2", 3),
+    ("npc.valeria", "cleric.channel_divinity", 2),
+    ("npc.valeria", "cleric.sentinel", 5),
+    ("npc.valeria", "cleric.eyes_of_grave", 5),
+    ("npc.valeria", "item.pearl_of_power", 1),
+    ("npc.valeria", "slots.1", 4),
+    ("npc.valeria", "slots.2", 3),
+    ("npc.valeria", "slots.3", 3),
+    ("npc.valeria", "slots.4", 2),
+    ("npc.brokk", "fighter.superiority", 5),
+    ("npc.brokk", "fighter.second_wind", 1),
+    ("npc.brokk", "fighter.action_surge", 1),
+    ("npc.brokk", "fighter.indomitable", 1),
+    ("npc.brokk", "item.titan_helm", 1),
+];
+
+/// Что было потрачено в старом листе: урон, ресурсы, кости хитов (до применения файла).
+struct SpentBefore2024 {
+    id: String,
+    /// Недостающие хиты; `None` — хиты в файле не записаны. Ноль хитов — `Some(u32::MAX)`.
+    damage: Option<u32>,
+    /// Потрачено из пула: id → сколько.
+    pools: Vec<(String, u32)>,
+    /// Потрачено костей хитов.
+    hit_dice: Option<u32>,
+}
+
+fn spent_before_2024(saved: &[SavedCharacter]) -> Vec<SpentBefore2024> {
+    saved
+        .iter()
+        .map(|c| SpentBefore2024 {
+            id: c.id.clone(),
+            damage: c.hit_points.map(|hp| {
+                if hp.current == 0 {
+                    u32::MAX
+                } else {
+                    hp.max.saturating_sub(hp.current)
+                }
+            }),
+            pools: c
+                .resources
+                .iter()
+                .flatten()
+                .filter_map(|p| {
+                    V9_POOL_MAX
+                        .iter()
+                        .find(|(who, id, _)| *who == c.id && *id == p.id)
+                        .map(|(_, _, max)| (p.id.clone(), max.saturating_sub(p.current)))
+                })
+                .collect(),
+            hit_dice: c
+                .profile
+                .as_ref()
+                .map(|p| p.hit_dice.iter().map(|d| d.total.saturating_sub(d.current)).sum()),
+        })
+        .collect()
+}
+
+/// Сохранения до 0.9.14 (формат 9): отряд «Дома Стрэндж» переведён на правила 2024 года
+/// (листы Дня 98). Потраченное в игре переносится на новые максимумы: урон, израсходованные
+/// заряды и кости хитов остаются израсходованными, полное остаётся полным.
+fn migrate_to_v10(party: &mut [Character], spent: &[SpentBefore2024]) -> Vec<String> {
+    let mut report = Vec::new();
+    for c in party.iter_mut() {
+        let Some(before) = spent.iter().find(|s| s.id == c.id) else {
+            continue;
+        };
+        if let Some(damage) = before.damage {
+            let max = c.hit_points.max;
+            c.hit_points.current =
+                if damage == u32::MAX { 0 } else { max.saturating_sub(damage).max(1) };
+        }
+        for (id, used) in &before.pools {
+            if let Ok(pool) = c.resource_mut(id) {
+                let target = pool.max().saturating_sub(*used);
+                let now = pool.current();
+                if target > now {
+                    let _ = pool.restore(target - now);
+                }
+            }
+        }
+        if let Some(used) = before.hit_dice {
+            let mut left = used;
+            for dice in &mut c.profile.hit_dice {
+                let take = left.min(dice.total);
+                dice.current = dice.total - take;
+                left -= take;
+            }
+        }
+        let prepared: Option<&[&str]> = match c.id.as_str() {
+            "npc.valeria" => Some(VALERIA_PREPARED),
+            "npc.gunther" => Some(GUNTHER_PREPARED),
+            _ => None,
+        };
+        if let (Some(list), Some(sc)) = (prepared, c.spellcasting.as_mut()) {
+            if let Some(caster) = sc.casters.first_mut() {
+                caster.prepared = list.iter().map(|s| (*s).to_string()).collect();
+            }
+        }
+        if c.id == "pc.nikis" && c.profile.xp.is_some_and(|xp| xp < 100_000) {
+            c.profile.xp = Some(106_500);
+        }
+        let classes: Vec<String> =
+            c.classes.iter().map(|k| format!("{} {}", k.class, k.level)).collect();
+        if !classes.is_empty() {
+            report.push(format!(
+                "{}: лист по правилам 2024 года (День 98) — {}, хиты {}/{}{}",
+                c.name,
+                classes.join(" / "),
+                c.hit_points.current,
+                c.hit_points.max,
+                if prepared.is_some() {
+                    ", подготовленные заклинания по новому листу"
+                } else {
+                    ""
+                },
+            ));
+        }
+    }
+    report
+}
+
 impl Session {
     /// Загружает сохранение вместо текущей игры. При ошибке игра не меняется.
     /// Генератор кубов и указатель базы знаний остаются текущими, отмена хода сбрасывается.
@@ -338,6 +477,12 @@ impl Session {
                 .map_err(|e| EngineError::InvalidSave(e.to_string()))?,
             None => demo_party(),
         };
+        let strange = save.campaign.is_none();
+        let spent = if strange && save.format_version < 10 {
+            spent_before_2024(&save.party)
+        } else {
+            Vec::new()
+        };
         let mut saved_party = save.party;
         for c in &mut party {
             match saved_party.iter().position(|s| s.id == c.id) {
@@ -348,7 +493,6 @@ impl Session {
         for s in saved_party {
             report.push(format!("Персонаж «{}» из файла не найден в приложении — пропущен", s.id));
         }
-        let strange = save.campaign.is_none();
         if strange && save.format_version < 5 {
             report.extend(migrate_to_v5(&mut party));
         }
@@ -357,6 +501,9 @@ impl Session {
         }
         if strange && save.format_version < 7 {
             report.extend(migrate_to_v7(&mut party));
+        }
+        if strange && save.format_version < 10 {
+            report.extend(migrate_to_v10(&mut party, &spent));
         }
 
         let mut notes = save.notes;
@@ -468,7 +615,7 @@ mod tests {
     fn dynamic_state_survives_round_trip() {
         let mut s = session();
         s.change_hp("pc.nikis", HpChange::Damage(20)).unwrap();
-        s.cast_spell("pc.nikis", &CastRequest::new("misty-step")).unwrap();
+        s.cast_spell("pc.nikis", &CastRequest::new("far-step")).unwrap();
         s.cast_spell(
             "pc.nikis",
             &CastRequest::new("counterspell").with_method(crate::CastMethod::Scroll),
@@ -477,7 +624,7 @@ mod tests {
         s.set_condition("npc.corvus", "Отравлен", true).unwrap();
         s.add_item("pc.nikis", "Печать Вернера", 1, None, "Документы", "").unwrap();
         s.add_note(NoteLayer::Player, "Пароль", "Серый рассвет").unwrap();
-        s.master_treasury_entry("gp", "purse", -80, "Ужин").unwrap();
+        s.master_treasury_entry("gp", "shadow_ring", -80, "Ужин").unwrap();
         let save = round_trip(&s);
 
         let mut loaded = Session::demo(Xoshiro256::from_seed(9));
@@ -519,9 +666,9 @@ mod tests {
         let mut loaded = session();
         let report = loaded.load(save).unwrap();
         let gunther = loaded.character("npc.gunther").unwrap();
-        assert_eq!(gunther.hit_points.current, 72);
-        assert_eq!(gunther.hit_points.max, 72);
-        assert_eq!(gunther.details().saves[0].total, 6);
+        assert_eq!(gunther.hit_points.current, 104);
+        assert_eq!(gunther.hit_points.max, 104);
+        assert_eq!(gunther.details().saves[0].total, 7);
         let text = report.supplemented.join("\n");
         assert!(text.contains("хиты 500"));
         assert!(text.contains("ресурсы — из приложения"));
@@ -550,7 +697,7 @@ mod tests {
         let valeria = save.party.iter_mut().find(|c| c.id == "npc.valeria").unwrap();
         valeria.inventory.as_mut().unwrap().items.retain(|i| i.name != WAND);
         valeria.spellcasting.as_mut().unwrap().casters[0].prepared =
-            vec!["bless".into(), "remove-curse".into()];
+            vec!["bless".into(), "locate-object".into()];
         let nikis = save.party.iter_mut().find(|c| c.id == "pc.nikis").unwrap();
         nikis
             .inventory
@@ -569,8 +716,9 @@ mod tests {
         let valeria = loaded.character("npc.valeria").unwrap();
         assert!(valeria.inventory.find_item(WAND).is_ok());
         let prepared = &valeria.spellcasting.as_ref().unwrap().casters[0].prepared;
-        assert_eq!(prepared.len(), 13);
-        assert!(!prepared.contains(&"remove-curse".to_string()));
+        assert_eq!(prepared.len(), 15);
+        assert!(!prepared.contains(&"locate-object".to_string()));
+        assert!(prepared.contains(&"sending".to_string()));
         let nikis = loaded.character("pc.nikis").unwrap();
         assert_eq!(nikis.inventory.find_item(WAND).unwrap().quantity, 1);
 
@@ -581,24 +729,34 @@ mod tests {
     }
 
     #[test]
-    fn nikis_level_eleven() {
+    fn nikis_level_twelve_2024() {
         let s = session();
         let n = s.character("pc.nikis").unwrap();
-        assert_eq!(n.level(), 11);
-        assert_eq!(n.proficiency_bonus(), 4);
+        assert_eq!(n.level(), 12);
+        assert_eq!(n.proficiency_bonus(), 5);
+        assert_eq!((n.hit_points.current, n.hit_points.max, n.hit_points.temporary), (59, 59, 11));
+        assert_eq!(n.armor_class, 18);
+        assert_eq!(n.profile.xp, Some(106_500));
         let book = n.spellbook().unwrap();
         assert_eq!(book.casters[0].save_dc, 17);
-        assert_eq!(book.casters[0].attack_bonus, 8);
-        assert_eq!(n.skill_total(crate::Skill::Deception), 10);
-        assert_eq!(n.skill_total(crate::Skill::SleightOfHand), 15);
-        assert_eq!(n.skill_total(crate::Skill::Perception), 5);
-        assert_eq!(n.resource("feat.metamagic_adept").unwrap().max(), 2);
+        assert_eq!(book.casters[0].attack_bonus, 9);
+        assert_eq!(n.skill_total(crate::Skill::Deception), 12);
+        assert_eq!(n.skill_total(crate::Skill::SleightOfHand), 17);
+        assert_eq!(n.skill_total(crate::Skill::Perception), 6);
+        let max = |id: &str| n.resource(id).unwrap().max();
+        assert_eq!(max("feat.lucky"), 5);
+        assert_eq!(max("species.heroic_inspiration"), 1);
+        assert_eq!(max("warlock.magical_cunning"), 1);
+        assert_eq!(max("invocation.tomb_of_levistus"), 1);
+        assert_eq!(max("rogue.wails_from_the_grave"), 5);
+        assert_eq!(max("feat.metamagic_adept"), 2);
         let pact = book.slots.iter().find(|s| s.pact).unwrap();
-        assert_eq!((pact.level, pact.pool.max()), (4, 2));
+        assert_eq!((pact.level, pact.pool.max()), (5, 2));
+        assert_eq!(n.profile.hit_dice[0].total, 12);
     }
 
     #[test]
-    fn brokk_level_nine() {
+    fn brokk_ram_2024() {
         let s = session();
         let b = s.character("npc.brokk").unwrap();
         let d = b.details();
@@ -614,6 +772,9 @@ mod tests {
         assert_eq!(hammer.damage, "1d8+8 дробящий");
         assert_eq!(d.attacks[1].to_hit, 9);
         assert_eq!(b.resource("fighter.indomitable").unwrap().max(), 1);
+        assert_eq!(b.resource("fighter.second_wind").unwrap().max(), 4);
+        assert_eq!(b.resource("fighter.superiority").unwrap().max(), 5);
+        assert_eq!((b.hit_points.max, b.armor_class, b.speed_ft), (124, 20, 30));
 
         let mut save = round_trip(&s);
         save.format_version = 5;
@@ -625,7 +786,7 @@ mod tests {
         let mut loaded = session();
         loaded.load(save).unwrap();
         let b = loaded.character("npc.brokk").unwrap();
-        assert_eq!(b.hit_points.current, 103);
+        assert_eq!(b.hit_points.current, 124);
         assert!(b.inventory.find_item("Дварфийские латы").is_ok());
     }
 
@@ -635,20 +796,77 @@ mod tests {
         let v = s.character("npc.valeria").unwrap();
         let d = v.details();
         let attack = |name: &str| d.attacks.iter().find(|a| a.name == name).unwrap().clone();
-        assert_eq!(attack("Кадило-булава").to_hit, 4);
+        assert_eq!(attack("Кадило-булава").to_hit, 5);
         assert_eq!(attack("Кадило-булава").damage, "1d6+1 дробящий");
         let toll = attack("Погребальный звон");
-        assert_eq!(toll.save_dc, Some(16));
+        assert_eq!(toll.save_dc, Some(17));
         assert!(toll.damage.starts_with("2d8+5 некротический"));
         let book = v.spellbook().unwrap();
-        assert_eq!(book.casters[0].save_dc, 16);
-        assert_eq!(book.casters[0].attack_bonus, 9);
-        assert_eq!(book.casters[0].prepared_count, Some(13));
-        assert_eq!(v.skill_total(crate::Skill::Perception), 8);
-        assert_eq!(v.skill_total(crate::Skill::Religion), 4);
-        assert_eq!(v.skill_total(crate::Skill::Persuasion), 3);
+        assert_eq!(book.casters[0].save_dc, 17);
+        assert_eq!(book.casters[0].attack_bonus, 10);
+        assert_eq!(book.casters[0].prepared_count, Some(15));
+        assert_eq!(v.skill_total(crate::Skill::Perception), 9);
+        assert_eq!(v.skill_total(crate::Skill::Religion), 10);
+        assert_eq!(v.skill_total(crate::Skill::Arcana), 6);
+        assert_eq!(v.skill_total(crate::Skill::Persuasion), 4);
+        assert_eq!(v.resource("cleric.channel_divinity").unwrap().max(), 3);
+        assert_eq!(v.resource("cleric.divine_intervention").unwrap().max(), 1);
+        assert_eq!(v.resource("slots.5").unwrap().max(), 2);
         assert_eq!(v.resource("cleric.sentinel").unwrap().max(), 5);
         assert_eq!(v.resource("cleric.eyes_of_grave").unwrap().max(), 5);
+    }
+
+    #[test]
+    fn strange_saves_before_2024_keep_what_was_spent() {
+        let s = session();
+        let mut save = round_trip(&s);
+        save.format_version = 9;
+        fn saved<'a>(save: &'a mut SaveData, id: &str) -> &'a mut SavedCharacter {
+            save.party.iter_mut().find(|c| c.id == id).unwrap()
+        }
+        // Как в файле 0.9.13: Никис 11 уровня ранен, потратил 2 Везунчика и 2 кости хитов.
+        let nikis = saved(&mut save, "pc.nikis");
+        nikis.hit_points = Some(HitPoints { current: 40, max: 58, temporary: 0 });
+        for p in nikis.resources.as_mut().unwrap() {
+            if p.id == "feat.lucky" {
+                p.current = 1;
+            }
+        }
+        nikis.profile.as_mut().unwrap().hit_dice = vec![HitDice { die: 8, current: 9, total: 11 }];
+        nikis.profile.as_mut().unwrap().xp = Some(95_000);
+        let gunther = saved(&mut save, "npc.gunther");
+        gunther.hit_points = Some(HitPoints { current: 72, max: 72, temporary: 0 });
+        for p in gunther.resources.as_mut().unwrap() {
+            if p.id == "paladin.lay_on_hands" {
+                p.current = 30;
+            }
+        }
+        gunther.spellcasting.as_mut().unwrap().casters[0].prepared =
+            vec!["bless".into(), "branding-smite".into()];
+        let corvus = saved(&mut save, "npc.corvus");
+        corvus.hit_points = Some(HitPoints { current: 0, max: 59, temporary: 0 });
+
+        let mut loaded = session();
+        let report = loaded.load(save).unwrap();
+        let n = loaded.character("pc.nikis").unwrap();
+        assert_eq!((n.hit_points.current, n.hit_points.max), (41, 59));
+        assert_eq!(n.resource("feat.lucky").unwrap().current(), 3);
+        assert_eq!(n.resource("feat.lucky").unwrap().max(), 5);
+        assert_eq!(n.profile.hit_dice[0].current, 10);
+        assert_eq!(n.profile.xp, Some(106_500));
+        let g = loaded.character("npc.gunther").unwrap();
+        assert_eq!(g.hit_points.current, 104, "полные хиты остаются полными");
+        assert_eq!(g.resource("paladin.lay_on_hands").unwrap().current(), 40);
+        assert_eq!(g.spellcasting.as_ref().unwrap().casters[0].prepared.len(), 9);
+        assert_eq!(loaded.character("npc.corvus").unwrap().hit_points.current, 0);
+        let text = report.supplemented.join("\n");
+        assert!(text.contains("Сэр Никис Стрэндж: лист по правилам 2024 года"), "{text}");
+        assert!(text.contains("Гюнтер"));
+
+        // Повторной миграции нет.
+        let again = round_trip(&loaded);
+        let report = session().load(again).unwrap();
+        assert!(report.supplemented.is_empty(), "{:?}", report.supplemented);
     }
 
     #[test]
@@ -684,6 +902,8 @@ mod tests {
         assert_eq!(other.campaign().map(|c| c.title.as_str()), Some("Проба"));
         // Миграции «Дома Стрэндж» к своей кампании не применяются.
         assert!(report.supplemented.iter().all(|r| !r.contains("Валерия")));
+        assert!(report.supplemented.iter().all(|r| !r.contains("правилам 2024 года")));
+        assert!(other.party().iter().all(|c| !c.id.starts_with("npc.") && c.id != "pc.nikis"));
     }
 
     #[test]

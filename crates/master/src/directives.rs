@@ -902,7 +902,7 @@ mod tests {
     #[test]
     fn cast_and_slot_commands_run_through_engine() {
         let mut s = session();
-        let reply = "Свет.\n```engine\n{\"cmd\":\"cast\",\"character\":\"npc.valeria\",\"spell\":\"bless\",\"slot\":2}\n{\"cmd\":\"slot\",\"character\":\"gunther\",\"level\":1}\n{\"cmd\":\"cast\",\"character\":\"pc.nikis\",\"spell\":\"Туманный шаг\",\"slot\":\"pact\"}\n```";
+        let reply = "Свет.\n```engine\n{\"cmd\":\"cast\",\"character\":\"npc.valeria\",\"spell\":\"bless\",\"slot\":2}\n{\"cmd\":\"slot\",\"character\":\"gunther\",\"level\":1}\n{\"cmd\":\"cast\",\"character\":\"pc.nikis\",\"spell\":\"Далёкий шаг\",\"slot\":\"pact\"}\n```";
         let turn = apply_directives(&mut s, reply);
         assert_eq!(turn.text, "Свет.");
         assert_eq!(turn.actions.len(), 3, "{:?}", turn.actions);
@@ -1023,8 +1023,8 @@ mod tests {
             "{\"cmd\":\"resource\",\"character\":\"pc.nikis\",\"resource\":\"Везунчик\",\"delta\":-1}\n",
             "{\"cmd\":\"condition\",\"character\":\"corvus\",\"add\":\"Отравлен\"}\n",
             "{\"cmd\":\"item\",\"character\":\"pc.nikis\",\"add\":\"Печать Вернера\",\"container\":\"Кольцо Теневого\"}\n",
-            "{\"cmd\":\"treasury\",\"asset\":\"gp\",\"location\":\"При себе\",\"quantity\":-50,\"reason\":\"Взятка\"}\n",
             "{\"cmd\":\"transfer\",\"asset\":\"gp\",\"quantity\":100,\"from\":\"crow_rock_vault\",\"to\":\"purse\"}\n",
+            "{\"cmd\":\"treasury\",\"asset\":\"gp\",\"location\":\"При себе\",\"quantity\":-50,\"reason\":\"Взятка\"}\n",
             "{\"cmd\":\"scene\",\"time\":\"полдень\"}\n",
             "{\"cmd\":\"move\",\"character\":\"valeria\",\"location\":\"Серебряный Шпиль\"}\n",
             "{\"cmd\":\"note\",\"layer\":\"player\",\"title\":\"Пароль гати\",\"text\":\"Серый рассвет\"}\n",
@@ -1040,8 +1040,9 @@ mod tests {
         assert_eq!(turn.actions.len(), 11);
         assert!(turn.actions[9].summary.contains("ничего не изменилось"));
         assert!(!turn.actions[10].ok);
+        // 12 урона: 11 временных хитов (Благословение Тёмного) и 1 хит.
         let nikis = s.character("pc.nikis").unwrap();
-        assert_eq!(nikis.hit_points.current, 56);
+        assert_eq!(nikis.hit_points.current, 58);
         assert_eq!(nikis.hit_points.temporary, 0);
         assert_eq!(s.scene().time.as_deref(), Some("полдень"));
         assert_eq!(s.notes().len(), 1);
@@ -1049,9 +1050,9 @@ mod tests {
         assert_eq!(info.actions.len(), 9);
         s.undo_master_turn().unwrap();
         let nikis = s.character("pc.nikis").unwrap();
-        assert_eq!(nikis.hit_points.current, 58);
+        assert_eq!((nikis.hit_points.current, nikis.hit_points.temporary), (59, 11));
         assert!(s.notes().is_empty());
-        assert_eq!(s.scene().time.as_deref(), Some("утро"));
+        assert_eq!(s.scene().time.as_deref(), Some("08:00"));
     }
 
     #[test]

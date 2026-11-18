@@ -256,6 +256,10 @@ pub struct Profile {
     pub exhaustion: u8,
     /// Расхождения листа с правилами, найденные при переносе.
     pub notes: Vec<String>,
+    /// Бонус мастерства по листу владельца, если он расходится с таблицей уровней
+    /// (сэр Никис: +5 на 12 уровне — решение владельца 4–5). `None` — по таблице.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub proficiency_override: Option<i32>,
 }
 
 /// Строка спасброска.
@@ -554,16 +558,16 @@ mod tests {
     fn nikis_skills_match_sheet() {
         let nikis = member("pc.nikis");
         let total = |s| nikis.skill_total(s);
-        assert_eq!(total(Skill::SleightOfHand), 15);
-        assert_eq!(total(Skill::Deception), 10);
-        assert_eq!(total(Skill::Stealth), 6);
-        assert_eq!(total(Skill::Perception), 5);
-        assert_eq!(total(Skill::Insight), 5);
-        assert_eq!(total(Skill::Persuasion), 6);
+        assert_eq!(total(Skill::SleightOfHand), 17);
+        assert_eq!(total(Skill::Deception), 12);
+        assert_eq!(total(Skill::Stealth), 7);
+        assert_eq!(total(Skill::Perception), 6);
+        assert_eq!(total(Skill::Insight), 6);
+        assert_eq!(total(Skill::Persuasion), 7);
         assert_eq!(total(Skill::Investigation), 4);
         assert_eq!(total(Skill::Athletics), 1);
         let details = nikis.details();
-        assert_eq!(details.passive_perception, 15);
+        assert_eq!(details.passive_perception, 16);
         let hand = details.skills.iter().find(|s| s.skill == Skill::SleightOfHand).unwrap();
         let labels: Vec<&str> = hand.breakdown.iter().map(|b| b.label.as_str()).collect();
         assert_eq!(labels, vec!["ЛОВ", "компетентность", "Перчатки Воровства"]);
@@ -574,10 +578,10 @@ mod tests {
     #[test]
     fn saves_match_sheets() {
         let totals = |id: &str| member(id).saves().iter().map(|s| s.total).collect::<Vec<_>>();
-        assert_eq!(totals("pc.nikis"), vec![1, 6, 0, 4, 1, 6]);
-        assert_eq!(totals("npc.corvus"), vec![4, 6, 2, 0, 3, -1]);
-        assert_eq!(totals("npc.gunther"), vec![6, 2, 4, 2, 6, 7]);
-        assert_eq!(totals("npc.valeria"), vec![1, 1, 2, 1, 8, 3]);
+        assert_eq!(totals("pc.nikis"), vec![1, 7, 0, 4, 1, 7]);
+        assert_eq!(totals("npc.corvus"), vec![5, 8, 2, 0, 3, -1]);
+        assert_eq!(totals("npc.gunther"), vec![7, 3, 5, 3, 8, 10]);
+        assert_eq!(totals("npc.valeria"), vec![1, 1, 2, 1, 9, 4]);
         assert_eq!(totals("npc.brokk"), vec![9, 1, 7, 0, 1, -1]);
     }
 
@@ -585,17 +589,20 @@ mod tests {
     fn attacks_are_computed() {
         let nikis = member("pc.nikis").details();
         let blade = nikis.attacks.iter().find(|a| a.name.starts_with("Клинок")).unwrap();
-        assert_eq!(blade.to_hit, 9);
+        assert_eq!(blade.to_hit, 10);
         assert!(blade.damage.starts_with("1d8+5"));
+        let dagger = nikis.attacks.iter().find(|a| a.name.contains("Лунное Жало")).unwrap();
+        assert_eq!(dagger.to_hit, 9);
+        assert!(dagger.damage.starts_with("1d4+4"));
         let blast = nikis.attacks.iter().find(|a| a.name.starts_with("Мистический")).unwrap();
-        assert_eq!(blast.to_hit, 8);
-        let crossbow = nikis.attacks.iter().find(|a| a.name.contains("арбалет")).unwrap();
-        assert_eq!(crossbow.to_hit, 2);
-        assert!(!crossbow.proficiency_unknown);
-        let pistol = nikis.attacks.iter().find(|a| a.name.contains("пистоль")).unwrap();
-        assert_eq!(pistol.to_hit, 3);
+        assert_eq!(blast.to_hit, 9);
+        // Арбалет и пистоль — в Кольце Теневого Хранилища, не в атаках (решение владельца 3).
+        assert_eq!(nikis.attacks.len(), 3);
+        let corvus = member("npc.corvus").details();
+        assert_eq!(corvus.attacks[0].to_hit, 9);
+        assert!(corvus.attacks[0].damage.starts_with("1d8+5"));
         let gunther = member("npc.gunther").details();
-        assert_eq!(gunther.attacks[0].to_hit, 8);
+        assert_eq!(gunther.attacks[0].to_hit, 9);
         let brokk = member("npc.brokk").details();
         assert_eq!(brokk.attacks[0].to_hit, 10);
     }

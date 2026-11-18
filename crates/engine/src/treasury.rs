@@ -738,7 +738,7 @@ mod tests {
     }
 
     #[test]
-    fn demo_treasury_matches_day_82_sheet() {
+    fn demo_treasury_matches_day_98_sheet() {
         let t = demo_treasury();
         let view = t.view();
         let find = |location: &str, asset: &str| {
@@ -748,15 +748,32 @@ mod tests {
                 .and_then(|l| l.lines.iter().find(|line| line.asset_id == asset))
                 .map(|line| line.quantity)
         };
-        assert_eq!(find("purse", "gp"), Some(580));
-        assert_eq!(find("crow_rock_vault", "gp"), Some(45_095));
-        assert_eq!(find("crow_rock_vault", "moon_silver_ingot"), Some(24));
+        assert_eq!(find("purse", "gp"), None);
+        assert_eq!(find("shadow_ring", "gp"), Some(2_080));
         assert_eq!(find("shadow_ring", "diamond"), Some(4));
+        assert_eq!(find("crow_rock_vault", "gp"), Some(33_095));
+        assert_eq!(find("crow_rock_vault", "moon_silver_ingot"), None);
+        assert_eq!(find("spire_treasury", "gp"), Some(32_040));
+        assert_eq!(find("willow_safe", "gp"), Some(2_000));
+        assert_eq!(find("concordat_flagship", "gp"), Some(7_500));
         let ingots = view.by_kind.iter().find(|k| k.kind == AssetKind::Ingot).unwrap();
-        assert_eq!(ingots.total, gp(24_000) + gp(1_500));
+        assert_eq!(ingots.total, gp(1_500));
+        // «1 500 зм в самоцветах» + «камни и жемчуг на 1 000 зм» при себе.
+        let purse_gems: i64 = view
+            .locations
+            .iter()
+            .find(|l| l.id == "purse")
+            .unwrap()
+            .lines
+            .iter()
+            .filter(|l| {
+                ["emerald", "fire_opal", "river_pearls", "sapphire", "amber"]
+                    .contains(&l.asset_id.as_str())
+            })
+            .map(|l| l.total)
+            .sum();
+        assert_eq!(purse_gems, gp(2_500));
         assert!(view.total > gp(100_000));
-        // Журнал содержит и начальные остатки, и операции после них.
-        assert!(view.entries.iter().any(|e| e.source == EntrySource::Opening));
-        assert!(view.entries.iter().any(|e| e.source == EntrySource::Master && e.day == 81));
+        assert!(view.entries.iter().all(|e| e.source == EntrySource::Opening && e.day == 98));
     }
 }

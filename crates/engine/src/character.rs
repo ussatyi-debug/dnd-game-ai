@@ -182,7 +182,7 @@ impl Character {
     }
 
     pub fn proficiency_bonus(&self) -> i32 {
-        proficiency_bonus(self.level())
+        self.profile.proficiency_override.unwrap_or_else(|| proficiency_bonus(self.level()))
     }
 
     pub fn initiative(&self) -> i32 {
@@ -293,14 +293,15 @@ mod tests {
     #[test]
     fn nikis_derived_values_match_sheet() {
         let nikis = demo_nikis();
-        assert_eq!(nikis.level(), 11);
-        assert_eq!(nikis.proficiency_bonus(), 4);
+        assert_eq!(nikis.level(), 12);
+        // Бонус мастерства — по листу владельца (+5), не по таблице (+4).
+        assert_eq!(nikis.proficiency_bonus(), 5);
         assert_eq!(nikis.initiative(), 2);
         let sheet = nikis.sheet();
         let mods: Vec<i32> = sheet.abilities.iter().map(|a| a.modifier).collect();
         assert_eq!(mods, vec![1, 2, 0, 4, 1, 2]);
         assert_eq!(sheet.abilities[3].label, "ИНТ");
-        assert_eq!(nikis.resource("feat.lucky").unwrap().to_string(), "Везунчик 3/3");
+        assert_eq!(nikis.resource("feat.lucky").unwrap().to_string(), "Везунчик 5/5");
     }
 
     #[test]
@@ -311,13 +312,13 @@ mod tests {
         nikis.resource_mut("pact.slots").unwrap().spend(2).unwrap();
 
         let restored = nikis.apply_rest(RestKind::Short);
-        assert_eq!(restored, vec!["Ячейки договора (4 круг)".to_string()]);
-        assert_eq!(nikis.resource("feat.lucky").unwrap().current(), 1);
+        assert_eq!(restored, vec!["Ячейки договора (5 круг)".to_string()]);
+        assert_eq!(nikis.resource("feat.lucky").unwrap().current(), 3);
         assert_eq!(nikis.hit_points.current, 20);
 
         let restored = nikis.apply_rest(RestKind::Long);
         assert!(restored.contains(&"Везунчик".to_string()));
-        assert_eq!(nikis.resource("feat.lucky").unwrap().current(), 3);
+        assert_eq!(nikis.resource("feat.lucky").unwrap().current(), 5);
         assert_eq!(nikis.hit_points.current, nikis.hit_points.max);
     }
 

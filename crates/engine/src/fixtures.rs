@@ -1,7 +1,9 @@
-//! Демо-данные до появления импорта кампании и сохранений.
+//! Кампания «Дом Стрэндж» на утро Дня 98 (заливка данных владельца, 18.11.2026).
 //!
-//! Источник — лист персонажей кампании «Дом Стрэндж» на День 82: по механике лист является
-//! главным источником (утверждённое правило разрешения противоречий).
+//! Боевая часть листов — из «Копии … Листы персонажей» (правила 2024 года), состояние,
+//! снаряжение и казна — из «Листов персонажей 1» (День 98). Где лист расходится с правилами
+//! 2024 года, лист приведён к правилам (решения владельца 8 и 10), а расхождение записано
+//! в заметки листа.
 
 use crate::character::{Ability, AbilityScores, Character, CharacterKind, ClassLevel, HitPoints};
 use crate::resource::{Recovery, ResourcePool};
@@ -43,15 +45,33 @@ fn with_slots(
 }
 
 fn granted(spell: &str, source: &str, resource: Option<&str>, level: u8) -> GrantedSpell {
+    granted_by("warlock", spell, source, resource, level)
+}
+
+fn granted_by(
+    caster: &str,
+    spell: &str,
+    source: &str,
+    resource: Option<&str>,
+    level: u8,
+) -> GrantedSpell {
     GrantedSpell {
         spell_id: spell.into(),
         source: source.into(),
         resource_id: resource.map(Into::into),
         cast_level: level,
-        caster_id: Some("warlock".into()),
+        caster_id: Some(caster.into()),
         slots_allowed: false,
     }
 }
+
+/// Героическое вдохновение вида «Человек» (Находчивый, правила 2024 года).
+fn heroic_inspiration() -> ResourcePool {
+    pool(HEROIC_INSPIRATION_ID, "Героическое вдохновение", 1, Recovery::LongRest)
+}
+
+/// ID пула героического вдохновения.
+pub const HEROIC_INSPIRATION_ID: &str = "species.heroic_inspiration";
 
 /// Заклинание черты, которое по её тексту можно накладывать и своими ячейками
 /// («Затронутый Тенью», «Затронутый Феями»).
@@ -63,30 +83,34 @@ fn scroll(spell: &str, level: u8, count: u32) -> ScrollStack {
     ScrollStack { spell_id: spell.into(), level, count, container: None }
 }
 
-/// Где начинается День 82. Строка «Текущая сцена: Мясной мост» в листе персонажей осталась
-/// от Дня 46 (штурм красилен завершён в тот день). По правилу «по локациям — самые поздние
-/// сведения» берутся хроника (вечер Дня 81) и заметки героя (график Дней 82–86).
-pub const SCENE_LOCATION: &str = "Цитадель Кроу-Рок";
+/// Где начинается День 98: конспиративный особняк Дома Стрэндж в Вейденбурге.
+pub const SCENE_LOCATION: &str = "Вейденбург, ул. Зелёных Ив, 7";
 
-/// Обстановка начала Дня 82 по хронике и заметкам героя.
-pub const SCENE_SITUATION: &str = "Утро Дня 82, Глава VI. Накануне вечером (День 81) сэр Никис \
-вернулся в грот Кроу-Рока в лике Владыки Стрэнджа и вместе с Калебом и бухгалтером Вайгелем \
-утвердил государственное устройство «Пять Столпов Альт-Вардена». Открыты вакансии: Старший \
-Казначей Коронной Палаты, Земский Бургомистр посадов Шпиля, Коронный Судья-Асессор и \
-Церемониймейстер Шпиля. На сегодня назначено прибытие кандидатов от барона Гуго фон Сталя \
-(из «Стального Утёса» и Черноводья) — начинается смотр претендентов. Дальше по графику: \
-День 83 — кандидаты от Старшины Хеккера и фактора Бранда (Вейденбург); День 84 — кандидаты от \
-баронессы Элеоноры фон Хольц и Прокурора фон Рауха с первым обозом репараций на 20 000 ЗМ; \
-День 85 — готова «Княжеская Астролябия Звёздного Моста» у Халида, прибывает делегация Мирры, \
-отчёт Папаши Крота о слежке за Мадам Орели; День 86 — коронация в Серебряном Шпиле. Корвус \
-как Хранитель Тайной Печати — в Шпиле (переход Звёздным Мостом из грота мгновенный), Гюнтер и \
-Брокк — в Копях Альт-Вардена, Валерия — в Кроу-Роке. Штурм красилен у Мясного моста давно \
-завершён (День 46).";
+/// Обстановка утра Дня 98 по вводной владельца.
+pub const SCENE_SITUATION: &str = "День 98, 08:00, Глава VI. Вейденбург, конспиративный особняк \
+Дома Стрэндж на ул. Зелёных Ив, 7 — подвал, экранированный соляными плитами. Корвус стоит у \
+двери. Ночные пленники — Фабрицио Лоренци и матросы Таранто — переданы Триумвирату Соли через \
+подземный шлюз, их фелюга лежит на дне Лимана. В Кольце Теневого Хранилища — шифры Коллегии \
+Семи Навигаторов, письма Малика аль-Джабари, шифровальная книга Валленштейна и 2 080 зм. Через \
+Соколиный Перстень Мысли отзывается Утопленник Морган: на рассвете у Багряной отмели потоплены \
+4 бригантины Брагадина, караван Дожа Касима и шейхи Зулейки с серебром идут чистым морем. \
+Открытые узлы дня. Сухой док № 1: Изабелла дель Торро, Клаус фон Цайс и Валерия ведут закладку \
+броненосца (4\" наклонная броня под 45°, двухконтурный реактор); к вечеру мастер Халид в \
+«Северной Звезде» закончит 7-й перстень. Подполье и Собор: Консильери Фубуа вчера выделил \
+Папаше Кроту 500 зм на перевербовку банды Шрама (Красный Яр) и подставу Ван дер Хольтов; \
+глашатаи Хеккера объявили о даре 2 000 зм собору Св. Юлиана; Юссач в Нойштадте передаёт ноту \
+Архиепископу Иоахиму. Три Ключа и Сеть: на Астролябии ждут склеп Вольфрика Стрэнджа («Чёрного \
+Ворона») в Ущелье Безмолвных Сосен у утёса Вороний Зуб (Третий Ключ к Шестому Столпу) и \
+терминал в Карак-Думе за Хребтом Железных Рёбер. Гюнтер — на карауле в отеле «Золотой Фазан», \
+Брокк — комендант обороны Кроу-Рока.";
+
+/// День начала кампании.
+pub const START_DAY: u32 = 98;
 
 pub fn demo_scene() -> Scene {
     Scene {
-        day: 82,
-        time: Some("утро".into()),
+        day: START_DAY,
+        time: Some("08:00".into()),
         location: SCENE_LOCATION.into(),
         situation: SCENE_SITUATION.into(),
         now: String::new(),
@@ -94,53 +118,55 @@ pub fn demo_scene() -> Scene {
     }
 }
 
-/// Колдовство сэра Никиса: Колдун 7 (Исчадие), воззвания, «Затронутый Тенью», Окуляр, свитки.
+/// Колдовство сэра Никиса: Колдун 9 (Исчадие, правила 2024 года), воззвания,
+/// «Затронутый Тенью», Окуляр, свитки.
 fn nikis_spellcasting() -> Spellcasting {
     let warlock = Caster::new(
         "warlock",
         "Колдун",
         SpellClass::Warlock,
         Ability::Charisma,
-        8,
+        9,
         Progression::Pact,
         Preparation::Known,
     )
     .cantrips(3, &["eldritch-blast", "minor-illusion", "mage-hand"])
     .known(
-        Some(9),
+        Some(10),
         &[
             "scorching-ray",
             "hellish-rebuke",
             "shadow-blade",
             "armor-of-agathys",
-            "misty-step",
+            "far-step",
             "suggestion",
             "counterspell",
             "blight",
             "fireball",
+            "synaptic-static",
         ],
     )
-    .expanded(
+    .always(
         "Покровитель: Исчадие",
         &[
             "burning-hands",
             "command",
-            "blindness-deafness",
             "scorching-ray",
+            "suggestion",
             "fireball",
             "stinking-cloud",
             "fire-shield",
             "wall-of-fire",
-            "flame-strike",
-            "hallow",
+            "geas",
+            "insect-plague",
         ],
     )
-    .item_bonus(2, "Жезл Хранителя Договора +2")
-    .dc_item_bonus(1, "+1 к КС по листу игрока");
+    .item_bonus(2, "Жезл Хранителя Договора +2");
 
     Spellcasting {
         casters: vec![warlock],
         granted: vec![
+            granted("find-familiar", "Воззвание: Договор Цепи", None, 1),
             granted("disguise-self", "Воззвание: Маска многих обличий", None, 1),
             granted("speak-with-dead", "Воззвание: Шёпот могилы", None, 3),
             feat_spell(
@@ -172,18 +198,29 @@ fn nikis_spellcasting() -> Spellcasting {
                 ..scroll("globe-of-invulnerability", 6, 1)
             },
         ],
-        restorers: vec![SlotRestorer {
-            resource_id: "item.pact_rod.slot".into(),
-            label: "Жезл Хранителя Договора".into(),
-            max_level: 5,
-            pact_only: true,
-        }],
+        restorers: vec![
+            SlotRestorer {
+                resource_id: "item.pact_rod.slot".into(),
+                label: "Жезл Хранителя Договора".into(),
+                max_level: 5,
+                pact_only: true,
+            },
+            // Половина ячеек договора с округлением вверх: при 2 ячейках — одна.
+            SlotRestorer {
+                resource_id: MAGICAL_CUNNING_ID.into(),
+                label: "Магическое коварство".into(),
+                max_level: 5,
+                pact_only: true,
+            },
+        ],
         can_prepare: false,
     }
 }
 
-/// Сир Гюнтер: Паладин 8, Клятва Возмездия. В листе подготовлено 7 заклинаний при лимите 6
-/// (ХАР +2 + половина уровня 4) — движок помечает превышение, а не скрывает его.
+/// ID пула «Магического коварства» колдуна (правила 2024 года).
+pub const MAGICAL_CUNNING_ID: &str = "warlock.magical_cunning";
+
+/// Сир Гюнтер: Паладин 10, Клятва Возмездия (правила 2024 года: 9 подготовленных).
 fn gunther_spellcasting() -> Spellcasting {
     Spellcasting {
         casters: vec![Caster::new(
@@ -191,73 +228,144 @@ fn gunther_spellcasting() -> Spellcasting {
             "Паладин",
             SpellClass::Paladin,
             Ability::Charisma,
-            8,
-            Progression::Half,
+            10,
+            Progression::Half2024,
             Preparation::Prepared,
         )
-        .prepared(&[
-            "bless",
-            "shield-of-faith",
-            "command",
-            "find-steed",
-            "protection-from-poison",
-            "branding-smite",
-            "magic-weapon",
-        ])
-        .always("Клятва Возмездия", &["bane", "hunters-mark", "hold-person", "misty-step"])],
+        .prepared(GUNTHER_PREPARED)
+        .max_prepared(9)
+        .always("Паладин", &["divine-smite", "find-steed"])
+        .always(
+            "Клятва Возмездия",
+            &[
+                "bane",
+                "hunters-mark",
+                "hold-person",
+                "misty-step",
+                "haste",
+                "protection-from-energy",
+            ],
+        )],
+        granted: vec![
+            granted_by(
+                "paladin",
+                "divine-smite",
+                "Паладин: Божественная кара",
+                Some("paladin.free_smite"),
+                1,
+            ),
+            granted_by(
+                "paladin",
+                "find-steed",
+                "Паладин: Верный скакун",
+                Some("paladin.faithful_steed"),
+                2,
+            ),
+        ],
         ..Spellcasting::default()
     }
 }
 
-/// Подготовленные заклинания Валерии по листу (13 = МДР 5 + уровень 8).
-pub(crate) const VALERIA_PREPARED: &[&str] = &[
-    "healing-word",
+/// Подготовленные заклинания Гюнтера по листу (правила 2024 года).
+pub(crate) const GUNTHER_PREPARED: &[&str] = &[
     "bless",
-    "detect-magic",
-    "detect-poison-and-disease",
-    "zone-of-truth",
-    "locate-object",
-    "silence",
-    "spiritual-weapon",
-    "dispel-magic",
-    "spirit-guardians",
-    "sending",
-    "divination",
-    "banishment",
+    "shield-of-faith",
+    "command",
+    "cure-wounds",
+    "protection-from-poison",
+    "magic-weapon",
+    "shining-smite",
+    "aura-of-vitality",
+    "revivify",
 ];
 
-/// Сестра Валерия: Жрица 8, Домен Могилы. «Уход за умирающими» — доменный заговор сверх
-/// четырёх жреческих.
+/// Подготовленные заклинания Валерии по листу: 15 по правилам 2024 года, «Послание» остаётся
+/// (решение владельца 9).
+pub(crate) const VALERIA_PREPARED: &[&str] = &[
+    "healing-word",
+    "cure-wounds",
+    "bless",
+    "spiritual-weapon",
+    "silence",
+    "zone-of-truth",
+    "spirit-guardians",
+    "dispel-magic",
+    "remove-curse",
+    "sending",
+    "banishment",
+    "divination",
+    "mass-cure-wounds",
+    "greater-restoration",
+    "flame-strike",
+];
+
+/// Сестра Валерия: Жрица 10, Домен Могилы (заклинания домена 2014 года в шаблоне жреца 2024),
+/// Божественный орден «Тауматург» (+1 заговор), «Посвящённый в магию» (друид).
 fn valeria_spellcasting() -> Spellcasting {
+    let mut initiate = Caster::new(
+        "druid_mi",
+        "Посвящённый в магию (друид)",
+        SpellClass::Druid,
+        Ability::Wisdom,
+        10,
+        Progression::Innate,
+        Preparation::Prepared,
+    )
+    .cantrips(2, &["thorn-whip", "druidcraft"])
+    .max_prepared(0);
+    initiate.expanded = Vec::new();
     Spellcasting {
-        casters: vec![Caster::new(
-            "cleric",
-            "Жрица",
-            SpellClass::Cleric,
-            Ability::Wisdom,
-            8,
-            Progression::Full,
-            Preparation::Prepared,
-        )
-        .cantrips(
-            5,
-            &["spare-the-dying", "toll-the-dead", "sacred-flame", "guidance", "thaumaturgy"],
-        )
-        .prepared(VALERIA_PREPARED)
-        .attack_item_bonus(1, "Палочка военного мага +1")
-        .always(
-            "Домен Могилы",
-            &[
-                "bane",
-                "false-life",
-                "gentle-repose",
-                "ray-of-enfeeblement",
-                "revivify",
-                "vampiric-touch",
-                "blight",
-                "death-ward",
-            ],
-        )],
+        casters: vec![
+            Caster::new(
+                "cleric",
+                "Жрица",
+                SpellClass::Cleric,
+                Ability::Wisdom,
+                10,
+                Progression::Full,
+                Preparation::Prepared,
+            )
+            .cantrips(
+                6,
+                &[
+                    "sacred-flame",
+                    "toll-the-dead",
+                    "spare-the-dying",
+                    "guidance",
+                    "thaumaturgy",
+                    "light",
+                ],
+            )
+            .prepared(VALERIA_PREPARED)
+            .max_prepared(15)
+            .attack_item_bonus(1, "Палочка военного мага +1")
+            .always(
+                "Домен Могилы",
+                &[
+                    "bane",
+                    "false-life",
+                    "gentle-repose",
+                    "ray-of-enfeeblement",
+                    "revivify",
+                    "vampiric-touch",
+                    "blight",
+                    "death-ward",
+                    "antilife-shell",
+                    "raise-dead",
+                ],
+            ),
+            initiate,
+        ],
+        granted: vec![GrantedSpell {
+            slots_allowed: true,
+            ..granted_by(
+                "druid_mi",
+                "healing-word",
+                "Черта: Посвящённый в магию (друид)",
+                Some("feat.magic_initiate"),
+                1,
+            )
+        }],
         restorers: vec![SlotRestorer {
             resource_id: "item.pearl_of_power".into(),
             label: "Жемчужина Силы".into(),
@@ -268,7 +376,7 @@ fn valeria_spellcasting() -> Spellcasting {
     }
 }
 
-/// Сэр Никис Стрэндж, 10 уровень (Плут 3 / Колдун 7).
+/// Сэр Никис Стрэндж, 12 уровень (Плут 3 / Колдун 9), правила 2024 года.
 pub fn demo_nikis() -> Character {
     Character {
         id: "pc.nikis".into(),
@@ -278,22 +386,27 @@ pub fn demo_nikis() -> Character {
         race: "Человек".into(),
         classes: vec![
             class("Плут", Some("Фантом"), 3),
-            class("Колдун", Some("Исчадие (Ксартас), Договор Цепи"), 8),
+            class("Колдун", Some("Исчадие (Ксартас), Договор Цепи"), 9),
         ],
         // Интеллект: базовое 12, Обруч Интеллекта устанавливает 19.
         abilities: abilities([12, 14, 11, 19, 12, 15]),
-        hit_points: hp(58, 10),
+        hit_points: hp(59, 11),
         armor_class: 18,
         speed_ft: 30,
         location: SCENE_LOCATION.into(),
         resources: with_slots(
             vec![
-                ResourcePool::lucky(),
+                ResourcePool::lucky(5),
+                heroic_inspiration(),
                 pool("warlock.dark_ones_luck", "Удача Тёмного", 2, Recovery::LongRest),
-                pool("rogue.wails_from_the_grave", "Вопли из могилы", 4, Recovery::LongRest),
+                pool(MAGICAL_CUNNING_ID, "Магическое коварство", 1, Recovery::LongRest),
+                pool("invocation.tomb_of_levistus", "Гробница Левистуса", 1, Recovery::ShortRest),
+                pool("rogue.wails_from_the_grave", "Вопли из могилы", 5, Recovery::LongRest),
                 pool("feat.metamagic_adept", "Единицы чародейства", 2, Recovery::LongRest),
                 pool("item.pact_rod.slot", "Жезл: восстановление ячейки", 1, Recovery::LongRest),
                 pool("item.ocular.hadar", "Окуляр: Голод Хадара", 1, Recovery::Daily),
+                pool("item.sunset_blade.step", "Клинок: прыжок сквозь Саван", 1, Recovery::Daily),
+                pool("item.astrolabe.return", "Астролябия: Эфирный Возврат", 1, Recovery::LongRest),
                 pool(
                     "feat.shadow_touched.invisibility",
                     "Невидимость (Затронутый Тенью)",
@@ -317,7 +430,7 @@ pub fn demo_nikis() -> Character {
     }
 }
 
-/// Отряд Дома Стрэндж: сэр Никис, четыре спутника 8 уровня и фамильяр.
+/// Отряд Дома Стрэндж: сэр Никис, четыре спутника 10 уровня и фамильяр.
 pub fn demo_party() -> Vec<Character> {
     vec![
         demo_nikis(),
@@ -327,16 +440,18 @@ pub fn demo_party() -> Vec<Character> {
             name: "Корвус «Немой»".into(),
             title: "Хранитель Тайной Печати и Первый Писец Двора".into(),
             race: "Человек".into(),
-            classes: vec![class("Монах", Some("Путь Открытой Ладони"), 8)],
-            abilities: abilities([12, 16, 14, 10, 16, 8]),
-            hit_points: hp(59, 0),
-            armor_class: 18,
+            classes: vec![class("Монах", Some("Воин Открытой Ладони"), 10)],
+            abilities: abilities([12, 18, 14, 10, 16, 8]),
+            hit_points: hp(73, 0),
+            armor_class: 19,
             speed_ft: 50,
-            location: "Серебряный Шпиль".into(),
+            location: SCENE_LOCATION.into(),
             resources: vec![
-                pool("monk.ki", "Очки Ци", 8, Recovery::ShortRest),
-                pool("monk.wholeness_of_body", "Целостность тела", 1, Recovery::LongRest),
-                pool("item.ki_beads", "Чётки: восстановить 2 Ци", 1, Recovery::Daily),
+                pool("monk.ki", "Очки концентрации", 10, Recovery::ShortRest),
+                pool("monk.uncanny_metabolism", "Невероятный метаболизм", 1, Recovery::LongRest),
+                pool("monk.wholeness_of_body", "Целостность тела", 3, Recovery::LongRest),
+                heroic_inspiration(),
+                pool("item.ki_beads", "Чётки: восстановить 2 очка", 1, Recovery::Daily),
             ],
             spellcasting: None,
             profile: sheets::corvus_profile(),
@@ -349,24 +464,36 @@ pub fn demo_party() -> Vec<Character> {
             name: "Сир Гюнтер «Бастион»".into(),
             title: "Командир Латной Гвардии Шпиля".into(),
             race: "Человек".into(),
-            classes: vec![class("Паладин", Some("Клятва Возмездия"), 8)],
-            abilities: abilities([18, 10, 14, 10, 12, 14]),
-            hit_points: hp(72, 0),
+            classes: vec![class("Паладин", Some("Клятва Возмездия"), 10)],
+            abilities: abilities([18, 10, 14, 10, 12, 16]),
+            hit_points: hp(104, 0),
             armor_class: 22,
             speed_ft: 30,
-            location: "Копи Альт-Вардена".into(),
+            location: "Вейденбург, отель «Золотой Фазан»".into(),
             resources: with_slots(
                 vec![
-                    pool("paladin.lay_on_hands", "Наложение рук (хиты)", 40, Recovery::LongRest),
+                    pool("paladin.lay_on_hands", "Наложение рук (хиты)", 50, Recovery::LongRest),
                     pool(
                         "paladin.channel_divinity",
                         "Канал Божественности",
-                        1,
-                        Recovery::ShortRest,
+                        2,
+                        Recovery::OneOnShortRest,
                     ),
-                    pool("paladin.divine_sense", "Божественное чувство", 3, Recovery::LongRest),
+                    pool(
+                        "paladin.free_smite",
+                        "Божественная кара без ячейки",
+                        1,
+                        Recovery::LongRest,
+                    ),
+                    pool(
+                        "paladin.faithful_steed",
+                        "Верный скакун без ячейки",
+                        1,
+                        Recovery::LongRest,
+                    ),
+                    heroic_inspiration(),
                 ],
-                3,
+                5,
                 &gunther_spellcasting(),
             ),
             spellcasting: Some(gunther_spellcasting()),
@@ -378,22 +505,35 @@ pub fn demo_party() -> Vec<Character> {
             id: "npc.valeria".into(),
             kind: CharacterKind::Companion,
             name: "Сестра Валерия «Пепельная Дева»".into(),
-            title: "Глава лазарета Кроу-Рока".into(),
+            title: "Око Инквизиции · при адмирале Изабелле дель Торро".into(),
             race: "Человек".into(),
-            classes: vec![class("Жрица", Some("Домен Могилы"), 8)],
+            classes: vec![class("Жрица", Some("Домен Могилы"), 10)],
             abilities: abilities([12, 12, 14, 12, 20, 10]),
-            hit_points: hp(59, 0),
+            hit_points: hp(73, 0),
             armor_class: 18,
             speed_ft: 30,
-            location: "Цитадель Кроу-Рок".into(),
+            location: "Вейденбург, верфи (сухой док № 1)".into(),
             resources: with_slots(
                 vec![
-                    pool("cleric.channel_divinity", "Канал Божественности", 2, Recovery::ShortRest),
+                    pool(
+                        "cleric.channel_divinity",
+                        "Канал Божественности",
+                        3,
+                        Recovery::OneOnShortRest,
+                    ),
+                    pool(
+                        "cleric.divine_intervention",
+                        "Божественное вмешательство",
+                        1,
+                        Recovery::LongRest,
+                    ),
                     pool("cleric.sentinel", "Часовой у двери смерти", 5, Recovery::LongRest),
                     pool("cleric.eyes_of_grave", "Взгляд за грань", 5, Recovery::LongRest),
+                    pool("feat.magic_initiate", "Лечащее слово без ячейки", 1, Recovery::LongRest),
+                    heroic_inspiration(),
                     pool("item.pearl_of_power", "Жемчужина Силы", 1, Recovery::Daily),
                 ],
-                3,
+                4,
                 &valeria_spellcasting(),
             ),
             spellcasting: Some(valeria_spellcasting()),
@@ -405,19 +545,21 @@ pub fn demo_party() -> Vec<Character> {
             id: "npc.brokk".into(),
             kind: CharacterKind::Companion,
             name: "Брокк Железнолом".into(),
-            title: "Сапёрный корпус · Нижний Бастион".into(),
-            race: "Горный дварф".into(),
-            classes: vec![class("Воин", Some("Мастер Боевых Искусств"), 9)],
+            title: "Комендант обороны Кроу-Рока".into(),
+            race: "Дварф".into(),
+            classes: vec![class("Воин", Some("Мастер Боевых Искусств"), 10)],
             abilities: abilities([20, 12, 16, 10, 12, 8]),
-            hit_points: hp(103, 0),
+            hit_points: hp(124, 0),
             armor_class: 20,
-            speed_ft: 25,
-            location: "Копи Альт-Вардена".into(),
+            speed_ft: 30,
+            location: "Цитадель Кроу-Рок".into(),
             resources: vec![
-                pool("fighter.superiority", "Кубы превосходства (d8)", 5, Recovery::ShortRest),
-                pool("fighter.second_wind", "Второе дыхание", 1, Recovery::ShortRest),
+                pool("fighter.superiority", "Кубы превосходства (d10)", 5, Recovery::ShortRest),
+                pool("fighter.second_wind", "Второе дыхание", 4, Recovery::OneOnShortRest),
                 pool("fighter.action_surge", "Всплеск действий", 1, Recovery::ShortRest),
                 pool("fighter.indomitable", "Несгибаемый", 1, Recovery::LongRest),
+                pool("fighter.know_your_enemy", "Познай своего врага", 1, Recovery::LongRest),
+                pool("species.stonecunning", "Чувство камня", 4, Recovery::LongRest),
                 pool("item.titan_helm", "Шлем Горного Титана", 1, Recovery::Daily),
             ],
             spellcasting: None,
@@ -436,7 +578,7 @@ pub fn demo_party() -> Vec<Character> {
             hit_points: hp(7, 0),
             armor_class: 13,
             speed_ft: 40,
-            location: SCENE_LOCATION.into(),
+            location: "Нойштадт".into(),
             resources: vec![],
             spellcasting: None,
             profile: sheets::yussach_profile(),
@@ -446,17 +588,19 @@ pub fn demo_party() -> Vec<Character> {
     ]
 }
 
-const DAY_OPENING: u32 = 75;
+const DAY_OPENING: u32 = START_DAY;
 
-/// Казна Дома Стрэндж по листу на День 82. Начальные остатки записаны на День 75,
-/// а последующие операции (фонд «Серебряный Рассвет», доля «Северной Звезды» и др.)
-/// — отдельными записями журнала, чтобы итог сходился с листом.
+/// Казна Дома Стрэндж по «Листам персонажей 1» на утро Дня 98: начальные остатки.
+/// Самоцветы: «1 500 зм в самоцветах», «камни и жемчуг на 1 000 зм» и «4 алмаза на 4 000 зм» —
+/// разные ценности (решение владельца 12); состав первых задан при заливке. Слитки Лунного
+/// Серебра ушли с караваном в Мирру (24 шт.), остаток в листе не указан — в казне их нет.
 pub fn demo_treasury() -> Treasury {
     let locations = [
         ("purse", "При себе"),
         ("shadow_ring", "Кольцо Теневого Хранилища"),
         ("willow_safe", "Сейф особняка, ул. Зелёных Ив, 7"),
         ("crow_rock_vault", "Сокровищница Кроу-Рока"),
+        ("spire_treasury", "Казна Серебряного Шпиля"),
         ("concordat_flagship", "Казна Конкордата (флагман в Кашаре)"),
         ("fleet_stores", "Склады флота"),
     ]
@@ -468,14 +612,16 @@ pub fn demo_treasury() -> Treasury {
         ("gp", "Золотые монеты", AssetKind::Coin, gp(1)),
         ("diamond", "Алмаз", AssetKind::Gem, gp(1_000)),
         ("black_pearl", "Чёрная жемчужина", AssetKind::Gem, gp(250)),
-        ("sapphire", "Сапфир", AssetKind::Gem, gp(100)),
+        ("emerald", "Изумруд", AssetKind::Gem, gp(500)),
+        ("fire_opal", "Огненный опал", AssetKind::Gem, gp(500)),
+        ("sapphire", "Сапфир Сапфирового Берега", AssetKind::Gem, gp(100)),
         ("amber", "Северный янтарь", AssetKind::Gem, gp(50)),
         ("river_pearls", "Речной жемчуг Лимана (россыпь)", AssetKind::Gem, gp(400)),
-        ("select_gems", "Отборные самоцветы (набор)", AssetKind::Gem, gp(1_500)),
         ("moon_silver_ingot", "Лунное Адамантовое Серебро, слиток", AssetKind::Ingot, gp(1_000)),
         ("ether_core", "Сердечник адамантового эфира", AssetKind::Ingot, gp(500)),
         ("bedrock_ore", "Штуф коренной руды (не оценён)", AssetKind::Ingot, 0),
         ("vogel_mortgage", "Закладная полковника Фогеля", AssetKind::Note, gp(6_000)),
+        ("brock_bill", "Вексель банка Брок", AssetKind::Note, gp(2_500)),
         ("bills", "Векселя", AssetKind::Note, gp(12_300)),
         ("brock_deposit", "Депозиты Банка Броков", AssetKind::Note, gp(14_000)),
         ("ring_wald", "Перстень-печатка канцлера Вальда", AssetKind::Valuable, gp(150)),
@@ -500,9 +646,11 @@ pub fn demo_treasury() -> Treasury {
 
     let mut treasury = Treasury::new("Казна Дома Стрэндж", locations, assets);
 
-    let opening: [(&str, &str, i64); 22] = [
-        ("purse", "gp", 500),
-        ("purse", "select_gems", 1),
+    let opening: [(&str, &str, i64); 24] = [
+        // «1 500 зм в самоцветах».
+        ("purse", "emerald", 2),
+        ("purse", "fire_opal", 1),
+        // «Камни и жемчуг на 1 000 зм».
         ("purse", "river_pearls", 1),
         ("purse", "sapphire", 5),
         ("purse", "amber", 2),
@@ -510,17 +658,20 @@ pub fn demo_treasury() -> Treasury {
         ("purse", "ring_xavier", 1),
         ("purse", "ring_zubeir", 1),
         ("purse", "watch_eberhard", 1),
+        ("shadow_ring", "gp", 2_080),
         ("shadow_ring", "diamond", 4),
         ("shadow_ring", "vogel_mortgage", 1),
+        ("shadow_ring", "brock_bill", 1),
         ("willow_safe", "gp", 2_000),
         ("willow_safe", "bills", 1),
-        ("crow_rock_vault", "gp", 51_095),
+        ("crow_rock_vault", "gp", 33_095),
         ("crow_rock_vault", "brock_deposit", 1),
+        // «Жемчуг и алмазы на 5 000 зм».
         ("crow_rock_vault", "black_pearl", 12),
         ("crow_rock_vault", "diamond", 2),
-        ("crow_rock_vault", "moon_silver_ingot", 25),
         ("crow_rock_vault", "ether_core", 3),
         ("crow_rock_vault", "bedrock_ore", 3),
+        ("spire_treasury", "gp", 32_040),
         ("concordat_flagship", "gp", 7_500),
         ("fleet_stores", "sapphire_silk", 12),
     ];
@@ -532,37 +683,10 @@ pub fn demo_treasury() -> Treasury {
                 asset_id: asset.into(),
                 location_id: location.into(),
                 quantity,
-                reason: "Начальный остаток (перенос кампании)".into(),
+                reason: "Начальный остаток (День 98, листы владельца)".into(),
                 source: EntrySource::Opening,
             })
             .expect("начальные остатки корректны");
-    }
-
-    let operations: [(u32, &str, &str, i64, &str); 5] = [
-        (75, "crow_rock_vault", "gp", -5_000, "Фонд «Серебряный Рассвет» — мастеру Торвальду"),
-        (75, "crow_rock_vault", "gp", -1_000, "Усиление пограничных разъездов"),
-        (
-            81,
-            "crow_rock_vault",
-            "moon_silver_ingot",
-            -1,
-            "Халиду аль-Басри на Княжескую Астролябию",
-        ),
-        (81, "purse", "gp", 480, "Первая доля прибыли мануфактуры «Северная Звезда» (40%)"),
-        (81, "purse", "gp", -400, "Папаше Кроту на слежку за Мадам Орели"),
-    ];
-    for (day, location, asset, quantity, reason) in operations {
-        treasury
-            .record(NewEntry {
-                day,
-                time: None,
-                asset_id: asset.into(),
-                location_id: location.into(),
-                quantity,
-                reason: reason.into(),
-                source: EntrySource::Master,
-            })
-            .expect("операции демо-казны корректны");
     }
     treasury
 }

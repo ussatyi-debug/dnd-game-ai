@@ -789,6 +789,8 @@ mod tests {
     #[test]
     fn buying_gives_change() {
         let mut s = Session::demo(crate::rng::Xoshiro256::from_seed(7));
+        // Утром Дня 98 золото Никиса — в Кольце Теневого Хранилища; в кошель — горсть монет.
+        s.master_treasury_transfer("gp", 20, "shadow_ring", "purse", "На мелкие расходы").unwrap();
         let gold = s.treasury().quantity("gp", "purse");
         // Свеча за медяк: в кошеле только золото — движок отдаёт монету и берёт сдачу.
         let line = s.master_buy("свеча", "1 мм", "purse").unwrap();
@@ -809,10 +811,13 @@ mod tests {
     #[test]
     fn damage_uses_temporary_hp_first_and_heal_caps() {
         let mut s = session();
+        // 11 временных хитов (Благословение Тёмного) принимают урон первыми.
         let hp = s.change_hp("pc.nikis", HpChange::Damage(10)).unwrap();
-        assert_eq!((hp.current, hp.temporary), (58, 0));
+        assert_eq!((hp.current, hp.temporary), (59, 1));
+        let hp = s.change_hp("pc.nikis", HpChange::Damage(10)).unwrap();
+        assert_eq!((hp.current, hp.temporary), (50, 0));
         let hp = s.change_hp("pc.nikis", HpChange::Heal(100)).unwrap();
-        assert_eq!(hp.current, 58);
+        assert_eq!(hp.current, 59);
         let hp = s.change_hp("pc.nikis", HpChange::Temporary(5)).unwrap();
         assert_eq!(hp.temporary, 5);
         let hp = s.change_hp("pc.nikis", HpChange::Damage(200)).unwrap();
@@ -824,12 +829,14 @@ mod tests {
     #[test]
     fn resources_by_name_and_conditions() {
         let mut s = session();
-        let p = s.adjust_resource("pc.nikis", "Везунчик", -2).unwrap();
+        let p = s.adjust_resource("pc.nikis", "Везунчик", -4).unwrap();
         assert_eq!(p.current(), 1);
         assert!(s.adjust_resource("pc.nikis", "Везунчик", -2).is_err());
         assert!(s.engine_log().last().unwrap().starts_with("Отказ"));
         let p = s.adjust_resource("pc.nikis", "feat.lucky", 5).unwrap();
-        assert_eq!(p.current(), 3);
+        assert_eq!(p.current(), 5);
+        let p = s.adjust_resource("pc.nikis", "Героическое вдохновение", -1).unwrap();
+        assert_eq!(p.current(), 0);
         let list = s.set_condition("npc.corvus", "испуган", true).unwrap();
         assert_eq!(list, vec!["Испуган".to_string()]);
     }
@@ -844,9 +851,10 @@ mod tests {
         assert_eq!(s.remove_item("pc.nikis", "Зелье Героизма", 1).unwrap(), 0);
 
         let before = s.treasury_view().total;
-        s.master_treasury_entry("Золотые монеты", "При себе", -80, "Ужин").unwrap();
+        s.master_treasury_entry("Золотые монеты", "Кольцо Теневого", -80, "Ужин").unwrap();
         assert_eq!(s.treasury_view().total, before - 8_000);
         s.master_treasury_transfer("gp", 100, "Сокровищница", "При себе", "На расходы").unwrap();
+        assert_eq!(s.treasury().quantity("gp", "purse"), 100);
         assert!(s.master_treasury_entry("gp", "purse", -1_000_000, "x").is_err());
         let id = s.master_new_asset("Изумруд Шпиля", AssetKind::Gem, 500).unwrap();
         s.master_treasury_entry(&id, "purse", 1, "Трофей").unwrap();
@@ -898,7 +906,7 @@ mod tests {
         .unwrap();
         assert_eq!(s.scene().mood, Mood::Calm);
         s.change_scene(SceneChange { mood: Some(Mood::Travel), ..SceneChange::default() }).unwrap();
-        s.change_scene(SceneChange { day: Some(83), ..SceneChange::default() }).unwrap();
+        s.change_scene(SceneChange { day: Some(99), ..SceneChange::default() }).unwrap();
         assert_eq!(s.scene().mood, Mood::Travel, "дорога продолжается на следующий день");
         s.change_scene(SceneChange { mood: Some(Mood::Battle), ..SceneChange::default() }).unwrap();
         s.master_rest(RestKind::Short);
@@ -916,7 +924,8 @@ mod tests {
         assert!(s.master_undo_info().unwrap().available);
         let actions = s.undo_master_turn().unwrap();
         assert_eq!(actions.len(), 2);
-        assert_eq!(s.character("pc.nikis").unwrap().hit_points.current, 58);
+        let hp = s.character("pc.nikis").unwrap().hit_points;
+        assert_eq!((hp.current, hp.temporary), (59, 11));
         assert!(s.notes().is_empty());
         assert!(s.engine_log().last().unwrap().starts_with("Отменён ход мастера"));
 
@@ -962,6 +971,7 @@ mod tests {
         .known(None, &["magic-missile"])];
         sc.scrolls =
             vec![ScrollStack { spell_id: "shield".into(), level: 1, count: 1, container: None }];
+        s.master_treasury_transfer("gp", 100, "shadow_ring", "purse", "На чернила").unwrap();
         // Не со свитка без свитка, заговор, чужой список, уже в книге, слишком высокий круг.
         assert_eq!(
             s.copy_spell("pc.nikis", "fireball", true),

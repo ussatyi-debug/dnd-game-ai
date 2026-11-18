@@ -20,8 +20,10 @@ export interface RollResult {
   die: DieId;
   values: number[];
   total: number;
-  /** Переброс чертой «Везунчик»: значение до переброса. */
+  /** «Везунчик» (правила 2024 года — преимущество): первый куб. */
   luckyFrom?: number;
+  /** «Везунчик»: второй куб; итог — больший из двух. */
+  luckySecond?: number;
 }
 
 /** Запись лога. */
@@ -45,7 +47,8 @@ export function rollTitle(roll: RollResult & { master?: TrayRoll["master"] }): s
 /** Подробности для лога. */
 export function rollDetail(roll: RollResult): string {
   if (roll.luckyFrom !== undefined) {
-    return `${roll.total} (было ${roll.luckyFrom})`;
+    const second = roll.luckySecond ?? roll.total;
+    return `${roll.total} (преимущество: ${roll.luckyFrom} и ${second})`;
   }
   if (roll.values.length === 1) {
     return String(roll.total);
