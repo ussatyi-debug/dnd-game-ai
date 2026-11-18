@@ -41,7 +41,8 @@ export default function LevelUpWindow({ id, wizard, onClose, onOpenWizard, onDon
 
   const options = useMemo(() => (sheet ? classOptions(sheet) : []), [sheet]);
   useEffect(() => {
-    if (!classId && options.length) setClassId(options[0].cls.id);
+    const first = options[0];
+    if (!classId && first) setClassId(first.cls.id);
   }, [options, classId]);
 
   const option = options.find((o) => o.cls.id === classId);

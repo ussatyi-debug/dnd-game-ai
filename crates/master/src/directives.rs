@@ -1113,7 +1113,7 @@ mod tests {
             concat!(
                 "```engine\n",
                 "{\"cmd\":\"new_card\",\"layer\":\"master\",\"section\":\"prisoners\",\"title\":\"Соглядатай у Шпиля\",\"summary\":\"Задержан Корвусом\",\"facts\":{\"Где\":\"казематы Шпиля\"},\"status\":\"prisoner\"}\n",
-                "{\"cmd\":\"note\",\"layer\":\"master\",\"kind\":\"timer\",\"due_day\":83,\"title\":\"Хвост на тракте\",\"text\":\"Засада 2–3 всадника\",\"card\":\"Соглядатай у Шпиля\"}\n",
+                "{\"cmd\":\"note\",\"layer\":\"master\",\"kind\":\"timer\",\"due_day\":100,\"title\":\"Хвост на тракте\",\"text\":\"Засада 2–3 всадника\",\"card\":\"Соглядатай у Шпиля\"}\n",
                 "{\"cmd\":\"note\",\"layer\":\"master\",\"kind\":\"timer\",\"title\":\"без дня\"}\n",
                 "```"
             ),

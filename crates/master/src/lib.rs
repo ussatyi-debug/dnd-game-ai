@@ -579,7 +579,7 @@ mod tests {
             .any(|v| v.as_str().unwrap().starts_with("Ловкость рук +17")));
         assert_eq!(nikis["пассивная_внимательность"], 16);
         assert!(nikis["инвентарь"]["Кольцо Теневого Хранилища"].is_array());
-        assert!(context["листы"]["npc.corvus"]["навыки"].is_string());
+        assert!(context["листы"]["npc.corvus"]["навыки"].is_array());
         let valeria_attacks = context["листы"]["npc.valeria"]["атаки"].as_array().unwrap();
         assert!(valeria_attacks
             .iter()
