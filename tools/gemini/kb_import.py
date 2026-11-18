@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Ответы Gemini (слой «Мир») → src/data/kb/world.generated.ts.
 
-Запуск: python3 tools/gemini/kb_import.py tools/gemini/kb_world_1.json [kb_world_2.json ...]
+Запуск: python3 tools/gemini/kb_import.py tools/gemini/answers/kb_world_batch*.json  (партии по порядку: поздняя главнее)
         python3 tools/gemini/kb_import.py --check   (только проверка уже встроенного)
 
 Проверяет каждую карточку (поля, разделы, префиксы id, статусы, связи и родителей, английские
@@ -23,7 +23,11 @@ STATUSES = {"active", "ally", "vassal", "neutral", "watch", "enemy", "prisoner",
             "progress", "done", "failed", "planned"}
 FIELDS = ["id", "layer", "section", "group", "strangeOnly", "parent", "title", "subtitle", "summary",
           "status", "statusNote", "facts", "body", "tags", "related", "source", "link"]
-LATIN = re.compile(r"\b[A-Za-z]{3,}\b")
+# Латиница из 3+ букв, кроме римских цифр (Генрих III).
+LATIN = re.compile(r"\b(?![IVXLCDM]+\b)[A-Za-z]{3,}\b")
+# Карточки, которые раскрывают тайну отряда даже в «публичной» версии Gemini (решение разработчика):
+# видны только в кампании «Дом Стрэндж». Звёздный Мост: работа сети и открытые терминалы — тайна.
+FORCE_STRANGE_ONLY = {"lore.star_bridge"}
 HEADER = (
     "// Сгенерировано tools/gemini/kb_import.py из ответов Gemini — не править вручную.\n"
     "// Карточки слоя «Мир» на День 98: новые и обновлённые (заменяют карточки world.ts с тем же id).\n\n"
@@ -119,6 +123,13 @@ def main() -> None:
         raw = Path(f).read_text(encoding="utf-8").strip()
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)
         incoming += json.loads(raw)
+    # Одна карточка в нескольких партиях: побеждает более поздняя (уточнённая) версия.
+    latest: dict[str, dict] = {}
+    for c in incoming:
+        if c.get("id") in latest:
+            print(f"повтор {c['id']}: берётся версия из более поздней партии")
+        latest[c.get("id")] = c
+    incoming = list(latest.values())
     errors = check(incoming, known)
     if errors:
         print("Ошибки — файл не изменён:\n" + "\n".join(errors))
@@ -127,6 +138,8 @@ def main() -> None:
     added = sum(1 for c in incoming if c["id"] not in by_id)
     for c in incoming:
         by_id[c["id"]] = normalize(c)
+    for cid in FORCE_STRANGE_ONLY & by_id.keys():
+        by_id[cid]["strangeOnly"] = True
     merged = sorted(by_id.values(), key=lambda c: (c["section"], c["group"], c["title"]))
     OUT.write_text(HEADER + "export const WORLD_GENERATED: KbEntry[] = "
                    + json.dumps(merged, ensure_ascii=False, indent=2) + ";\n", encoding="utf-8")
