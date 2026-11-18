@@ -647,6 +647,11 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
             }
             session.cast_spell(&character, &request).map(|o| o.summary).map_err(|e| e.to_string())
         }
+        "copy_spell" => {
+            let spell = find_spell(text_field(cmd, "spell")?);
+            let from_scroll = opt_text(cmd, "source") == Some("scroll");
+            session.copy_spell(&character, &spell, from_scroll).map_err(|e| e.to_string())
+        }
         "slot" => {
             let slot = slot_ref(cmd.get("level"))?.ok_or("нет поля «level»")?;
             let spend = cmd.get("spend").and_then(Value::as_bool).unwrap_or(true);

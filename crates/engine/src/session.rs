@@ -237,6 +237,12 @@ pub struct Session {
     pub(crate) met_unknown: Vec<(String, u8)>,
     /// Номер первой записи базы в текущем ходу мастера.
     pub(crate) turn_note_start: u64,
+    /// Броски мастера этого хода и прошлого (строки с подписями) — подсказка мастеру.
+    pub(crate) turn_rolls: Vec<String>,
+    pub(crate) last_turn_rolls: Vec<String>,
+    /// Инициатива участников текущего боя (подписанные броски мастера) — подсказка мастеру.
+    pub(crate) initiative: Vec<(String, i64)>,
+    pub(crate) initiative_noted: bool,
     /// Пул кубов хода: движок бросает его заранее и показывает мастеру; выражения мастера
     /// `[[1d8+3]]` считаются из него по порядку (в сохранение не попадает).
     pub(crate) dice_pool: DicePool,
@@ -354,6 +360,10 @@ impl Session {
             battle_unrewarded: false,
             met_unknown: Vec::new(),
             turn_note_start: u64::MAX,
+            turn_rolls: Vec::new(),
+            last_turn_rolls: Vec::new(),
+            initiative: Vec::new(),
+            initiative_noted: false,
             dice_pool: DicePool::default(),
         }
     }
@@ -533,6 +543,40 @@ impl Session {
         self.spellbook(id)
     }
 
+    /// Переписать заклинание в книгу волшебника: 50 зм за круг из кошелька отряда,
+    /// 2 часа работы за круг (время сцены сдвигает мастер). Со свитка — свиток расходуется.
+    pub fn copy_spell(
+        &mut self,
+        id: &str,
+        spell_id: &str,
+        from_scroll: bool,
+    ) -> Result<String, EngineError> {
+        let character = self.character(id)?;
+        let who = character.name.clone();
+        let checked = character.check_copy(spell_id, from_scroll);
+        let (name, level) = match checked {
+            Ok(v) => v,
+            Err(e) => {
+                self.log(format!("Отказ (переписывание, {who}): {e}"));
+                return Err(e);
+            }
+        };
+        let price = format!("{} зм", 50 * u32::from(level));
+        self.master_buy(&format!("переписывание «{name}» в книгу"), &price, "purse")?;
+        self.character_mut(id)?.copy_to_spellbook(spell_id, from_scroll)?;
+        let source = if from_scroll {
+            "со свитка (свиток израсходован)"
+        } else {
+            "из найденной книги"
+        };
+        let line = format!(
+            "{who}: «{name}» ({level} круг) переписано в книгу заклинаний {source} — {price}, {} ч работы",
+            2 * u32::from(level)
+        );
+        self.log(line.clone());
+        Ok(line)
+    }
+
     /// Накладывание заклинания с проверкой правил и списанием ячейки.
     pub fn cast_spell(
         &mut self,
@@ -685,12 +729,45 @@ impl Session {
 
     /// Новый пул кубов хода: по `per_die` значений каждого куба из [`POOL_SIDES`].
     pub fn deal_dice_pool(&mut self, per_die: usize) -> &DicePool {
+        // Новый ход: броски прошлого хода — подсказка мастеру, если игрок оспорит их.
+        self.last_turn_rolls = std::mem::take(&mut self.turn_rolls);
         let values = POOL_SIDES
             .iter()
             .map(|&sides| (0..per_die).map(|_| self.rng.roll_die(sides)).collect())
             .collect();
         self.dice_pool = DicePool { values, used: [0; POOL_SIDES.len()] };
         &self.dice_pool
+    }
+
+    /// Бросок мастера в этом ходу (строка с подписью) — попадёт в «броски прошлого хода».
+    pub fn note_master_roll(&mut self, line: &str) {
+        self.turn_rolls.push(line.to_string());
+    }
+
+    /// Броски мастера прошлого хода.
+    pub fn last_turn_rolls(&self) -> &[String] {
+        &self.last_turn_rolls
+    }
+
+    /// Инициатива участника текущего боя, если уже брошена.
+    pub fn initiative_of(&self, name: &str) -> Option<i64> {
+        let key = name.trim().to_lowercase();
+        self.initiative.iter().find(|(n, _)| n.to_lowercase() == key).map(|(_, v)| *v)
+    }
+
+    /// Запомнить инициативу участника (повтор не перезаписывает первое значение).
+    pub fn note_initiative(&mut self, name: &str, value: i64) {
+        self.initiative_noted = true;
+        if self.initiative_of(name).is_none() && !name.trim().is_empty() {
+            self.initiative.push((name.trim().to_string(), value));
+        }
+    }
+
+    /// Очередь инициативы текущего боя: от большей к меньшей.
+    pub fn initiative_order(&self) -> Vec<(String, i64)> {
+        let mut order = self.initiative.clone();
+        order.sort_by(|a, b| b.1.cmp(&a.1));
+        order
     }
 
     /// Пул кубов текущего хода.

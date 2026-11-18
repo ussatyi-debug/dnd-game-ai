@@ -100,6 +100,16 @@ fn preparation_options(
 }
 
 #[tauri::command]
+fn copy_spell(
+    id: String,
+    spell_id: String,
+    from_scroll: bool,
+    state: State<'_, SessionState>,
+) -> Result<String, String> {
+    lock(&state)?.copy_spell(&id, &spell_id, from_scroll).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn prepare_spells(
     id: String,
     caster_id: String,
@@ -1136,6 +1146,7 @@ pub fn run() {
             spellbook,
             preparation_options,
             prepare_spells,
+            copy_spell,
             cast_spell,
             change_slot,
             restore_slot,

@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { CLASS_LABELS, levelLabel, SPELL_BY_ID, SRD_ATTRIBUTION } from "../data/spells/index.ts";
 import {
   castSpell,
+  copySpell,
   errorText,
   type CastMethod,
   type CastOutcome,
@@ -156,9 +157,11 @@ interface SpellCardProps {
   book: SpellbookView | null;
   onClose: () => void;
   onCast?: (outcome: CastOutcome) => void;
+  /** Книга изменилась не накладыванием (переписали свиток). */
+  onChanged?: (summary: string) => void;
 }
 
-export default function SpellCard({ spellId, book, onClose, onCast }: SpellCardProps) {
+export default function SpellCard({ spellId, book, onClose, onCast, onChanged }: SpellCardProps) {
   const spell = SPELL_BY_ID.get(spellId);
   const options = useMemo(
     () => (book && spell ? castOptions(book, spellId, spell.level) : []),
@@ -190,6 +193,29 @@ export default function SpellCard({ spellId, book, onClose, onCast }: SpellCardP
         setResult(outcome.summary);
         setPicked(null);
         onCast?.(outcome);
+      })
+      .catch((e: unknown) => setError(errorText(e)))
+      .finally(() => setBusy(false));
+  }
+
+  // Свиток заклинания у волшебника, которого нет в его книге, — можно переписать.
+  const wizard = book?.casters.find((c) => c.preparation === "spellbook");
+  const canCopy =
+    !!book &&
+    !!wizard &&
+    spell.level > 0 &&
+    spell.level <= wizard.max_spell_level &&
+    book.scrolls.some((s) => s.spell.id === spellId && s.count > 0) &&
+    !wizard.spellbook.some((s) => s.id === spellId);
+
+  function copy() {
+    if (!book) return;
+    setBusy(true);
+    setError(null);
+    copySpell(book.character_id, spellId, true)
+      .then((summary) => {
+        setResult(summary);
+        onChanged?.(summary);
       })
       .catch((e: unknown) => setError(errorText(e)))
       .finally(() => setBusy(false));
@@ -267,6 +293,16 @@ export default function SpellCard({ spellId, book, onClose, onCast }: SpellCardP
                   Сотворить
                 </button>
               </>
+            )}
+            {canCopy && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={copy}
+                className="w-full rounded-md border border-gold/60 px-4 py-2 text-sm text-gold hover:bg-gold/10 disabled:opacity-40"
+              >
+                Переписать в книгу — {50 * spell.level} зм, {2 * spell.level} ч (свиток израсходуется)
+              </button>
             )}
             {result && <p className="rounded-md border border-gold/40 px-3 py-2 text-sm text-gold">⚙ {result}</p>}
             {error && (

@@ -153,6 +153,11 @@ impl Session {
         }
         self.age_due_timers();
         self.age_met_unknown();
+        // Бой кончился — очередь инициативы больше не нужна.
+        if self.scene.mood != Mood::Battle && !self.initiative_noted {
+            self.initiative.clear();
+        }
+        self.initiative_noted = false;
         let after = self.checkpoint();
         let today = self.scene.day;
         let day_note = |c: &Checkpoint| {
@@ -936,5 +941,57 @@ mod tests {
         let lines = s.master_rest(RestKind::Long);
         assert!(lines.iter().any(|l| l.contains("Везунчик")));
         assert!(s.engine_log().last().unwrap().starts_with("Длительный отдых"));
+    }
+
+    #[test]
+    fn wizard_copies_scroll_into_spellbook() {
+        use crate::spellcasting::{Caster, Preparation, Progression, ScrollStack};
+        use crate::spells::SpellClass;
+        let mut s = session();
+        let c = s.character_mut("pc.nikis").unwrap();
+        let sc = c.spellcasting.as_mut().unwrap();
+        sc.casters = vec![Caster::new(
+            "wizard",
+            "Волшебник",
+            SpellClass::Wizard,
+            crate::character::Ability::Intelligence,
+            5,
+            Progression::Full,
+            Preparation::Spellbook,
+        )
+        .known(None, &["magic-missile"])];
+        sc.scrolls =
+            vec![ScrollStack { spell_id: "shield".into(), level: 1, count: 1, container: None }];
+        // Не со свитка без свитка, заговор, чужой список, уже в книге, слишком высокий круг.
+        assert_eq!(
+            s.copy_spell("pc.nikis", "fireball", true),
+            Err(EngineError::NoScroll("Огненный шар".into()))
+        );
+        assert!(matches!(
+            s.copy_spell("pc.nikis", "fire-bolt", false),
+            Err(EngineError::CantripNotCopied(_))
+        ));
+        assert!(matches!(
+            s.copy_spell("pc.nikis", "cure-wounds", false),
+            Err(EngineError::NotOnClassList { .. })
+        ));
+        assert!(matches!(
+            s.copy_spell("pc.nikis", "magic-missile", false),
+            Err(EngineError::AlreadyInSpellbook(_))
+        ));
+        assert!(matches!(
+            s.copy_spell("pc.nikis", "wish", false),
+            Err(EngineError::SpellLevelTooHigh { .. })
+        ));
+        let line = s.copy_spell("pc.nikis", "shield", true).unwrap();
+        assert!(line.contains("50 зм") && line.contains("2 ч"), "{line}");
+        let sc = s.character("pc.nikis").unwrap().spellcasting.as_ref().unwrap();
+        assert!(sc.casters[0].known.iter().any(|k| k == "shield"));
+        assert!(sc.scrolls.is_empty());
+        // Не волшебник книгу не пополняет.
+        assert!(matches!(
+            s.copy_spell("npc.valeria", "shield", false),
+            Err(EngineError::NoSpellbook(_))
+        ));
     }
 }

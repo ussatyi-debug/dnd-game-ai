@@ -89,6 +89,11 @@ pub enum Request {
         caster_id: String,
         spells: Vec<String>,
     },
+    CopySpell {
+        id: String,
+        spell_id: String,
+        from_scroll: bool,
+    },
     CastSpell {
         id: String,
         spell_id: String,
@@ -342,6 +347,9 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
         }
         Request::PrepareSpells { id, caster_id, spells } => {
             to_value(session.prepare_spells(&id, &caster_id, &spells).map_err(|e| e.to_string())?)
+        }
+        Request::CopySpell { id, spell_id, from_scroll } => {
+            to_value(session.copy_spell(&id, &spell_id, from_scroll).map_err(|e| e.to_string())?)
         }
         Request::CastSpell { id, spell_id, method, slot_level } => {
             let request = CastRequest { spell_id, method, slot_level };

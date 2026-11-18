@@ -361,6 +361,10 @@ export default function SpellbookPanel({ book, onChanged, onNote }: SpellbookPan
             onNote(outcome.summary);
             onChanged();
           }}
+          onChanged={(summary) => {
+            onNote(summary);
+            onChanged();
+          }}
         />
       )}
       {preparingCaster && (

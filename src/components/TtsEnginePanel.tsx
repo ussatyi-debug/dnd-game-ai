@@ -1,7 +1,7 @@
 // Настройки озвучки: вкладки движков (как выбор провайдера ИИ) и голоса каждого движка.
 
 import { useEffect, useState } from "react";
-import { preview, ttsPlayer, type Gender, type TtsSettings } from "../lib/tts";
+import { preview, PREVIEW_ID, stopPreview, ttsPlayer, type Gender, type TtsSettings } from "../lib/tts";
 import {
   CLOUD_VOICES,
   cloudModels,
@@ -45,6 +45,18 @@ export default function TtsEnginePanel({ tts, onChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Пример голоса звучит, пока открыты настройки: закрыли окно — пример замолкает.
+  const [previewing, setPreviewing] = useState(false);
+  useEffect(() => {
+    const off = ttsPlayer.subscribe((st) =>
+      setPreviewing(st.messageId === PREVIEW_ID && st.status !== "idle"),
+    );
+    return () => {
+      off();
+      stopPreview();
+    };
+  }, []);
+
   const engines: TtsEngineId[] = ["piper", ...(silero ? (["silero"] as const) : []), "server", "openai", "gemini", "yandex"];
   const engine = tts.engine;
   const update = (patch: Partial<TtsSettings>) => onChange({ ...tts, ...patch });
@@ -80,12 +92,20 @@ export default function TtsEnginePanel({ tts, onChange }: Props) {
       )}
 
       <div className="flex flex-wrap gap-2 pt-1">
-        <button type="button" onClick={() => preview("m", tts, "мужской голос")} className={button}>
-          ▶ Мужской
-        </button>
-        <button type="button" onClick={() => preview("f", tts, "женский голос")} className={button}>
-          ▶ Женский
-        </button>
+        {previewing ? (
+          <button type="button" onClick={stopPreview} className={button}>
+            ■ Остановить пример
+          </button>
+        ) : (
+          <>
+            <button type="button" onClick={() => preview("m", tts, "мужской голос")} className={button}>
+              ▶ Мужской
+            </button>
+            <button type="button" onClick={() => preview("f", tts, "женский голос")} className={button}>
+              ▶ Женский
+            </button>
+          </>
+        )}
       </div>
       <label className="flex items-center justify-between gap-2">
         <span>Повествование</span>

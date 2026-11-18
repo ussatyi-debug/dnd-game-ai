@@ -55,6 +55,12 @@ pub enum EngineError {
     DayInPast { current: u32, requested: u32 },
     /// Пустая запись в базу знаний.
     EmptyNote,
+    /// У персонажа нет книги заклинаний.
+    NoSpellbook(String),
+    /// Заклинание уже в книге.
+    AlreadyInSpellbook(String),
+    /// Заговоры в книгу не переписывают.
+    CantripNotCopied(String),
     /// Событие в журнал мастера пересказывает запись игрока этого же хода.
     JournalRetell(u64),
     /// Шага с таким номером у цели нет.
@@ -224,6 +230,13 @@ impl fmt::Display for EngineError {
                 "Сейчас День {current} — вернуться в День {requested} нельзя"
             ),
             Self::EmptyNote => write!(f, "Пустая запись: нужен заголовок или текст"),
+            Self::NoSpellbook(who) => {
+                write!(f, "У {who} нет книги заклинаний — переписывать заклинания может волшебник")
+            }
+            Self::AlreadyInSpellbook(spell) => write!(f, "«{spell}» уже есть в книге заклинаний"),
+            Self::CantripNotCopied(spell) => {
+                write!(f, "«{spell}» — заговор, заговоры в книгу не переписывают")
+            }
             Self::JournalRetell(id) => write!(
                 f,
                 "журнал мастера не пересказывает событие: оно уже записано игроку [запись {id}] — \

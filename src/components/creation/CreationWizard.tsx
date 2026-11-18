@@ -79,6 +79,7 @@ export default function CreationWizard({ onClose, onConfirm, companion, levelUp 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quick, setQuick] = useState(false);
+  const [askReset, setAskReset] = useState(false);
 
   useEffect(() => {
     if (companion || levelUp) return;
@@ -113,6 +114,7 @@ export default function CreationWizard({ onClose, onConfirm, companion, levelUp 
     return built;
   }, [draft, step, companion, levelUp]);
   const go = (i: number) => {
+    setQuick(false);
     const next = steps[Math.max(0, Math.min(steps.length - 1, i))];
     if (next) {
       setStep(next.id);
@@ -139,11 +141,13 @@ export default function CreationWizard({ onClose, onConfirm, companion, levelUp 
     }
   }
 
+  /** Сброс — с подтверждением окном игры: системный confirm в WebView Android может не показаться. */
   function reset() {
-    if (window.confirm("Начать создание героя заново? Все выборы будут сброшены.")) {
-      setDraft(newDraft());
-      setStep("species");
-    }
+    setDraft(newDraft());
+    setStep("species");
+    setQuick(false);
+    setError(null);
+    setAskReset(false);
   }
 
   /** Импорт листа из JSON, DOC или PDF: движок проверяет лист так же, как при создании, и игра начинается с ним. */
@@ -210,7 +214,7 @@ export default function CreationWizard({ onClose, onConfirm, companion, levelUp 
             >
               ⚡ Быстрый старт
             </button>
-            <button type="button" onClick={reset} className="rounded-md px-2 py-1 text-xs text-muted hover:text-parchment">
+            <button type="button" onClick={() => setAskReset(true)} className="rounded-md px-2 py-1 text-xs text-muted hover:text-parchment">
               Сбросить
             </button>
               </>
@@ -244,6 +248,17 @@ export default function CreationWizard({ onClose, onConfirm, companion, levelUp 
             );
           })}
         </nav>
+        {askReset && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-edge px-3 py-2 text-sm">
+            <span className="text-parchment">Начать создание героя заново? Все выборы будут сброшены.</span>
+            <button type="button" onClick={reset} className="rounded-md bg-blood px-3 py-1 text-parchment hover:bg-blood/80">
+              Сбросить
+            </button>
+            <button type="button" onClick={() => setAskReset(false)} className="rounded-md border border-edge px-3 py-1 text-muted hover:text-parchment">
+              Отмена
+            </button>
+          </div>
+        )}
       </header>
 
       <main id="creation-body" className="relative flex-1 overflow-y-auto">
@@ -251,7 +266,7 @@ export default function CreationWizard({ onClose, onConfirm, companion, levelUp 
           {levelStart && step === "class" && (
             <LevelUpIntro fromSheet={levelStart.fromSheet} draft={draft} update={update} />
           )}
-          {quick && <QuickStart onPick={chooseQuick} maxLevel={companion?.maxLevel} />}
+          {quick && <QuickStart onPick={chooseQuick} onManual={() => setQuick(false)} maxLevel={companion?.maxLevel} />}
           {!quick && step === "species" && <StepSpecies draft={draft} update={update} />}
           {!quick && step === "background" && <StepBackground draft={draft} update={update} />}
           {!quick && step === "class" && (
@@ -358,13 +373,24 @@ function LevelUpIntro({
 }
 
 /** Готовые герои: по 4 на ступени «Уровни 1–3» и «Уровни 4–6». */
-function QuickStart({ onPick, maxLevel }: { onPick: (h: QuickHero) => void; maxLevel?: number }) {
+function QuickStart({
+  onPick,
+  onManual,
+  maxLevel,
+}: {
+  onPick: (h: QuickHero) => void;
+  onManual: () => void;
+  maxLevel?: number;
+}) {
   const tiers: { tier: 1 | 2; title: string }[] = [
     { tier: 1, title: "Ступень 1 · 3 уровень" },
     { tier: 2, title: "Ступень 2 · 5 уровень" },
   ];
   return (
     <section className="space-y-4">
+      <button type="button" onClick={onManual} className="rounded-md border border-edge px-3 py-1.5 text-sm text-parchment hover:border-gold">
+        ← Создать вручную
+      </button>
       <p className="text-sm text-parchment/80">
         Готовые герои: выберите — откроется итоговый лист. Можно сразу начать приключение или вернуться к любому шагу и поправить.
       </p>

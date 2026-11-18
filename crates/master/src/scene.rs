@@ -746,8 +746,26 @@ fn turn_message(
             out.push_str(&format!("{line}\n"));
         }
         out.push_str(
-            "Выражения [[1d20+4]], [[1d8+2 > id]], [[1d20+3 ?]] — движок берёт кубы отсюда по порядку \
-и подставляет итог.\n\n",
+            "Выражения [[1d20+4 | атака: Вор → Оттокар]], [[1d8+2 > id | урон: Вор]], [[1d20+3 ? | Внимательность: Вор]] — \
+движок берёт кубы отсюда по порядку и подставляет итог; после «|» — чей бросок и зачем.\n\n",
+        );
+    }
+    let order = session.initiative_order();
+    if !order.is_empty() {
+        let line: Vec<String> = order.iter().map(|(n, v)| format!("{n} — {v}")).collect();
+        out.push_str(&format!(
+            "[ИНИЦИАТИВА БОЯ]\n{}\nХоды — строго по этой очереди; инициативу не перебрасывай.\n\n",
+            line.join(", ")
+        ));
+    }
+    let last = session.last_turn_rolls();
+    if !last.is_empty() {
+        out.push_str("[БРОСКИ ПРОШЛОГО ХОДА]\n");
+        for l in last {
+            out.push_str(&format!("- {l}\n"));
+        }
+        out.push_str(
+            "Если игрок оспаривает прошлый ход — сверься с этим списком: брось то, чего не было, верное не отменяй.\n\n",
         );
     }
     let hints = turn_hint(player_text);

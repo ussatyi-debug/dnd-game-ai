@@ -470,6 +470,11 @@ export function preparationOptions(id: string, casterId: string): Promise<SpellE
   return call<SpellEntry[]>("preparation_options", { id, casterId });
 }
 
+/** Переписать заклинание в книгу волшебника: 50 зм и 2 ч за круг; со свитка — свиток расходуется. */
+export function copySpell(id: string, spellId: string, fromScroll: boolean): Promise<string> {
+  return call<string>("copy_spell", { id, spellId, fromScroll });
+}
+
 export function prepareSpells(id: string, casterId: string, spells: string[]): Promise<SpellbookView> {
   return call<SpellbookView>("prepare_spells", { id, casterId, spells });
 }

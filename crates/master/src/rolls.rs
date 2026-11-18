@@ -6,7 +6,7 @@
 //! В итоговом ответе движок ищет броски d20, которых не делал, и помечает их.
 
 use crate::directives::{commands, find_character, split};
-use dnd_engine::Session;
+use dnd_engine::{DiceExpr, Session};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -277,6 +277,7 @@ pub fn run_rolls(session: &mut Session, reply: &str) -> Option<RollRound> {
     }
     for r in &rolls {
         session.log(format!("Бросок мастера: {}", r.line));
+        session.note_master_roll(&r.line);
     }
     let mut feedback = String::from("[ДВИЖОК]\n");
     if !rolls.is_empty() {
@@ -343,17 +344,62 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
     while let Some(start) = rest.find("[[") {
         let Some(len) = rest[start + 2..].find("]]") else { break };
         out.push_str(&rest[..start]);
-        let inner = rest[start + 2..start + 2 + len].trim();
+        let raw = rest[start + 2..start + 2 + len].trim();
         rest = &rest[start + 2 + len + 2..];
+        // «| подпись» — чей бросок и зачем: «атака: Арбалетчик → Оттокар», «инициатива: Вор».
+        let (inner, mut label) = match raw.split_once('|') {
+            Some((e, l)) => (e.trim(), Some(l.trim()).filter(|l| !l.is_empty())),
+            None => (raw, None),
+        };
         // «?» в конце — тайный бросок: куб забирается, число в рассказ не попадает.
         let (inner, hidden) = match inner.strip_suffix('?') {
             Some(i) => (i.trim(), true),
             None => (inner, false),
         };
-        let (expression, target) = match inner.split_once('>') {
+        let (mut expression, mut target) = match inner.split_once('>') {
             Some((e, t)) => (e.trim(), Some(t.trim()).filter(|t| !t.is_empty())),
             None => (inner, None),
         };
+        // «> pc.id урон: Вор» без «|» — цель до первого пробела, дальше подпись.
+        if let (None, Some(t)) = (label, target) {
+            if let Some((id, l)) = t.split_once(char::is_whitespace) {
+                target = Some(id.trim());
+                label = Some(l.trim()).filter(|l| !l.is_empty());
+            }
+        }
+        // Подпись без «|»: «1d20+4 атака: Вор» — выражение до первого пробела.
+        if label.is_none() && DiceExpr::parse(expression).is_err() {
+            if let Some((e, l)) = expression.split_once(char::is_whitespace) {
+                if DiceExpr::parse(e).is_ok() {
+                    expression = e.trim();
+                    label = Some(l.trim()).filter(|l| !l.is_empty());
+                }
+            }
+        }
+        // Инициатива участника боя: брошена раньше — не перебрасывается, число то же.
+        let initiative = label.and_then(initiative_name);
+        if let Some((name, value)) =
+            initiative.and_then(|n| session.initiative_of(n).map(|v| (n, v)))
+        {
+            if !hidden {
+                out.push_str(&value.to_string());
+            }
+            let line = format!("инициатива: {name} — уже брошена: {value} (не перебрасывается)");
+            session.log(format!("Бросок мастера: {line}"));
+            session.note_master_roll(&line);
+            continue;
+        }
+        // Число вместо выражения — известный итог (инициатива героя из его броска).
+        if let (Some(name), Ok(value)) = (initiative, expression.parse::<i64>()) {
+            session.note_initiative(name, value);
+            if !hidden {
+                out.push_str(&value.to_string());
+            }
+            let line = format!("инициатива: {name} — {value}");
+            session.log(format!("Бросок мастера: {line}"));
+            session.note_master_roll(&line);
+            continue;
+        }
         let Ok(roll) = session.roll_from_pool(expression) else {
             // Не выражение — оставляем текст без скобок, игрок не увидит служебной разметки.
             out.push_str(inner);
@@ -362,6 +408,9 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
         let total = roll.total.max(0);
         if !hidden {
             out.push_str(&total.to_string());
+        }
+        if let Some(name) = initiative {
+            session.note_initiative(name, total);
         }
         let dice: Vec<u32> = roll.groups.iter().flat_map(|g| g.values.iter().copied()).collect();
         let d20 =
@@ -372,10 +421,12 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
             (None, Some(t)) => t.to_string(),
             (None, None) => "Мастер".to_string(),
         };
-        let what = match (hidden, target.is_some()) {
-            (true, _) => "тайный бросок",
-            (false, true) => "урон",
-            (false, false) => "бросок",
+        let what = match (label, hidden, target.is_some()) {
+            (Some(l), true, _) => format!("тайный бросок, {l}"),
+            (Some(l), false, _) => l.to_string(),
+            (None, true, _) => "тайный бросок".into(),
+            (None, false, true) => "урон".into(),
+            (None, false, false) => "бросок".into(),
         };
         let values: Vec<String> = dice.iter().map(u32::to_string).collect();
         let line =
@@ -383,9 +434,10 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
         if let (Some(id), true, false) = (&member, apply_damage, hidden) {
             commands.push(json!({ "cmd": "hp", "character": id, "damage": total }).to_string());
         }
+        session.note_master_roll(&line);
         rolls.push(MasterRoll {
             who,
-            what: what.to_string(),
+            what,
             expression: roll.expression,
             dice,
             total,
@@ -403,6 +455,16 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
         format!("```engine\n{}\n```", commands.join("\n"))
     };
     PoolTurn { text: out, rolls, commands }
+}
+
+/// Имя участника из подписи «инициатива: Арбалетчик».
+fn initiative_name(label: &str) -> Option<&str> {
+    let rest = label
+        .trim()
+        .strip_prefix("инициатива")
+        .or_else(|| label.trim().strip_prefix("Инициатива"))?;
+    let name = rest.trim_start_matches([':', ' ', '—', '-']).trim();
+    (!name.is_empty()).then_some(name)
 }
 
 /// Броски d20 в тексте мастера, которых движок не делал в этом ходу и которых нет в заявке
@@ -466,6 +528,40 @@ mod tests {
 
     fn session() -> Session {
         Session::demo(Xoshiro256::from_seed(11))
+    }
+
+    #[test]
+    fn labeled_rolls_initiative_and_last_turn() {
+        let mut s = session();
+        let pool = s.deal_dice_pool(8).clone();
+        let d20 = pool.remaining(20).to_vec();
+        let text = "Инициатива: герой [[13 | инициатива: Никис]], арбалетчик [[1d20+2 | инициатива: Арбалетчик]]. \
+Выстрел [[1d20+4 атака: Арбалетчик → Никис]], [[1d8+2 > pc.nikis урон: Арбалетчик]].";
+        let turn = resolve_pool(&mut s, text, true);
+        let init = i64::from(d20[0]) + 2;
+        assert!(turn.text.contains(&format!("герой 13, арбалетчик {init}.")), "{}", turn.text);
+        assert_eq!(turn.rolls.len(), 3, "{:?}", turn.rolls);
+        assert_eq!(turn.rolls[1].what, "атака: Арбалетчик → Никис");
+        assert_eq!(turn.rolls[1].d20, Some(d20[1]));
+        assert_eq!(turn.rolls[2].who, s.character("pc.nikis").unwrap().name);
+        assert_eq!(turn.rolls[2].what, "урон: Арбалетчик");
+        assert!(turn.commands.contains("pc.nikis"));
+        let top = if init > 13 {
+            ("Арбалетчик".to_string(), init)
+        } else {
+            ("Никис".to_string(), 13)
+        };
+        assert_eq!(s.initiative_order()[0], top);
+        assert_eq!(s.initiative_order().len(), 2);
+        // Повторная инициатива не перебрасывается и куб не забирает.
+        let again = resolve_pool(&mut s, "[[1d20+2 | инициатива: арбалетчик]]", true);
+        assert_eq!(again.text, init.to_string());
+        assert!(again.rolls.is_empty());
+        // Новый ход: броски этого хода — «прошлого хода» для мастера.
+        s.deal_dice_pool(8);
+        let last = s.last_turn_rolls().join("\n");
+        assert!(last.contains("атака: Арбалетчик → Никис"), "{last}");
+        assert!(last.contains("уже брошена"), "{last}");
     }
 
     #[test]

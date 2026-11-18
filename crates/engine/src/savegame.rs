@@ -385,6 +385,9 @@ impl Session {
         self.repair_player_sections();
         self.turn_note_start = u64::MAX;
         self.met_unknown.clear();
+        self.initiative.clear();
+        self.turn_rolls.clear();
+        self.last_turn_rolls.clear();
         self.chronicle_from = self.scene.day;
         self.turns_since_chronicle = 0;
         self.log(format!("Загружено сохранение: День {}", self.scene.day));

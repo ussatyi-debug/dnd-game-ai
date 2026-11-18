@@ -510,6 +510,11 @@ class TtsPlayer {
   private run = 0;
   private current: { messageId: number; label: string; text: string; settings: TtsSettings } | null = null;
 
+  /** Текущее состояние плеера. */
+  snapshot(): TtsState {
+    return this.state;
+  }
+
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
     fn(this.state);
@@ -733,8 +738,16 @@ if (typeof document !== "undefined") {
 export const PREVIEW_TEXT =
   "Мистический заряд по метнувшему камень. Вы стоите глубоко в сфере, и снаружи вас не видят. Атака невидимого противника идёт с преимуществом. Я беру больший куб из каждой пары, а до уступа вы достаёте: «Взор дьявола» видит сквозь свою же тьму, а дальность заклинания сто двадцать футов.";
 
+/** Номер «сообщения» для примера голоса в настройках. */
+export const PREVIEW_ID = -1;
+
 /** Прослушать пример голоса в настройках. */
 export function preview(gender: Gender, settings: TtsSettings, label?: string) {
   const name = label ?? (gender === "f" ? "женский голос" : "мужской голос");
-  void ttsPlayer.play(-1, `Пример: ${name}`, PREVIEW_TEXT, { ...settings, narrator: gender });
+  void ttsPlayer.play(PREVIEW_ID, `Пример: ${name}`, PREVIEW_TEXT, { ...settings, narrator: gender });
+}
+
+/** Остановить пример голоса, если играет он (озвучку ответа мастера не трогает). */
+export function stopPreview() {
+  if (ttsPlayer.snapshot().messageId === PREVIEW_ID) ttsPlayer.stop();
 }

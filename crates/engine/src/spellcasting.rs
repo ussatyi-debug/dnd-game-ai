@@ -690,6 +690,74 @@ enum Plan {
 }
 
 impl Character {
+    /// Можно ли переписать заклинание в книгу (правила 2024: 2 часа и 50 зм за круг):
+    /// у персонажа книга заклинаний, заклинание из списка его класса, круг ему доступен,
+    /// в книге его ещё нет; со свитка — свиток при нём. Возвращает название и круг.
+    pub fn check_copy(
+        &self,
+        spell_id: &str,
+        from_scroll: bool,
+    ) -> Result<(String, u8), EngineError> {
+        let m = meta(spell_id)?;
+        let sc = self.spellcasting_ref()?;
+        let c = sc
+            .casters
+            .iter()
+            .find(|c| c.preparation == Preparation::Spellbook)
+            .ok_or_else(|| EngineError::NoSpellbook(self.name.clone()))?;
+        if m.is_cantrip() {
+            return Err(EngineError::CantripNotCopied(m.name.to_string()));
+        }
+        if c.known.iter().any(|k| k == m.id) {
+            return Err(EngineError::AlreadyInSpellbook(m.name.to_string()));
+        }
+        if !c.has_on_list(m) {
+            return Err(EngineError::NotOnClassList {
+                spell: m.name.to_string(),
+                list: format!("класса «{}»", c.label),
+            });
+        }
+        let max = c.max_spell_level();
+        if m.level > max {
+            return Err(EngineError::SpellLevelTooHigh {
+                spell: m.name.to_string(),
+                level: m.level,
+                max,
+            });
+        }
+        if from_scroll && !sc.scrolls.iter().any(|s| s.spell_id == m.id && s.count > 0) {
+            return Err(EngineError::NoScroll(m.name.to_string()));
+        }
+        Ok((m.name.to_string(), m.level))
+    }
+
+    /// Вписать заклинание в книгу (после `check_copy` и оплаты); свиток расходуется.
+    pub(crate) fn copy_to_spellbook(
+        &mut self,
+        spell_id: &str,
+        from_scroll: bool,
+    ) -> Result<(), EngineError> {
+        let m = meta(spell_id)?;
+        let name = self.name.clone();
+        let sc =
+            self.spellcasting.as_mut().ok_or_else(|| EngineError::NotASpellcaster(name.clone()))?;
+        if from_scroll {
+            if let Some(i) = sc.scrolls.iter().position(|s| s.spell_id == m.id && s.count > 0) {
+                sc.scrolls[i].count -= 1;
+                if sc.scrolls[i].count == 0 {
+                    sc.scrolls.remove(i);
+                }
+            }
+        }
+        let c = sc
+            .casters
+            .iter_mut()
+            .find(|c| c.preparation == Preparation::Spellbook)
+            .ok_or_else(|| EngineError::NoSpellbook(name))?;
+        c.known.push(m.id.to_string());
+        Ok(())
+    }
+
     fn spellcasting_ref(&self) -> Result<&Spellcasting, EngineError> {
         self.spellcasting.as_ref().ok_or_else(|| EngineError::NotASpellcaster(self.name.clone()))
     }
