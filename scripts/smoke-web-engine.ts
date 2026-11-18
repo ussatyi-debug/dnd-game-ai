@@ -20,12 +20,13 @@ const sheet = engine.call<{ name: string; level: number; resources: { id: string
   id: "pc.nikis",
 });
 assert.equal(sheet.name, "Сэр Никис Стрэндж");
-assert.equal(sheet.level, 11);
+assert.equal(sheet.level, 12);
 assert.equal(sheet.resources[0]?.id, "feat.lucky");
 
 const reroll = engine.call<{ value: number; lucky: { current: number } }>({ cmd: "lucky_reroll" });
 assert.ok(reroll.value >= 1 && reroll.value <= 20);
-assert.equal(reroll.lucky.current, 2);
+// Везунчик 2024: очков по бонусу мастерства (+5 по листу владельца).
+assert.equal(reroll.lucky.current, 4);
 
 const rested = engine.call<{ characters: { id: string; restored: string[] }[] }>({
   cmd: "take_rest",
@@ -46,12 +47,13 @@ assert.equal(book.slots[0]?.pact, true);
 const cast = engine.call<{ cast_level: number; summary: string }>({
   cmd: "cast_spell",
   id: "pc.nikis",
-  spellId: "misty-step",
+  spellId: "scorching-ray",
   method: null,
   slotLevel: null,
 });
-assert.equal(cast.cast_level, 4);
-assert.ok(cast.summary.includes("Туманный шаг"));
+// Ячейки договора колдуна 9 уровня — 5 круга.
+assert.equal(cast.cast_level, 5);
+assert.ok(cast.summary.includes("Палящий луч"));
 const applied = engine.call<{ text: string; actions: { ok: boolean }[] }>({
   cmd: "master_apply",
   text: 'Вспышка.\n```engine\n{"cmd":"cast","character":"npc.valeria","spell":"bless"}\n```',
@@ -71,7 +73,7 @@ const query = engine.call<{ feedback: string }>({
   cmd: "master_rolls",
   text: 'Начинаю рассказ.\n```engine\n{"cmd":"query","what":"spells","id":"pc.nikis"}\n```',
 });
-assert.ok(query.feedback.includes("Ответы на запросы") && query.feedback.includes("misty-step"));
+assert.ok(query.feedback.includes("Ответы на запросы") && query.feedback.includes("scorching-ray"));
 const rolls = engine.call<{ rolls: { total: number; d20: number }[]; feedback: string }>({
   cmd: "master_rolls",
   text: '```engine\n{"cmd":"roll","who":"Стражник","what":"атака","dice":"1d20+5","vs":"ac:18"}\n```',
