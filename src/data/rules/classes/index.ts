@@ -4,9 +4,13 @@ import type { ClassData } from "../types";
 import { BARD, CLERIC, DRUID, SORCERER, WARLOCK, WIZARD } from "./casters.ts";
 import { PALADIN, RANGER } from "./half.ts";
 import { BARBARIAN, FIGHTER, MONK, ROGUE } from "./martial.ts";
+import { PHB_SUBCLASSES } from "./phb-subclasses.generated.ts";
 
 export { INVOCATIONS, METAMAGIC } from "./casters.ts";
 
 export const CLASSES: ClassData[] = [BARBARIAN, BARD, CLERIC, DRUID, FIGHTER, MONK, PALADIN, RANGER, ROGUE, SORCERER, WARLOCK, WIZARD];
+
+// Подклассы Книги игрока 2024 года — после подкласса SRD.
+for (const cls of CLASSES) cls.subclasses.push(...(PHB_SUBCLASSES[cls.id] ?? []));
 
 export const CLASS_BY_ID = new Map(CLASSES.map((c) => [c.id, c]));

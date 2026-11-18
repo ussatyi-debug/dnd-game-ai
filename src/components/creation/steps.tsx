@@ -45,6 +45,7 @@ import {
   signed,
   slotFeat,
   spellChoices,
+  castingOf,
   TIERS,
   type Draft,
   type StepId,
@@ -586,6 +587,7 @@ function SpellPicker({
 export function StepSpells({ draft, update }: StepProps) {
   const choices = spellChoices(draft);
   const r = resolve(draft);
+  const casting = castingOf(r);
   const miSlots = featSlots(draft).filter((s) => slotFeat(draft, s)?.id === "magic_initiate");
   if (choices.length === 0) {
     return (
@@ -597,10 +599,10 @@ export function StepSpells({ draft, update }: StepProps) {
   }
   return (
     <div className="space-y-3">
-      {r.cls?.spellcasting && (
+      {casting && (
         <p className="text-xs text-muted">
-          Заклинательная характеристика — {ABILITY_NAME[r.cls.spellcasting.ability]}.{" "}
-          {r.cls.spellcasting.preparation === "known"
+          Заклинательная характеристика — {ABILITY_NAME[casting.ability]}.{" "}
+          {casting.preparation === "known"
             ? "Список меняется при повышении уровня."
             : "Подготовку можно менять после длительного отдыха."}{" "}
           Заклинания подкласса и класса, которые всегда подготовлены, добавятся сами.

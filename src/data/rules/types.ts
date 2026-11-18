@@ -47,6 +47,8 @@ export interface Choice {
   count: number;
   /** Итоговое число берётся из колонки таблицы класса на текущем уровне (воззвания, мастерство оружия). */
   column?: string;
+  /** Число по уровням класса (манёвры Мастера боевых искусств): [уровень, сколько] — берётся старший из пройденных. */
+  byLevel?: [number, number][];
   /** Навыки или id вариантов, из которых выбирать; пусто — любые. */
   from?: string[];
   options?: Option[];
@@ -57,7 +59,16 @@ export interface ResourceRule {
   id: string;
   name: string;
   /** Максимум: число, колонка таблицы класса, модификатор характеристики или бонус мастерства. */
-  max: { value?: number; column?: string; ability?: AbilityId; proficiency?: boolean; perLevel?: number; min?: number };
+  max: {
+    value?: number;
+    column?: string;
+    ability?: AbilityId;
+    proficiency?: boolean;
+    perLevel?: number;
+    min?: number;
+    /** По уровням класса: [уровень, максимум] — берётся старший из пройденных (кубы превосходства). */
+    byLevel?: [number, number][];
+  };
   recovery: "short" | "long" | "short_one";
 }
 
@@ -71,8 +82,9 @@ export interface Feature {
 
 export interface SpellcastingRule {
   ability: AbilityId;
-  /** full — полный заклинатель, half — паладин и следопыт (по правилам 2024 года ячейки с 1 уровня), pact — колдун. */
-  progression: "full" | "half" | "pact";
+  /** full — полный заклинатель, half — паладин и следопыт (по правилам 2024 года ячейки с 1 уровня),
+   * third — треть заклинателя (Мистический рыцарь, Мистический ловкач), pact — колдун. */
+  progression: "full" | "half" | "third" | "pact";
   /** known — список меняется только с уровнем; prepared — готовит после отдыха; spellbook — книга волшебника. */
   preparation: "known" | "prepared" | "spellbook";
   /** Класс в каталоге заклинаний. */
@@ -90,6 +102,8 @@ export interface SubclassData {
   summary: string;
   /** Всегда подготовленные заклинания подкласса: уровень класса → id заклинаний. */
   spells?: Record<number, string[]>;
+  /** Магия подкласса у класса без своей магии (Мистический рыцарь, Мистический ловкач). */
+  spellcasting?: SpellcastingRule;
   /** Заклинания, зависящие от выбора в подклассе (местность Круга земли): id варианта → уровень → заклинания. */
   spellsByOption?: { choice: string; spells: Record<string, Record<number, string[]>> };
   features: Feature[];

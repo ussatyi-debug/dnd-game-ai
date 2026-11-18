@@ -45,6 +45,7 @@ import type {
   ResourceRule,
   SkillId,
   SpeciesData,
+  SpellcastingRule,
   SubclassData,
   WeaponData,
 } from "../data/rules/types";
@@ -355,11 +356,19 @@ function canUseWeapon(cls: ClassData, w: WeaponData): boolean {
   return false;
 }
 
+/** Значение по уровням: старшая из пройденных ступеней ([уровень, значение]). */
+export function byLevel(steps: [number, number][], level: number): number {
+  let v = 0;
+  for (const [at, value] of steps) if (level >= at) v = value;
+  return v;
+}
+
 /** Выборы из правил (вид, предыстория, класс, таланты) без заклинаний. */
 function ruleChoice(d: Draft, c: Choice, key: string, source: string, step: StepId): ChoiceSlot {
   const r = resolve(d);
   let count = c.count;
   if (c.column && r.cls) count = columnNumber(r.cls, c.column, d.level);
+  if (c.byLevel) count = byLevel(c.byLevel, d.level);
   let options: ChoiceOption[] = [];
   switch (c.kind) {
     case "skill":
@@ -643,12 +652,17 @@ export interface SpellSlotChoice {
   options: SpellData[];
 }
 
-/** Наибольший круг заклинаний класса на уровне. */
-export function maxSpellLevel(cls: ClassData, level: number): number {
-  const sc = cls.spellcasting;
+/** Магия героя: класса или подкласса (Мистический рыцарь, Мистический ловкач). */
+export function castingOf(r: Pick<Resolved, "cls" | "subclass">): SpellcastingRule | undefined {
+  return r.cls?.spellcasting ?? r.subclass?.spellcasting;
+}
+
+/** Наибольший круг заклинаний на уровне класса. */
+export function maxSpellLevel(sc: SpellcastingRule | undefined, level: number): number {
   if (!sc) return 0;
   if (sc.progression === "full") return Math.min(9, Math.ceil(level / 2));
   if (sc.progression === "half") return Math.min(5, Math.ceil(level / 4));
+  if (sc.progression === "third") return level < 3 ? 0 : level < 7 ? 1 : level < 13 ? 2 : level < 19 ? 3 : 4;
   return Math.min(5, Math.ceil(level / 2));
 }
 
@@ -657,9 +671,9 @@ const onList = (s: SpellData, list: string) => s.classes.includes(list);
 export function spellChoices(d: Draft): SpellSlotChoice[] {
   const r = resolve(d);
   const out: SpellSlotChoice[] = [];
-  const sc = r.cls?.spellcasting;
+  const sc = castingOf(r);
   if (r.cls && sc) {
-    const maxLevel = maxSpellLevel(r.cls, d.level);
+    const maxLevel = maxSpellLevel(sc, d.level);
     let cantrips = sc.cantrips[d.level - 1] ?? 0;
     const order = one(d, "cleric.order") ?? one(d, "druid.order");
     if (order === "thaumaturge" || order === "magician") cantrips += 1;
@@ -1141,6 +1155,7 @@ function resourceMax(rule: ResourceRule, d: Draft, cls: ClassData | null): numbe
   const m = rule.max;
   let v = 0;
   if (m.value !== undefined) v = m.value;
+  else if (m.byLevel) v = byLevel(m.byLevel, d.level);
   else if (m.column && cls) v = columnNumber(cls, m.column, d.level);
   else if (m.ability) v = modifier(finalAbilities(d)[m.ability]);
   else if (m.proficiency) v = proficiencyBonus(d.level);
@@ -1400,7 +1415,7 @@ export function buildSpec(d: Draft, kind: "player" | "companion" = "player"): He
   }
 
   // Заклинания класса.
-  const sc = cls?.spellcasting;
+  const sc = castingOf(r);
   if (cls && sc) {
     const always: string[] = [];
     const sub = r.subclass;

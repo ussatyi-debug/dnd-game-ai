@@ -52,7 +52,7 @@ export interface SpecCaster {
   class: SpellClassId;
   ability: AbilityId;
   level: number;
-  progression: "full" | "half_2024" | "pact" | "innate";
+  progression: "full" | "half_2024" | "third" | "pact" | "innate";
   preparation: "known" | "prepared" | "spellbook";
   cantrips: string[];
   max_cantrips: number;

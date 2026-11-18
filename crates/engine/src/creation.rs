@@ -689,6 +689,42 @@ pub(crate) mod tests {
         assert_eq!(hero.profile.hit_dice, vec![HitDice { die: 6, current: 3, total: 3 }]);
     }
 
+    /// Мистический рыцарь 3 уровня: магия подкласса — треть заклинателя на Интеллекте.
+    #[test]
+    fn eldritch_knight_casts_as_third_caster() {
+        let mut spec = wizard_spec();
+        spec.classes = vec![SpecClass {
+            id: "fighter".into(),
+            name: "Воин".into(),
+            subclass: Some("Мистический рыцарь".into()),
+            level: 3,
+            hit_die: 10,
+        }];
+        spec.hp.rolls = vec![6, 6];
+        spec.features.clear();
+        spec.resources.retain(|r| r.id != "wizard.arcane_recovery");
+        let knight = Caster::new(
+            "fighter",
+            "Воин",
+            SpellClass::Wizard,
+            Ability::Intelligence,
+            3,
+            Progression::Third,
+            Preparation::Known,
+        )
+        .cantrips(2, &["fire-bolt", "light"])
+        .known(Some(3), &["shield", "magic-missile", "sleep"]);
+        spec.casters[0] = knight.clone();
+        assert_eq!(validate_hero(&spec), Vec::<String>::new());
+        let hero = build_hero(&spec, "Тракт").unwrap();
+        assert_eq!(hero.resource("slots.1").map(ResourcePool::max), Some(2));
+        assert!(hero.resource("slots.2").is_none());
+        // Круг 2 Мистическому рыцарю 3 уровня недоступен.
+        let mut too_high = spec.clone();
+        too_high.casters[0] = knight.known(Some(4), &["misty-step"]);
+        assert!(validate_hero(&too_high).iter().any(|e| e.contains("выше доступного круга")));
+    }
+
     #[test]
     fn invalid_sheet_is_rejected_with_reasons() {
         let mut spec = wizard_spec();
