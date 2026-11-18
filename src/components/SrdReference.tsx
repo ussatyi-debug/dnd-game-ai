@@ -8,6 +8,7 @@ import featsUrl from "../../data/rules/feats.json?url";
 import phbFeatsUrl from "../../data/rules/phb_feats.json?url";
 import subclassesUrl from "../../data/rules/subclasses.json?url";
 import { CLASS_LABELS } from "../data/spells/index.ts";
+import { CLASSES } from "../data/rules/classes/index.ts";
 import { SpellText } from "./SpellCard";
 
 export type SrdKind = "monsters" | "items" | "feats" | "subclasses";
@@ -60,6 +61,32 @@ interface Subclass {
   name: string;
   name_en?: string;
   features: { level: number; name: string; mechanics?: string[]; desc?: string[] }[];
+  /** srd — подкласс SRD 5.2.1 из данных классов; legacy — подкласс кампании вне книги 2024 года. */
+  book?: "srd" | "legacy";
+}
+
+/** Названия всех 12 классов (CLASS_LABELS — только заклинатели). */
+const CLASS_NAMES: Record<string, string> = {
+  ...CLASS_LABELS,
+  ...Object.fromEntries(CLASSES.map((c) => [c.id, c.name])),
+};
+
+/** Подклассы SRD 5.2.1 (по одному у класса) — из данных классов мастера создания. */
+function srdSubclasses(): Subclass[] {
+  return CLASSES.flatMap((c) =>
+    c.subclasses
+      .filter((s) => s.source === "srd")
+      .map((s) => ({
+        id: `srd.${c.id}.${s.id}`,
+        class: c.id,
+        name: s.name,
+        book: "srd" as const,
+        features: [
+          { level: 0, name: "Кратко", desc: [s.summary] },
+          ...s.features.map((f) => ({ level: f.level, name: f.name, desc: [f.text] })),
+        ],
+      })),
+  );
 }
 
 type Entry = { id: string; name: string; sub: string; data: Monster | Item | Feat | Subclass };
@@ -68,6 +95,8 @@ const SRD_NOTE =
   "Содержит материалы System Reference Document 5.2.1 © Wizards of the Coast LLC, лицензия CC-BY-4.0 " +
   "(creativecommons.org/licenses/by/4.0). Перевод — проект DnD Game AI.";
 const PHB_NOTE = "Механика Книги игрока 2024 (вне SRD) пересказана своими словами.";
+const LEGACY_NOTE =
+  "Подкласс кампании «Дом Стрэндж» вне книги 2024 года (дополнительная механика); механика пересказана своими словами.";
 
 const RARITY: Record<string, string> = {
   Common: "обычный",
@@ -77,7 +106,27 @@ const RARITY: Record<string, string> = {
   Legendary: "легендарный",
   Artifact: "артефакт",
   Varies: "разная",
+  "Rarity Varies": "редкость разная",
 };
+
+/** Редкость, в том числе составная: «Uncommon (+1), Rare (+2), or Very Rare (+3)». */
+function rarity(value: string): string {
+  if (RARITY[value]) return RARITY[value];
+  const words: [RegExp, string][] = [
+    [/Very Rare/g, "очень редкий"],
+    [/Uncommon/g, "необычный"],
+    [/Common/g, "обычный"],
+    [/Rare/g, "редкий"],
+    [/Legendary/g, "легендарный"],
+    [/Artifact/g, "артефакт"],
+    [/Silver/g, "серебро"],
+    [/Brass/g, "латунь"],
+    [/Bronze/g, "бронза"],
+    [/Iron/g, "железо"],
+    [/,? or /g, " или "],
+  ];
+  return words.reduce((s, [re, ru]) => s.replace(re, ru), value);
+}
 const SPEED: Record<string, string> = { walk: "", fly: "полёт", swim: "плавание", climb: "лазание", burrow: "копание" };
 const SENSES: Record<string, string> = {
   darkvision: "тёмное зрение",
@@ -126,7 +175,7 @@ async function loadEntries(kind: SrdKind): Promise<Entry[]> {
     return (await records<Item>(itemsUrl)).map((i) => ({
       id: i.id,
       name: i.name,
-      sub: `${i.kind.split(/[.,(]/)[0]} · ${RARITY[i.rarity] ?? i.rarity}`,
+      sub: `${i.kind.split(/[.,(]/)[0]} · ${rarity(i.rarity)}`,
       data: i,
     }));
   }
@@ -139,10 +188,11 @@ async function loadEntries(kind: SrdKind): Promise<Entry[]> {
       data: f,
     }));
   }
-  return (await records<Subclass>(subclassesUrl)).map((s) => ({
+  const phbSubclasses = await records<Subclass>(subclassesUrl);
+  return [...srdSubclasses(), ...phbSubclasses].map((s) => ({
     id: s.id,
-    name: s.name,
-    sub: CLASS_LABELS[s.class] ?? s.class,
+    name: s.book === "legacy" ? `${s.name} (подкласс кампании)` : s.name,
+    sub: CLASS_NAMES[s.class] ?? s.class,
     data: s,
   }));
 }
@@ -212,7 +262,8 @@ function MonsterView({ m }: { m: Monster }) {
 
 function Detail({ kind, entry, onBack }: { kind: SrdKind; entry: Entry; onBack: () => void }) {
   const d = entry.data;
-  const phb = kind === "subclasses" || (kind === "feats" && (d as Feat).source === "phb");
+  const book = kind === "subclasses" ? (d as Subclass).book : undefined;
+  const phb = (kind === "subclasses" && book !== "srd") || (kind === "feats" && (d as Feat).source === "phb");
   return (
     <article className="space-y-3 p-4">
       <button type="button" onClick={onBack} className="text-sm text-muted hover:text-parchment">
@@ -223,7 +274,7 @@ function Detail({ kind, entry, onBack }: { kind: SrdKind; entry: Entry; onBack: 
       {kind === "items" && (
         <>
           <p className="text-xs text-muted">
-            {(d as Item).kind.split(/[.(]/)[0]} · {RARITY[(d as Item).rarity] ?? (d as Item).rarity}
+            {(d as Item).kind} · {rarity((d as Item).rarity)}
             {(d as Item).attunement ? " · требует настройки" : ""}
           </p>
           <SpellText paragraphs={(d as Item).desc} />
@@ -241,13 +292,11 @@ function Detail({ kind, entry, onBack }: { kind: SrdKind; entry: Entry; onBack: 
       {kind === "subclasses" &&
         (d as Subclass).features.map((f) => (
           <section key={`${f.level}-${f.name}`} className="space-y-1">
-            <h4 className="font-serif text-gold">
-              {f.level} уровень — {f.name}
-            </h4>
+            <h4 className="font-serif text-gold">{f.level > 0 ? `${f.level} уровень — ${f.name}` : f.name}</h4>
             <SpellText paragraphs={f.mechanics ?? f.desc ?? []} />
           </section>
         ))}
-      <p className="text-[11px] text-muted">{phb ? PHB_NOTE : SRD_NOTE}</p>
+      <p className="text-[11px] text-muted">{book === "legacy" ? LEGACY_NOTE : phb ? PHB_NOTE : SRD_NOTE}</p>
     </article>
   );
 }

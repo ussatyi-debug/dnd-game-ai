@@ -11600,7 +11600,7 @@
   },
   "minotaur-of-baphomet": {
    "id": "minotaur-of-baphomet",
-   "name": "Минотавр БафOMETа",
+   "name": "Минотавр Бафомета",
    "size": "Большой",
    "type": "чудовище",
    "alignment": "хаотично-злой",
@@ -24739,7 +24739,7 @@
    "name": "Морской конёк",
    "size": "Крошечный",
    "type": "зверь",
-   "alignment": "не имеет alignment",
+   "alignment": "без мировоззрения",
    "ac": [
     {
      "value": 12,
