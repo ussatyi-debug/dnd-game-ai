@@ -182,6 +182,24 @@ fn chat_archive(
     Ok(true)
 }
 
+/// Команды хода без запроса к модели: второй шаг не удался и пропущен — движок выполняет
+/// команды, которые мастер написал в рассказе сам (`repair` — как исправление отказов).
+#[tauri::command]
+fn master_update_apply(
+    text: String,
+    repair: Option<bool>,
+    state: State<'_, SessionState>,
+) -> Result<serde_json::Value, String> {
+    let commands = dnd_master::update_commands(&text);
+    let mut session = lock(&state)?;
+    let value = if repair.unwrap_or(false) {
+        serde_json::to_value(dnd_master::apply_repair(&mut session, &commands))
+    } else {
+        serde_json::to_value(dnd_master::apply_directives(&mut session, &commands))
+    };
+    value.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn master_undo_info(state: State<'_, SessionState>) -> Result<Option<UndoInfo>, String> {
     Ok(lock(&state)?.master_undo_info())
@@ -1173,6 +1191,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             roll_expression,
             chat_archive,
+            master_update_apply,
             exit_app,
             lucky_reroll,
             character_sheet,

@@ -691,6 +691,7 @@ export default function App() {
             }),
           reply.model,
           reply.fabricated,
+          reply.written_commands,
         );
       })
       .catch((e: unknown) => {
@@ -704,21 +705,28 @@ export default function App() {
   /**
    * Второй шаг двухшагового хода: команды движка по рассказу мастера. Пока он идёт, кнопка
    * «Отправить» закрыта (поле ввода — нет). Через минуту ожидание можно пропустить: шаг
-   * доработает сам; при сбое — повторить или пропустить.
+   * доработает сам; при сбое — повторить или пропустить. Пропуск после сбоя выполняет
+   * команды, которые мастер написал в рассказе сам (`written`), — иначе они терялись.
    */
   function runUpdate(
     messageId: number,
     job: () => Promise<{ actions: MasterAction[]; raw: string[] }>,
     model: string,
     fabricated: string[],
+    written = "",
   ) {
     const token = ++updateToken.current;
+    let failed = false;
     setUpdating({ stalled: false, failed: false });
     updateActions.current = {
-      retry: () => runUpdate(messageId, job, model, fabricated),
+      retry: () => runUpdate(messageId, job, model, fabricated, written),
       skip: () => {
         updateToken.current++;
         setUpdating(null);
+        if (failed && written.trim()) {
+          void applyWritten(messageId, written, model, fabricated).finally(afterMasterTurn);
+          return;
+        }
         afterMasterTurn();
       },
     };
@@ -735,10 +743,26 @@ export default function App() {
         }
       })
       .catch((e: unknown) => {
+        failed = true;
         devLog.add("error", "Обновление данных по рассказу не удалось", typeof e === "string" ? e : errorText(e));
         if (updateToken.current === token) setUpdating({ stalled: true, failed: true });
       })
       .finally(() => window.clearTimeout(timer));
+  }
+
+  /** Второй шаг не удался и пропущен: движок выполняет команды, написанные мастером в рассказе. */
+  async function applyWritten(messageId: number, written: string, model: string, fabricated: string[]) {
+    try {
+      const turn = (await masterUpdateApply(written)) as MasterTurn;
+      recordTurn(messageId, { actions: turn.actions, rolls: [], fabricated, raw: [written], model: `${model} · команды из рассказа` });
+      devLog.add(
+        "engine",
+        "Второй шаг пропущен — выполнены команды из рассказа мастера",
+        turn.actions.map((a) => `${a.ok ? "✓" : "✗"} ${a.summary}`).join("\n"),
+      );
+    } catch (e) {
+      devLog.add("error", "Команды из рассказа мастера не выполнены", errorText(e));
+    }
   }
 
   /** Повтор заявки после сбоя: оборванный ответ убирается, заявка уходит заново. */
@@ -903,6 +927,7 @@ export default function App() {
           },
           tierName,
           [],
+          written,
         );
       })
       .catch((e: unknown) => {

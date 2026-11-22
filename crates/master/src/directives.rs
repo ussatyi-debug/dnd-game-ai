@@ -237,9 +237,19 @@ pub(crate) fn split_now(text: &str) -> (String, String) {
     let now: Vec<&str> = now
         .iter()
         .map(|l| l.trim().trim_start_matches(['-', '*', '•']).trim())
-        .filter(|l| !l.is_empty())
+        .filter(|l| !l.is_empty() && !is_now_noise(l))
         .collect();
     (prose.join("\n").trim().to_string(), now.join("\n"))
+}
+
+/// Служебная строка в сводке «СЕЙЧАС»: внутренние имена («loc.mole_hole») или слова о движке
+/// («Движок не нашёл карточку по этому id»). Игрок видит сводку в «Обстановке».
+fn is_now_noise(line: &str) -> bool {
+    is_service_line(line)
+        || line.split(|c: char| !c.is_alphabetic()).any(|w| {
+            let w = w.to_lowercase();
+            w == "движок" || w.starts_with("движк")
+        })
 }
 
 /// Живая сводка «СЕЙЧАС» из ответа мастера (двухшаговый ход: её сохраняет вызывающий код).
@@ -489,7 +499,11 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             Ok(text)
         })(),
         "note" => (|| -> Result<String, String> {
-            let layer = match opt_text(cmd, "layer") {
+            // Слой мастер называет и «scope», и «target» (лог 22.11): поле не теряется.
+            let layer_field = opt_text(cmd, "layer")
+                .or_else(|| opt_text(cmd, "scope"))
+                .or_else(|| opt_text(cmd, "target"));
+            let layer = match layer_field {
                 None => None,
                 Some("player") => Some(NoteLayer::Player),
                 Some("master") => Some(NoteLayer::Master),
@@ -527,7 +541,11 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             }
             let title = opt_text(cmd, "title").unwrap_or("");
             let text = opt_text(cmd, "text").unwrap_or("");
-            let layer = layer.unwrap_or(NoteLayer::Player);
+            // Тайна, план и таймер без слоя — журнал мастера: игроку их видеть нельзя.
+            let layer = layer.unwrap_or(match kind {
+                Some(NoteKind::Secret | NoteKind::Plan | NoteKind::Timer) => NoteLayer::Master,
+                _ => NoteLayer::Player,
+            });
             engine(session.create_note(NewNote {
                 card: opt_text(cmd, "card").map(Into::into),
                 kind: kind.unwrap_or_default(),
@@ -754,13 +772,22 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
                 lines.push(last_log(session));
             }
             // Поручение спутника: "task" — дать (пустое — снять), "done":true — выполнено.
-            match cmd.get("task").and_then(Value::as_str).map(str::trim) {
-                Some("") => lines.extend(session.clear_task(&character, "отменено")),
-                Some(task) => lines.push(engine(session.set_task(&character, task))?),
-                None => {}
-            }
-            if cmd.get("done").and_then(Value::as_bool) == Some(true) {
+            // «done» решает первым: с ним пустой "task" не делает поручение отменённым, а
+            // непустой — новое поручение после выполненного.
+            let done = cmd.get("done").and_then(Value::as_bool) == Some(true);
+            let task = cmd.get("task").and_then(Value::as_str).map(str::trim);
+            let closing = done || task == Some("");
+            if done {
                 lines.extend(session.clear_task(&character, "выполнено"));
+            }
+            match task {
+                Some("") if !done => lines.extend(session.clear_task(&character, "отменено")),
+                Some("") | None => {}
+                Some(task) => lines.push(engine(session.set_task(&character, task))?),
+            }
+            // Снимать нечего — не ошибка: повтор с исправлением стоил бы лишнего запроса.
+            if lines.is_empty() && closing {
+                lines.push(format!("{character}: поручения не было"));
             }
             if lines.is_empty() {
                 return Err("у move нужно поле «location», «task» или «done»".into());
@@ -979,6 +1006,61 @@ mod tests {
         );
         assert!(done.actions[0].ok, "{:?}", done.actions);
         assert!(s.tasks().is_empty());
+        // Пустой "task" вместе с "done" — выполнено, а не отменено (лог 22.11).
+        apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"move\",\"character\":\"npc.gunther\",\"task\":\"привести наряд\"}\n```",
+        );
+        let done = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"move\",\"character\":\"npc.gunther\",\"task\":\"\",\"done\":true}\n```",
+        );
+        assert!(done.actions[0].summary.contains("выполнено"), "{:?}", done.actions);
+        assert!(s.tasks().is_empty());
+        // Снимать нечего — без отказа и повтора.
+        let again = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"move\",\"character\":\"npc.gunther\",\"done\":true}\n```",
+        );
+        assert!(again.actions[0].ok, "{:?}", again.actions);
+    }
+
+    #[test]
+    fn now_summary_drops_service_lines() {
+        let (text, now) = split_now(
+            "Крот молчит.\nСЕЙЧАС\n- Кротовая Нора, вечер\n- Движок не нашёл карточку по этому id\n- loc.mole_hole рядом\n- Движение у пристани",
+        );
+        assert_eq!(text, "Крот молчит.");
+        assert_eq!(now, "Кротовая Нора, вечер\nДвижение у пристани");
+    }
+
+    #[test]
+    fn note_layer_by_scope_and_kind() {
+        let mut s = session();
+        let turn = apply_directives(
+            &mut s,
+            concat!(
+                "```engine\n",
+                "{\"cmd\":\"note\",\"scope\":\"master\",\"kind\":\"timer\",\"due_day\":100,\"title\":\"Встреча\",\"text\":\"Шрам придёт\"}\n",
+                "{\"cmd\":\"note\",\"kind\":\"secret\",\"title\":\"Предупреждение\",\"text\":\"Брока предупредили\"}\n",
+                "{\"cmd\":\"note\",\"kind\":\"plan\",\"title\":\"Аванс\",\"text\":\"Крот проверит баржи\"}\n",
+                "{\"cmd\":\"note\",\"target\":\"player\",\"title\":\"Отчёт\",\"text\":\"Брок ушёл утром\"}\n",
+                "{\"cmd\":\"note\",\"title\":\"Награда\",\"text\":\"Объявлена награда\"}\n",
+                "```"
+            ),
+        );
+        assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
+        let layers: Vec<NoteLayer> = s.notes().iter().map(|n| n.layer).collect();
+        assert_eq!(
+            layers,
+            vec![
+                NoteLayer::Master,
+                NoteLayer::Master,
+                NoteLayer::Master,
+                NoteLayer::Player,
+                NoteLayer::Player
+            ]
+        );
     }
 
     #[test]

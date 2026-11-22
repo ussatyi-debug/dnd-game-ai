@@ -1205,11 +1205,19 @@ pub fn update_commands(reply: &str) -> String {
         .and_then(|s| s.strip_suffix("```"))
         .unwrap_or(trimmed)
         .trim();
-    let list = match serde_json::from_str::<Value>(body) {
+    // Начало ответа за модель Claude больше не подставляем: она может начать с пояснения или
+    // блока ```json посреди текста — тогда JSON берётся от первой «{» до последней «}».
+    let embedded = body
+        .find('{')
+        .zip(body.rfind('}'))
+        .filter(|(start, end)| start < end)
+        .map(|(start, end)| &body[start..=end]);
+    let parse = |text: &str| match serde_json::from_str::<Value>(text) {
         Ok(Value::Object(map)) => map.get("commands").and_then(Value::as_array).cloned(),
         Ok(Value::Array(items)) => Some(items),
         _ => None,
     };
+    let list = parse(body).or_else(|| embedded.and_then(parse));
     match list {
         Some(items) => {
             let lines: Vec<String> = items
@@ -1481,5 +1489,11 @@ mod tests {
         assert!(text.contains("\"damage\":4"));
         assert!(!text.contains("roll"));
         assert_eq!(update_commands("{\"commands\":[]}"), "");
+        // Без «prefill»: пояснение перед JSON и блок ```json посреди ответа.
+        let text = update_commands(
+            "Команды по рассказу:\n```json\n{\"commands\":[{\"cmd\":\"hp\",\"character\":\"pc.nikis\",\"heal\":2}]}\n```\nГотово.",
+        );
+        assert!(text.starts_with("```engine"), "{text}");
+        assert!(text.contains("\"heal\":2"), "{text}");
     }
 }

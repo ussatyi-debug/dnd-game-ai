@@ -434,16 +434,7 @@ pub async fn chat(
                 openai::generate(client, key, &model, system, history, json_mode).await
             }
             Provider::Anthropic => {
-                anthropic::generate(
-                    client,
-                    key,
-                    &model,
-                    system_parts,
-                    history,
-                    json_mode,
-                    cache_upto,
-                )
-                .await
+                anthropic::generate(client, key, &model, system_parts, history, cache_upto).await
             }
             Provider::Local => {
                 ollama::generate(client, key, &model, system, history, json_mode).await

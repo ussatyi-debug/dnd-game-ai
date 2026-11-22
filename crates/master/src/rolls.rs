@@ -392,7 +392,9 @@ pub fn run_rolls(session: &mut Session, reply: &str) -> Option<RollRound> {
             "Остальные команды из твоего сообщения движок выполнит вместе с итогом хода — не повторяй их.\n",
         );
     }
-    let prose = crate::directives::clean_reply(&prose);
+    // Сводка «СЕЙЧАС» из ответа с запросом не нужна: итог хода пишет свою. Иначе при склейке
+    // частей всё после неё (рассказ продолжения) уходило в сводку, а не в чат (лог 22.11).
+    let prose = crate::directives::clean_reply(&crate::directives::split_now(&prose).0);
     if !prose.is_empty() {
         feedback.push_str(
             "Твой рассказ до запроса игрок уже видит. Продолжай с места остановки: не пересказывай его и не разыгрывай заявку игрока заново.\n",
@@ -774,6 +776,19 @@ mod tests {
 
     fn session() -> Session {
         Session::demo(Xoshiro256::from_seed(11))
+    }
+
+    #[test]
+    fn query_round_drops_its_now_summary() {
+        let mut s = session();
+        let reply = "Крот прячет свёрток.\n\nСЕЙЧАС:\n- Кротовая Нора\n- Аванс передан\n```engine\n{\"cmd\":\"query\",\"what\":\"rules\",\"topic\":\"transfer\"}\n```";
+        let round = run_rolls(&mut s, reply).expect("запрос сведений");
+        assert_eq!(round.prose, "Крот прячет свёрток.");
+        // Склейка с продолжением: рассказ второй части остаётся в чате, сводка — последняя.
+        let full = format!("{}\n\nКрот принимает аванс.\nСЕЙЧАС\n- Нора", round.prose);
+        let (text, now) = crate::directives::split_now(&full);
+        assert!(text.ends_with("Крот принимает аванс."), "{text}");
+        assert_eq!(now, "Нора");
     }
 
     #[test]

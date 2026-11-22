@@ -689,8 +689,18 @@ impl Session {
                 self.scene.location = location;
             }
         }
+        let situation_given = change.situation.is_some();
         if let Some(situation) = change.situation {
             self.scene.situation = situation.trim().to_string();
+        }
+        // Новое место, новый день или скачок времени больше чем на час: прежняя «ситуация»
+        // устарела, а мастер её почти не обновляет (утренняя висела до вечера, лог 22.11).
+        // Сцену описывает живая сводка «СЕЙЧАС».
+        let stale = self.scene.day != day_before
+            || self.scene.location != place_before
+            || crate::combat::time_jump(time_before.as_deref(), self.scene.time.as_deref());
+        if stale && !situation_given {
+            self.scene.situation.clear();
         }
         // Явный признак конца боя: новое место, новый день, время ушло больше чем на час,
         // мастер сменил настроение с боя на другое.
@@ -963,6 +973,30 @@ mod tests {
         assert!(s.change_scene(SceneChange { day: Some(10), ..SceneChange::default() }).is_err());
         s.move_character("npc.valeria", "Серебряный Шпиль").unwrap();
         assert!(s.party_view().members.iter().find(|m| m.id == "npc.valeria").unwrap().in_scene);
+    }
+
+    #[test]
+    fn stale_situation_clears_on_new_place_or_time_jump() {
+        let mut s = session();
+        let at = |time: &str| SceneChange { time: Some(time.into()), ..SceneChange::default() };
+        s.change_scene(SceneChange {
+            situation: Some("Подвал особняка".into()), ..at("08:00")
+        })
+        .unwrap();
+        s.change_scene(at("08:30")).unwrap();
+        assert_eq!(s.scene().situation, "Подвал особняка");
+        s.change_scene(at("16:00")).unwrap();
+        assert!(s.scene().situation.is_empty());
+        s.change_scene(SceneChange {
+            location: Some("Кротовая Нора".into()),
+            situation: Some("Логово Крота".into()),
+            ..SceneChange::default()
+        })
+        .unwrap();
+        assert_eq!(s.scene().situation, "Логово Крота");
+        s.change_scene(SceneChange { location: Some("Порт".into()), ..SceneChange::default() })
+            .unwrap();
+        assert!(s.scene().situation.is_empty());
     }
 
     #[test]

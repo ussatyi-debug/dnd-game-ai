@@ -41,7 +41,6 @@ pub async fn generate(
     model: &str,
     system: &[String],
     history: &[ChatMessage],
-    json_mode: bool,
     cache_upto: Option<usize>,
 ) -> Result<Generated, String> {
     let response = client
@@ -49,7 +48,7 @@ pub async fn generate(
         .header("x-api-key", key)
         .header("anthropic-version", API_VERSION)
         .header("anthropic-beta", CACHE_BETA)
-        .json(&request_body(model, system, history, json_mode, cache_upto))
+        .json(&request_body(model, system, history, cache_upto))
         .send()
         .await
         .map_err(network_error)?;
@@ -58,10 +57,10 @@ pub async fn generate(
     if !status.is_success() {
         return Err(api_error(status.as_u16(), &body));
     }
-    // В строгом режиме ответ начат с «{» на нашей стороне — возвращаем его обратно в текст.
-    let text = parse_reply(&body)?;
+    // Строгий JSON задаёт просьба в запросе: новые модели Claude не принимают начало ответа
+    // от нас («assistant message prefill»); JSON из ответа достаёт движок.
     Ok(Generated {
-        text: if json_mode { format!("{{{}", text.trim_start()) } else { text },
+        text: parse_reply(&body)?,
         prompt_tokens: prompt_tokens(&body),
         cached_tokens: cached_tokens(&body),
         cache_write_tokens: cache_write_tokens(&body),
@@ -98,13 +97,12 @@ fn cache_mark() -> Value {
 /// Каждый блок `system` — со своей меткой кэша: кодекс не меняется всю игру, снимок сцены —
 /// до смены сцены, и при смене сцены перезаписывается только снимок. `cache_upto` — номер
 /// сообщения истории, до которого включительно история тоже кэшируется (последнее перед
-/// текущим ходом). Меток не больше четырёх: два блока и история. Строгий JSON задаётся
-/// началом ответа.
+/// текущим ходом). Меток не больше четырёх: два блока и история. Последним всегда идёт
+/// слово игрока: начало ответа за модель новые Claude не принимают (400, «prefill»).
 pub(crate) fn request_body(
     model: &str,
     system: &[String],
     history: &[ChatMessage],
-    json_mode: bool,
     cache_upto: Option<usize>,
 ) -> Value {
     let mut messages: Vec<Value> = history
@@ -130,10 +128,6 @@ pub(crate) fn request_body(
     // Messages API требует, чтобы последним было слово игрока.
     if messages.last().and_then(|m| m["role"].as_str()) == Some("assistant") {
         messages.push(json!({ "role": "user", "content": "Продолжай." }));
-    }
-    if json_mode {
-        // Ответ начинается с «{» — модель продолжает строго с JSON.
-        messages.push(json!({ "role": "assistant", "content": "{" }));
     }
     json!({
         "model": model,
@@ -192,7 +186,7 @@ mod tests {
     #[test]
     fn system_is_cached_and_history_starts_with_player() {
         let history = [msg(Role::Master, "Вступление"), msg(Role::Player, "Осматриваюсь")];
-        let body = request_body("claude-sonnet-4", &["КОДЕКС".into()], &history, false, None);
+        let body = request_body("claude-sonnet-4", &["КОДЕКС".into()], &history, None);
         assert_eq!(body["system"][0]["cache_control"]["type"], "ephemeral");
         assert_eq!(body["system"][0]["cache_control"]["ttl"], "1h");
         assert_eq!(body["messages"].as_array().unwrap().len(), 1);
@@ -207,7 +201,7 @@ mod tests {
             msg(Role::Player, "Ищу корабль"),
         ];
         let system = ["КОДЕКС".to_string(), "СНИМОК".to_string()];
-        let body = request_body("claude-sonnet-4", &system, &history, false, Some(1));
+        let body = request_body("claude-sonnet-4", &system, &history, Some(1));
         assert_eq!(body["system"].as_array().unwrap().len(), 2);
         assert_eq!(body["system"][1]["text"], "СНИМОК");
         assert_eq!(body["system"][1]["cache_control"]["ttl"], "1h");
@@ -218,12 +212,17 @@ mod tests {
     }
 
     #[test]
-    fn json_mode_starts_the_answer_with_brace() {
+    fn the_request_never_ends_with_a_master_prefill() {
+        // Второй шаг (строгий JSON) тоже кончается словом игрока: «prefill» новые Claude
+        // отклоняют с ошибкой 400.
         let history = [msg(Role::Player, "Что в сумке?")];
-        let body = request_body("claude-sonnet-4", &["КОДЕКС".into()], &history, true, None);
+        let body = request_body("claude-haiku-5-5", &["КОДЕКС".into()], &history, None);
         let messages = body["messages"].as_array().unwrap();
-        assert_eq!(messages.last().unwrap()["role"], "assistant");
-        assert_eq!(messages.last().unwrap()["content"], "{");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages.last().unwrap()["role"], "user");
+        let history = [msg(Role::Player, "Иду"), msg(Role::Master, "Порт шумит.")];
+        let body = request_body("claude-haiku-5-5", &["КОДЕКС".into()], &history, None);
+        assert_eq!(body["messages"].as_array().unwrap().last().unwrap()["role"], "user");
     }
 
     #[test]
