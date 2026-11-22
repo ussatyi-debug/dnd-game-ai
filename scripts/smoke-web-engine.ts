@@ -62,7 +62,7 @@ assert.equal(applied.text, "Вспышка.");
 assert.equal(applied.actions[0]?.ok, true);
 
 const context = engine.call<{ system: string; turn: string }>({ cmd: "master_context", query: "Атакую стражника" });
-assert.ok(context.system.startsWith("Ты — Мастер") && context.system.includes('"cmd":"roll"'));
+assert.ok(context.system.startsWith("Ты — мастер") && context.system.includes('"cmd":"hp"') && context.system.includes("ДОМ СТРЭНДЖ"));
 assert.ok(context.system.includes("СНИМОК СЦЕНЫ") && context.system.includes("ХРОНИКА"));
 assert.ok(context.turn.includes("[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]") && context.turn.endsWith("Атакую стражника"));
 assert.ok(context.turn.includes("[ПОДСКАЗКА ДВИЖКА]"));
