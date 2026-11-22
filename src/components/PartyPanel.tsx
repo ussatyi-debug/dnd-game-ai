@@ -196,6 +196,7 @@ export default function PartyPanel({
                   </div>
                 )}
                 {!m.in_scene && <div className="mt-1 text-[11px] text-gold/80">📍 {m.location}</div>}
+                {m.task && <div className="mt-1 text-[11px] text-parchment/80">📜 {m.task}</div>}
               </button>
               {exp?.open && exp.can_level && (
                 <button

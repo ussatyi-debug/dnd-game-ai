@@ -46,6 +46,7 @@ mod sheets;
 mod spell_catalog;
 pub mod spellcasting;
 pub mod spells;
+pub mod tasks;
 pub mod treasury;
 
 pub use character::{
@@ -54,8 +55,8 @@ pub use character::{
 };
 pub use check::{player_d20, roll_d20, AttackResult, D20Roll, Modifier, RollMode, RollSource};
 pub use combat::{
-    Combat, CombatRollKind, Fighter, FighterStatus, InitiativeEntry, NewFighter, Side, TargetLink,
-    COMBAT_QUIET_TURNS,
+    Combat, CombatRollKind, EncounterBudget, Fighter, FighterStatus, InitiativeEntry, NewFighter,
+    Side, TargetLink, COMBAT_QUIET_TURNS,
 };
 pub use creation::{
     build_hero, build_party, level_for_xp, starting_treasury, validate_hero, Campaign, HeroSpec,
@@ -85,9 +86,9 @@ pub use resource::{Recovery, ResourcePool, RestKind};
 pub use rng::{DiceRng, Xoshiro256};
 pub use savegame::{LoadReport, SaveData, SavedCharacter};
 pub use session::{
-    DicePool, LuckyReroll, MasterMemo, Mood, PartyMember, PartyView, RestResult, RestedCharacter,
-    SaveState, Scene, Session, ENGINE_LOG_LIMIT, LUCKY_ID, MIN_SAVE_FORMAT, POOL_SIDES,
-    SAVE_FORMAT_VERSION,
+    ChatLine, DicePool, LuckyReroll, MasterMemo, Mood, PartyMember, PartyView, RestResult,
+    RestedCharacter, SaveState, Scene, Session, ENGINE_LOG_LIMIT, LUCKY_ID, MIN_SAVE_FORMAT,
+    POOL_SIDES, SAVE_FORMAT_VERSION,
 };
 pub use sheet_edits::{SheetEdit, SheetProposal};
 pub use spellcasting::{
@@ -96,6 +97,7 @@ pub use spellcasting::{
     SlotRestorer, SlotView, SpellEntry, SpellbookView, Spellcasting, PACT_SLOTS_ID,
 };
 pub use spells::{all_spells, class_list, spell, SpellClass, SpellMeta};
+pub use tasks::CompanionTask;
 pub use treasury::{
     gp, Asset, AssetKind, Copper, Entry, EntrySource, EntryView, Location, NewEntry, Treasury,
     TreasuryView,

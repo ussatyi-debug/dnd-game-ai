@@ -28,6 +28,9 @@ const TAG: &str = "engine";
 pub struct MasterAction {
     pub ok: bool,
     pub summary: String,
+    /// Образец команды для повтора после отказа (игроку не показывается).
+    #[serde(skip)]
+    pub sample: Option<String>,
 }
 
 /// Ответ мастера после выполнения команд.
@@ -745,8 +748,24 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
             Ok(last_log(session))
         }
         "move" => {
-            engine(session.move_character(&character, text_field(cmd, "location")?))?;
-            Ok(last_log(session))
+            let mut lines = Vec::new();
+            if let Some(location) = opt_text(cmd, "location") {
+                engine(session.move_character(&character, location))?;
+                lines.push(last_log(session));
+            }
+            // Поручение спутника: "task" — дать (пустое — снять), "done":true — выполнено.
+            match cmd.get("task").and_then(Value::as_str).map(str::trim) {
+                Some("") => lines.extend(session.clear_task(&character, "отменено")),
+                Some(task) => lines.push(engine(session.set_task(&character, task))?),
+                None => {}
+            }
+            if cmd.get("done").and_then(Value::as_bool) == Some(true) {
+                lines.extend(session.clear_task(&character, "выполнено"));
+            }
+            if lines.is_empty() {
+                return Err("у move нужно поле «location», «task» или «done»".into());
+            }
+            Ok(lines.join("; "))
         }
         "propose_sheet" => {
             let edit: SheetEdit =
@@ -771,6 +790,22 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     let (text, now) = split_now(&text);
     let before = session.checkpoint();
     session.begin_turn_commands();
+    // Ответ вне игры «((…))»: мир стоит — без сводки, команд, хода времени и счётчика боя.
+    // Решает ответ мастера, а не заявка игрока.
+    let out_of_game = is_out_of_game(&text);
+    session.set_turn_out_of_game(out_of_game);
+    if out_of_game {
+        let skipped = blocks.iter().flat_map(|b| commands(b)).count();
+        if skipped > 0 {
+            session.log(format!("Ответ вне игры: команды не выполнены ({skipped})"));
+        }
+        session.commit_master_turn(before, Vec::new());
+        return MasterTurn {
+            text: clean_reply(&text),
+            actions: Vec::new(),
+            fabricated: Vec::new(),
+        };
+    }
     if !now.is_empty() {
         session.set_scene_now(&now);
     }
@@ -786,6 +821,20 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
         .collect();
     session.commit_master_turn(before, summaries);
     MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
+}
+
+/// Рассказ (без блоков команд и «СЕЙЧАС») целиком в двойных скобках «((…))».
+fn is_out_of_game(prose: &str) -> bool {
+    let t = prose.trim();
+    t.starts_with("((") && t.ends_with("))")
+}
+
+/// Ответ мастера вне игры: весь рассказ в двойных скобках «((…))» (решение 22.11.2026).
+/// По нему движок не двигает время, сводку «СЕЙЧАС», бой и не выполняет команды.
+pub fn out_of_game_reply(reply: &str) -> bool {
+    let (text, _) = split(reply);
+    let (text, _) = split_now(&text);
+    is_out_of_game(&text)
 }
 
 /// Отказ, после которого ничего делать не нужно: ячейки уже свободны, количество нулевое.
@@ -824,12 +873,14 @@ fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> V
                         actions.push(MasterAction {
                             ok: true,
                             summary: format!("повтор пропущен: «{name}»"),
+                            sample: None,
                         });
                         continue;
                     }
                 }
             }
             let key = cmd.as_ref().ok().map(command_key);
+            let name = cmd.as_ref().ok().map(command_name);
             let result = cmd.and_then(|cmd| run(session, &cmd));
             if result.is_ok() {
                 if let Some(key) = key {
@@ -837,11 +888,13 @@ fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> V
                 }
             }
             actions.push(match result {
-                Ok(summary) => MasterAction { ok: true, summary },
+                Ok(summary) => MasterAction { ok: true, summary, sample: None },
                 Err(reason) if nothing_to_do(&reason) => {
                     session.log(format!("Ничего не изменилось: {reason}"));
                     MasterAction {
-                        ok: true, summary: format!("ничего не изменилось: {reason}")
+                        ok: true,
+                        summary: format!("ничего не изменилось: {reason}"),
+                        sample: None,
                     }
                 }
                 Err(reason) => {
@@ -849,7 +902,11 @@ fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> V
                     if session.engine_log().last().is_none_or(|l| !l.contains(&reason)) {
                         session.log(format!("Отказ (команда мастера): {reason}"));
                     }
-                    MasterAction { ok: false, summary: reason }
+                    MasterAction {
+                        ok: false,
+                        summary: reason,
+                        sample: name.as_deref().and_then(crate::codex::command_sample),
+                    }
                 }
             });
         }
@@ -867,6 +924,9 @@ pub fn repair_request(actions: &[MasterAction]) -> Option<String> {
     let mut text = String::from("[ДВИЖОК] Эти команды не выполнены:\n");
     for a in failed {
         text.push_str(&format!("- {}\n", a.summary));
+        if let Some(sample) = &a.sample {
+            text.push_str(&format!("  Образец: {sample}\n"));
+        }
     }
     text.push_str(
         "Пришли ТОЛЬКО исправленные команды в одном блоке ```engine, без рассказа. Остальные \
@@ -902,6 +962,51 @@ mod tests {
 
     fn session() -> Session {
         Session::demo(Xoshiro256::from_seed(5))
+    }
+
+    #[test]
+    fn move_with_task_keeps_order_and_done_clears_it() {
+        let mut s = session();
+        let turn = apply_directives(
+            &mut s,
+            "Гюнтер уходит.\n```engine\n{\"cmd\":\"move\",\"character\":\"npc.gunther\",\"location\":\"ратуша\",\"task\":\"найти капитана стражи\"}\n```",
+        );
+        assert!(turn.actions[0].ok, "{:?}", turn.actions);
+        assert_eq!(s.task_of("npc.gunther").unwrap().text, "найти капитана стражи");
+        let done = apply_directives(
+            &mut s,
+            "Гюнтер справился.\n```engine\n{\"cmd\":\"move\",\"character\":\"npc.gunther\",\"done\":true}\n```",
+        );
+        assert!(done.actions[0].ok, "{:?}", done.actions);
+        assert!(s.tasks().is_empty());
+    }
+
+    #[test]
+    fn out_of_game_reply_runs_no_commands_and_keeps_now() {
+        let mut s = session();
+        let hp = s.character("npc.gunther").unwrap().hit_points.current;
+        s.set_scene_now("Склад, Гюнтер у лестницы");
+        let reply = "((Вне игры: бонусное действие у тебя ещё есть. Это по вопросу вне игры. \
+Если вопросов больше нет — продолжаем?))\n```engine\n{\"cmd\":\"hp\",\"character\":\"npc.gunther\",\"damage\":5}\n```\nСЕЙЧАС\n- Лист на ящике";
+        assert!(out_of_game_reply(reply));
+        let turn = apply_directives(&mut s, reply);
+        assert!(turn.actions.is_empty());
+        assert!(turn.text.starts_with("(("));
+        assert_eq!(s.character("npc.gunther").unwrap().hit_points.current, hp);
+        assert_eq!(s.scene().now, "Склад, Гюнтер у лестницы");
+        assert!(!out_of_game_reply("Гюнтер (молча) кивает."));
+    }
+
+    #[test]
+    fn failed_command_brings_a_sample() {
+        let mut s = session();
+        let turn = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"move\",\"character\":\"npc.gunther\"}\n```",
+        );
+        assert!(!turn.actions[0].ok);
+        let repair = repair_request(&turn.actions).unwrap();
+        assert!(repair.contains("Образец: {\"cmd\":\"move\""), "{repair}");
     }
 
     #[test]

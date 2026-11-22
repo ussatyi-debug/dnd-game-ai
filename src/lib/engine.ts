@@ -117,6 +117,8 @@ export interface PartyMember {
   location: string;
   in_scene: boolean;
   key_resources: ResourcePool[];
+  /** Поручение спутника: зачем он ушёл из сцены. */
+  task?: string | null;
 }
 
 export interface PartyView {
@@ -267,8 +269,24 @@ export function masterContext(
 }
 
 /** Двухшаговый ход: рассказ для игрока и команды, которые мастер всё же написал в нём. */
-export function masterNarration(text: string): Promise<{ text: string; written: string; no_changes: boolean }> {
-  return call<{ text: string; written: string; no_changes: boolean }>("master_narration", { text });
+export function masterNarration(
+  text: string,
+): Promise<{ text: string; written: string; no_changes: boolean; out_of_game?: boolean }> {
+  return call<{ text: string; written: string; no_changes: boolean; out_of_game?: boolean }>("master_narration", {
+    text,
+  });
+}
+
+/** Сообщение старого чата для поиска мастером (`query chat`). */
+export interface ChatLine {
+  id: number;
+  author: string;
+  text: string;
+}
+
+/** Старый чат вне окна истории мастера: движок ищет по нему по запросу мастера. */
+export function syncChatArchive(lines: ChatLine[]): Promise<boolean> {
+  return call<boolean>("chat_archive", { lines });
 }
 
 /** Двухшаговый ход, второй шаг: запрос «рассказ → команды движка». */

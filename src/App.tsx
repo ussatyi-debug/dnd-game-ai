@@ -22,6 +22,7 @@ import {
   aiChat,
   aiUpdate,
   masterNarration,
+  syncChatArchive,
   masterUpdateApply,
   masterUpdateRequest,
   type MasterRequest,
@@ -230,6 +231,8 @@ export default function App() {
   const [sample, setSample] = useState<Awaited<ReturnType<typeof getSample>>>(null);
   const [tier, setTier] = useState<ClaudeTier>(loadTier);
   const abortRef = useRef<AbortController | null>(null);
+  /** Какой старый чат уже передан движку (длина и последний id). */
+  const archiveKeyRef = useRef("");
   const [ai, setAi] = useState<AiSettingsView | null>(null);
   /** Веб-версия: мастера ведёт модель со своим ключом (Gemini, ChatGPT, YandexGPT). */
   const browserModel = !aiAvailable && ai !== null && ai.claude === false && Boolean(ai.model);
@@ -574,11 +577,26 @@ export default function App() {
     setTab("dialog");
   }
 
+  /**
+   * Старый чат вне окна истории — движку для поиска мастером (`query chat`). Отправляется,
+   * только когда изменился: окно сдвигается порциями, а не каждый ход.
+   */
+  function archiveOldChat(old: ChatMessage[]) {
+    const key = `${old.length}:${old[old.length - 1]?.id ?? 0}`;
+    if (archiveKeyRef.current === key) return;
+    archiveKeyRef.current = key;
+    void syncChatArchive(old.map((m) => ({ id: m.id, author: m.author, text: m.text }))).catch((e) =>
+      devLog.add("warning", `Старый чат не передан движку: ${errorText(e)}`),
+    );
+  }
+
   function historyWith(playerMessage: ChatMessage) {
     // Только сообщения до заявки: оборванный ответ после неё при повторе не уходит мастеру.
     // Последние заявки с ответами — раннюю часть диалога мастеру заменяет хроника.
     const prior = messages.filter((m) => m.id < playerMessage.id && (m.author === "player" || m.author === "master"));
-    const turns = recentTurns(prior, playerMessage).map((m) => ({
+    const recent = recentTurns(prior, playerMessage);
+    archiveOldChat(prior.slice(0, prior.length - (recent.length - 1)));
+    const turns = recent.map((m) => ({
       role: m.author === "player" ? ("player" as const) : ("master" as const),
       text: m.text,
     }));
@@ -839,6 +857,12 @@ export default function App() {
         logMasterRolls(rolled);
         recordTurn(reply.id, { actions: [], fabricated: [], rolls: rolled, raw, model: `${tierName} · ${size}` });
         const written = `${carried}${narration.written}`.trim();
+        // Ответ вне игры «((…))» — второй шаг не нужен: мир стоит.
+        if (narration.out_of_game) {
+          devLog.add("engine", "Ответ вне игры — второй шаг пропущен");
+          afterMasterTurn();
+          return;
+        }
         // Экономия: ход-разговор без изменений — второй запрос не отправляется.
         if (narration.no_changes && !written && skipEmptyUpdate()) {
           devLog.add("engine", "Ход без изменений — второй шаг пропущен");
@@ -982,6 +1006,8 @@ export default function App() {
   function loaded(save: ParsedSave, report: LoadReport, fromFile = false) {
     const maxId = Math.max(0, ...save.chat.map((m) => m.id), ...save.rolls.map((r) => r.id));
     nextId.current = maxId + 1;
+    // Загрузка очищает старый чат в движке — при следующем ходе он уйдёт заново.
+    archiveKeyRef.current = "";
     setMessages(save.chat);
     setRolls(save.rolls);
     partyView()

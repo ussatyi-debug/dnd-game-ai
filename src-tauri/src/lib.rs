@@ -171,6 +171,17 @@ fn master_notes(state: State<'_, SessionState>) -> Result<Vec<MasterNote>, Strin
     Ok(lock(&state)?.notes().to_vec())
 }
 
+/// Старый чат вне окна истории мастера — для поиска `query chat` (интерфейс шлёт его перед
+/// ходом мастера).
+#[tauri::command]
+fn chat_archive(
+    lines: Vec<dnd_engine::ChatLine>,
+    state: State<'_, SessionState>,
+) -> Result<bool, String> {
+    lock(&state)?.set_chat_archive(lines);
+    Ok(true)
+}
+
 #[tauri::command]
 fn master_undo_info(state: State<'_, SessionState>) -> Result<Option<UndoInfo>, String> {
     Ok(lock(&state)?.master_undo_info())
@@ -995,11 +1006,21 @@ async fn ai_chat(
         lock(&session)?.initiative_order().iter().filter_map(|(_, v)| u32::try_from(*v).ok()),
     );
     if two_step {
+        // Ответ вне игры «((…))»: мир стоит — без сводки и второго шага.
+        let out_of_game = dnd_master::out_of_game_reply(&full);
         let now = dnd_master::scene_now(&full);
-        if !now.is_empty() {
+        if !now.is_empty() && !out_of_game {
             lock(&session)?.set_scene_now(&now);
         }
         let (text, written, no_changes) = dnd_master::narration_parts(&full);
+        if out_of_game {
+            reply.fabricated = Vec::new();
+            reply.text = text;
+            reply.written_commands = String::new();
+            reply.no_changes = true;
+            reply.pending_update = false;
+            return Ok(reply);
+        }
         lock(&session)?.note_met_in_narration(&text);
         reply.fabricated = dnd_master::fabricated_rolls(&text, &engine_faces, &player_text);
         reply.text = text;
@@ -1151,6 +1172,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             roll_expression,
+            chat_archive,
             exit_app,
             lucky_reroll,
             character_sheet,

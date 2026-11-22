@@ -253,6 +253,10 @@ pub enum Request {
     MasterRepair {
         text: String,
     },
+    /// Старый чат вне окна истории мастера — для поиска `query chat`.
+    ChatArchive {
+        lines: Vec<dnd_engine::ChatLine>,
+    },
 }
 
 /// Карточка из формы интерфейса.
@@ -321,13 +325,22 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             ))
         }
         Request::MasterNarration { text } => {
+            // Ответ вне игры «((…))»: мир стоит — без сводки и второго шага.
+            let out_of_game = dnd_master::out_of_game_reply(&text);
             let now = dnd_master::scene_now(&text);
-            if !now.is_empty() {
+            if !now.is_empty() && !out_of_game {
                 session.set_scene_now(&now);
             }
             let (text, written, no_changes) = dnd_master::narration_parts(&text);
-            session.note_met_in_narration(&text);
-            Ok(json!({ "text": text, "written": written, "no_changes": no_changes }))
+            if !out_of_game {
+                session.note_met_in_narration(&text);
+            }
+            Ok(json!({
+                "text": text,
+                "written": if out_of_game { String::new() } else { written },
+                "no_changes": no_changes || out_of_game,
+                "out_of_game": out_of_game,
+            }))
         }
         Request::MasterUpdateRequest { player, narration, written } => {
             to_value(dnd_master::update_request(session, &player, &narration, &written))
@@ -482,6 +495,10 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(dnd_master::resolve_pool(session, &text, apply))
         }
         Request::MasterRepair { text } => to_value(dnd_master::apply_repair(session, &text)),
+        Request::ChatArchive { lines } => {
+            session.set_chat_archive(lines);
+            to_value(true)
+        }
     }
 }
 
@@ -700,9 +717,9 @@ mod tests {
         let mut s = session();
         let r = call(&mut s, json!({ "cmd": "master_context", "query": "Иду в порт" }));
         let system = r["ok"]["system"].as_str().unwrap();
-        assert!(system.starts_with("Ты — Мастер"));
+        assert!(system.starts_with("Ты — мастер"));
         assert!(system.contains("Сэр Никис Стрэндж"));
-        assert!(system.contains("\"cmd\":\"roll\""));
+        assert!(system.contains("\"cmd\":\"hp\""));
         let turn = r["ok"]["turn"].as_str().unwrap();
         assert!(turn.contains("[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]"));
         assert!(turn.ends_with("Иду в порт"));

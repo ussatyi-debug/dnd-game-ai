@@ -118,6 +118,15 @@ pub struct SaveData {
     /// Очередь инициативы текущего боя.
     #[cfg_attr(feature = "serde", serde(default))]
     pub initiative: Vec<crate::combat::InitiativeEntry>,
+    /// Поручения спутников (0.10.2).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub tasks: Vec<crate::tasks::CompanionTask>,
+    /// Снимок сцены мастера (0.10.2): после загрузки изменения сцены не теряются.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub master_memo: Option<crate::session::MasterMemo>,
+    /// Отдыхов за игру — часть ключа сцены снимка.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub rests: u64,
 }
 
 /// Итог загрузки.
@@ -533,7 +542,12 @@ impl Session {
         self.xp_log = save.xp_log;
         let ids: Vec<String> = self.party.iter().map(|c| c.id.clone()).collect();
         self.level_up_open = save.level_up_open.into_iter().filter(|id| ids.contains(id)).collect();
-        self.master_memo = None;
+        // Снимок сцены из сейва: тот же ключ сцены — мастер видит те же изменения, что до
+        // загрузки; старые сейвы без снимка собирают его заново.
+        self.master_memo = save.master_memo;
+        self.rests = save.rests;
+        self.tasks = save.tasks.into_iter().filter(|t| ids.contains(&t.character)).collect();
+        self.chat_archive.clear();
         self.repair_links();
         self.repair_player_sections();
         self.turn_note_start = u64::MAX;
@@ -620,6 +634,9 @@ mod tests {
             level_up_open: state.level_up_open,
             combat: state.combat,
             initiative: state.initiative,
+            tasks: state.tasks,
+            master_memo: state.master_memo,
+            rests: state.rests,
         }
     }
 
@@ -996,5 +1013,33 @@ mod tests {
         broken.treasury.record_unchecked_for_test("gp", "purse", -1_000_000);
         assert!(s.load(broken).is_err());
         assert_eq!(s.checkpoint(), before);
+    }
+
+    #[test]
+    fn scene_memo_tasks_and_rests_survive_load() {
+        let mut s = session();
+        let companion = s
+            .party()
+            .iter()
+            .find(|c| c.kind == crate::character::CharacterKind::Companion)
+            .unwrap()
+            .id
+            .clone();
+        s.move_character(&companion, "ратуша").unwrap();
+        s.set_task(&companion, "найти капитана стражи").unwrap();
+        s.take_rest(crate::resource::RestKind::Short);
+        s.set_master_memo(crate::session::MasterMemo {
+            key: "ключ".into(),
+            system: "снимок".into(),
+            baseline: vec![("pc|хиты".into(), "10".into())],
+            last_note_id: 3,
+        });
+        let save = round_trip(&s);
+        let mut t = session();
+        t.load(save).unwrap();
+        assert_eq!(t.master_memo().unwrap().key, "ключ");
+        assert_eq!(t.master_memo().unwrap().baseline.len(), 1);
+        assert_eq!(t.rest_count(), 1);
+        assert_eq!(t.task_of(&companion).unwrap().text, "найти капитана стражи");
     }
 }

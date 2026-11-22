@@ -198,6 +198,64 @@ pub struct Combat {
     pub draft: bool,
 }
 
+/// Бюджет опыта на персонажа по таблице сложности боя 2024 года (уровни 1–20):
+/// низкая, средняя, высокая.
+const XP_BUDGET: [[u32; 3]; 20] = [
+    [50, 75, 100],
+    [100, 150, 200],
+    [150, 225, 400],
+    [250, 375, 500],
+    [500, 750, 1_100],
+    [600, 1_000, 1_400],
+    [750, 1_300, 1_700],
+    [1_000, 1_700, 2_100],
+    [1_300, 2_000, 2_600],
+    [1_600, 2_300, 3_100],
+    [1_900, 2_900, 4_100],
+    [2_200, 3_700, 4_700],
+    [2_600, 4_200, 5_400],
+    [2_900, 4_900, 6_200],
+    [3_300, 5_400, 7_800],
+    [3_800, 6_100, 9_800],
+    [4_500, 7_200, 11_700],
+    [5_000, 8_700, 14_200],
+    [5_500, 10_700, 17_200],
+    [6_400, 13_200, 22_000],
+];
+
+/// Бюджет боя отряда: сумма по героям и спутникам в сцене (фамильяры не считаются).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EncounterBudget {
+    pub low: u32,
+    pub moderate: u32,
+    pub high: u32,
+    /// Сколько членов отряда посчитано.
+    pub members: usize,
+}
+
+impl EncounterBudget {
+    /// Сложность боя по опыту противников (правила 2024 года — с округлением вверх).
+    pub fn difficulty(&self, foes_xp: u32) -> &'static str {
+        if foes_xp <= self.low {
+            "низкая"
+        } else if foes_xp <= self.moderate {
+            "средняя"
+        } else if foes_xp <= self.high {
+            "высокая"
+        } else {
+            "выше высокой — смертельно опасно"
+        }
+    }
+
+    /// «низкая 1 200, средняя 1 800, высокая 2 400 ПО (отряд из 3)».
+    pub fn line(&self) -> String {
+        format!(
+            "низкая {}, средняя {}, высокая {} ПО (отряд из {})",
+            self.low, self.moderate, self.high, self.members
+        )
+    }
+}
+
 /// Напоминание о затихшем бое — раз в столько тихих ходов.
 pub const COMBAT_QUIET_TURNS: u8 = 3;
 /// Самое длинное в журнале боя (строки сверх — сжимаются, старые уходят).
@@ -703,6 +761,28 @@ impl Session {
         std::mem::take(&mut self.combat_reports)
     }
 
+    /// Бюджет боя отряда в сцене по таблице 2024 года; `None` — в сцене никого.
+    pub fn encounter_budget(&self) -> Option<EncounterBudget> {
+        let levels: Vec<u32> = self
+            .party
+            .iter()
+            .filter(|c| c.kind != CharacterKind::Familiar)
+            .filter(|c| c.location == self.scene.location || c.kind == CharacterKind::Player)
+            .map(|c| c.level().clamp(1, 20))
+            .collect();
+        if levels.is_empty() {
+            return None;
+        }
+        let mut budget = EncounterBudget { low: 0, moderate: 0, high: 0, members: levels.len() };
+        for level in levels {
+            let row = XP_BUDGET[(level - 1) as usize];
+            budget.low += row[0];
+            budget.moderate += row[1];
+            budget.high += row[2];
+        }
+        Some(budget)
+    }
+
     /// Блок «[БОЙ]» для хода мастера.
     pub fn combat_lines(&self) -> Vec<String> {
         let Some(c) = self.combat.as_ref() else { return Vec::new() };
@@ -763,6 +843,21 @@ impl Session {
             let links: Vec<String> =
                 c.links.iter().map(|l| format!("{} → {}", l.actor, l.target)).collect();
             out.push(format!("Последние цели: {}", links.join(", ")));
+        }
+        if let Some(budget) = self.encounter_budget() {
+            let foes: Vec<&Fighter> = c.fighters.iter().filter(|f| f.side == Side::Foe).collect();
+            let xp: u32 = foes.iter().map(|f| f.xp).sum();
+            let unknown: Vec<&str> =
+                foes.iter().filter(|f| f.xp == 0).map(|f| f.name.as_str()).collect();
+            let mut line = format!(
+                "Сложность по таблице 2024 года: противники {xp} ПО — {}; бюджет отряда: {}",
+                budget.difficulty(xp),
+                budget.line()
+            );
+            if !unknown.is_empty() {
+                line.push_str(&format!("; без опыта по бестиарию: {}", unknown.join(", ")));
+            }
+            out.push(line);
         }
         let recent: Vec<&String> = c.log.iter().rev().take(6).collect();
         if !recent.is_empty() {
@@ -862,5 +957,18 @@ mod tests {
         assert!(!c.draft);
         assert_eq!(c.fighters.iter().filter(|f| f.name == "Вышибала").count(), 1);
         assert!(s.start_combat(vec![foe("Ещё", 4)], false, &[]).is_err());
+    }
+
+    #[test]
+    fn encounter_budget_follows_2024_table() {
+        let s = session();
+        let b = s.encounter_budget().unwrap();
+        assert!(b.members >= 1);
+        assert!(b.low < b.moderate && b.moderate < b.high);
+        let one = EncounterBudget { low: 50, moderate: 75, high: 100, members: 1 };
+        assert_eq!(one.difficulty(50), "низкая");
+        assert_eq!(one.difficulty(60), "средняя");
+        assert_eq!(one.difficulty(100), "высокая");
+        assert!(one.difficulty(101).starts_with("выше"));
     }
 }

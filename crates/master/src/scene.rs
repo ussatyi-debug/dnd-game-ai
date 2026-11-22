@@ -18,7 +18,7 @@ use dnd_engine::knowledge::{matches, query_stems};
 use dnd_engine::{CharacterKind, CustomCard, MasterMemo, NoteKind, NoteLayer, Session};
 use serde_json::{json, Value};
 
-use crate::{custom_codex, kb_index, magic_context, note_json, sheet_context, CODEX};
+use crate::{kb_index, magic_context, note_json, sheet_context};
 
 /// Сколько последних заявок игрока (с ответами мастера) уходит мастеру по умолчанию.
 pub const HISTORY_TURNS_DEFAULT: usize = 6;
@@ -41,28 +41,6 @@ const CHRONICLE_FULL_DAYS: usize = 7;
 pub const CHRONICLE_REMINDER_TURNS: u32 = 10;
 /// Через сколько ходов без смены времени суток мастеру напоминают, что время идёт.
 const TIME_REMINDER_TURNS: u32 = 8;
-
-/// Правила работы со снимком сцены — дополнение к кодексу.
-const PROTOCOL: &str = r#"
-КОНТЕКСТ ПО СЦЕНАМ
-- «СНИМОК СЦЕНЫ» ниже собран в начале сцены и не меняется, пока сцена не сменится. День, время, место и хиты отряда сейчас — в блоке «[СЦЕНА]» последнего сообщения игрока; всё, что изменилось с начала сцены, — в «[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]». Последнее сообщение важнее снимка.
-- Постоянная часть листов всего отряда (спасброски, навыки, атаки, владения, умения, заклинания) — в блоке «ЛИСТЫ ОТРЯДА» сразу после кодекса. Текущее (ресурсы с id, кости хитов, состояния, инвентарь, ячейки) — «листы_сейчас» и «магия_сейчас» в снимке, у тех, кто в сцене; хиты — в [СЦЕНА]. Записи журнала, сделанные в этой сцене, в [ИЗМЕНЕНИЯХ] — полным текстом только последние, остальные заголовком. Чего не видишь — запроси у движка блоком ```engine (как броски), а не выдумывай:
-  {"cmd":"query","what":"sheet","id":"npc.valeria"} — лист; "spells" — книга заклинаний и ячейки; {"cmd":"query","what":"card","id":"npc.krot"} — текст карточки базы; {"cmd":"query","what":"notes","text":"склад"} — поиск по журналу мастера; {"cmd":"query","what":"chronicle","day":54} — пересказ дня.
-- Запрос бросков или запрос к движку можно дописать в конце уже начатого рассказа: рассказ игрок увидит, движок вернёт ответ, и ты продолжишь с места остановки.
-- Блоки последнего сообщения игрока заменяют поля прежнего контекста: [ЖУРНАЛ ДВИЖКА] — «журнал_движка», [СРАБОТАВШИЕ ТАЙМЕРЫ] — «сработавшие_таймеры», [ПРЕДЛОЖЕНИЯ ЛИСТА ЖДУТ ИГРОКА] — «предложения_листа_ждут_игрока», [НАПОМИНАНИЯ] — «напоминание_о_записях», [КАРТОЧКИ ПО ЗАЯВКЕ] и [ЖУРНАЛ МАСТЕРА ПО ЗАЯВКЕ] — подходящие к заявке карточки и записи.
-- В снимке — только последние записи игроку; старые приходят блоком [ЗАПИСИ ИГРОКУ ПО ЗАЯВКЕ] или по query notes. Описания карточек, созданных по ходу игры, — блоком [КАРТОЧКИ ИГРЫ ПО ЗАЯВКЕ] или по query card. Всё, что изменилось в базе с начала сцены (новые карточки с их id, статусы, правки и удаления записей, в том числе сделанные игроком), — в [ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ].
-- Пул кубов: в каждом ходу движок кладёт блок «[ПУЛ КУБОВ]» — заранее брошенные d20, d12, d10, d8, d6, d4. Броски противников, NPC и спутников, их урон и тайные проверки бери из пула, без запроса roll: пиши в рассказе выражение в двойных квадратных скобках — движок сам возьмёт кубы по порядку, посчитает и подставит итог числом. «Вор бьёт [[1d20+4]] против КД 15», урон противнику — «[[1d6+2]] урона». Урон члену отряда — «[[1d8+2 > id]]»: движок сам спишет хиты, команду hp за этот урон не пиши. Крит — удвой кубы сам: [[2d8+2]]. Тайная проверка — «[[1d20+3 ?]]»: куб забирается, игрок числа не видит. Каждое выражение забирает следующие значения своего куба, поэтому исход ты знаешь заранее — описывай попадание или промах по пулу. Арифметику не делай: итог посчитает движок. Броски героя игрока — только от игрока.
-- Ранний диалог тебе не присылается — его заменяет ХРОНИКА. Пересказ дня: {"cmd":"chronicle","day":N,"text":"5–10 предложений: что произошло, кто что узнал и решил, чем кончился день"}. Пересказ текущего дня обновляй по ходу — та же команда перезаписывает его.
-"#;
-
-/// Шпаргалка команд — в кэшируемом блоке кодекса (раньше шла в каждом ходу).
-const CHEAT_SHEET: &str = "Механика — только командами в блоке ```engine (по одной JSON-строке): \
-броски за NPC, противников и спутников и их урон — выражения пула [[1d20+4]], [[1d8+2 > id]], тайные — [[1d20+3 ?]]; \
-отдельный бросок с модификатором из листа — roll (числа только от движка), хиты — hp, ресурсы — resource, состояния — condition, \
-заклинания — cast, предметы — item, деньги — treasury/transfer, сцена и время — scene, отдых — rest, начало, участники и конец боя — combat (start с foes, add, set, end), \
-записи — note (layer player и master), новое задание или цель героя — new_card (player, goals), её ход и итог — goal, \
-пересказ дня — chronicle, недостающие сведения — query. \
-Без команды изменение не сохранится.";
 
 /// Запрос к модели: системный текст и последняя реплика игрока.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -495,20 +473,17 @@ fn first_sentence(text: &str) -> String {
     }
 }
 
-/// Кодекс с правилами снимка.
+/// Кодекс мастера: общая часть и слой кампании («Дом Стрэндж» или своя).
 fn codex(session: &Session) -> String {
-    let base = match session.campaign() {
-        Some(c) => {
-            let hero = session
-                .party()
-                .iter()
-                .find(|p| p.kind == CharacterKind::Player)
-                .map_or("герой игрока", |p| p.name.as_str());
-            custom_codex(&c.title, hero)
-        }
-        None => CODEX.to_string(),
-    };
-    format!("{base}{PROTOCOL}\nШПАРГАЛКА КОМАНД\n{CHEAT_SHEET}\n")
+    let hero = session.party().iter().find(|p| p.kind == CharacterKind::Player);
+    let hero_id = hero.map_or("pc.hero", |p| p.id.as_str());
+    match session.campaign() {
+        Some(c) => crate::codex::codex_text(
+            Some((&c.title, hero.map_or("герой игрока", |p| p.name.as_str()))),
+            hero_id,
+        ),
+        None => crate::codex::codex_text(None, hero_id),
+    }
 }
 
 /// Снимок сцены с хроникой — второй блок системного текста: собирается при смене сцены,
@@ -535,7 +510,7 @@ fn scene_system(session: &mut Session, short: bool) -> MasterMemo {
 /// Подсказка движка по словам заявки: какие команды, скорее всего, понадобятся.
 pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
     if out_of_game(player_text) {
-        return vec!["вне игры: ответ без хода мира и команд"];
+        return vec!["вне игры: ответ целиком в ((…)), без хода мира и команд"];
     }
     let t = player_text.to_lowercase().replace('ё', "е");
     let has = |words: &[&str]| words.iter().any(|w| t.contains(w));
@@ -560,14 +535,14 @@ pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
         "взлам",
         "слуша",
     ]) {
-        out.push("проверка: броски противников и тайные — roll; бросок героя — от игрока");
+        out.push("проверка: бросок героя — от игрока; противников и тайные — из пула [[…]]");
     }
     if has(&["отдых", "ночуем", "сплю", "привал", "ночлег"]) {
         out.push("отдых: rest short или long; при новом дне — chronicle прошедшего дня");
     }
     if has(&["покупа", "плачу", "заплат", "отдаю", "продаю", "куплю", "дарю", "беру", "забираю"])
     {
-        out.push("деньги и вещи: treasury/transfer, item add/remove/move");
+        out.push("покупка — buy; находки и награды — treasury; вещи — item add/remove/move");
     }
     if has(&[
         "задани",
@@ -586,7 +561,7 @@ pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
     }
     if has(&["иду", "едем", "идем", "отправля", "переход", "возвраща", "скачем", "плывем"])
     {
-        out.push("перемещение: scene location (и time), спутники — move");
+        out.push("перемещение: scene location (и time); спутник с заданием — move с task");
     }
     out
 }
@@ -659,6 +634,10 @@ fn scene_now_lines(session: &Session) -> Vec<String> {
         })
         .collect();
     out.push(format!("отряд: {}", party.join("; ")));
+    let tasks = session.task_lines();
+    if !tasks.is_empty() {
+        out.push(format!("поручения спутников: {}", tasks.join("; ")));
+    }
     out
 }
 
@@ -742,12 +721,14 @@ fn turn_message(
             || rolls_say_fight
             || session.scene().mood == dnd_engine::Mood::Battle
         {
-            reminders.push(
+            let budget = session.encounter_budget().map_or(String::new(), |b| {
+                format!("; сила противников — по бюджету боя 2024 года: {}", b.line())
+            });
+            reminders.push(format!(
                 "заявка похожа на нападение — если начинается бой, начни его командой \
-{\"cmd\":\"combat\",\"start\":true,\"foes\":[{\"name\":\"…\",\"role\":\"простолюдин\",\"surprised\":true}]}: \
-реши, кто застигнут врасплох, попроси у игрока инициативу героя и брось инициативу остальным"
-                    .to_string(),
-            );
+{{\"cmd\":\"combat\",\"start\":true,\"foes\":[{{\"name\":\"…\",\"role\":\"простолюдин\",\"surprised\":true}}]}}: \
+реши, кто застигнут врасплох, попроси у игрока инициативу героя и брось инициативу остальным{budget}"
+            ));
         }
     }
     if session.combat_quiet_reminder() {
@@ -768,6 +749,17 @@ fn turn_message(
         reminders.push(format!(
             "уже {} ходов без записей в базу знаний — запиши важное: события, тайны, планы NPC, таймеры",
             session.turns_without_notes()
+        ));
+    }
+    for task in session.stale_tasks() {
+        let name = session
+            .character(&task.character)
+            .map_or_else(|_| task.character.clone(), |c| c.name.clone());
+        reminders.push(format!(
+            "{name} выполняет поручение «{}» ({}) — время ушло: реши, чем оно кончилось (вернулся — \
+move к герою; весть или задержка — расскажи; выполнено — move с \"done\":true)",
+            task.text,
+            task.since()
         ));
     }
     let met = session.met_unknown();
@@ -820,8 +812,8 @@ fn turn_message(
     }
     if ooc {
         out.push_str(
-            "[ВНЕ ИГРЫ]\nИгрок говорит с тобой вне игры (правила, механика, уточнения). Ответь как мастер за \
-столом: без хода мира, без бросков и команд, время сцены не двигай.\n\n",
+            "[ВНЕ ИГРЫ]\nИгрок говорит с тобой вне игры (правила, механика, уточнения). Ответь целиком в \
+двойных скобках ((…)), как мастер за столом: без хода мира, бросков, команд и строки «СЕЙЧАС».\n\n",
         );
     }
     let fight = session.combat_lines();
@@ -1012,9 +1004,11 @@ pub fn answer_query(session: &Session, cmd: &Value) -> Result<String, String> {
                 |n| format!("День {day}: {}", n.text),
             ))
         }
-        other => {
-            Err(format!("неизвестный запрос «{other}»: sheet, spells, card, notes, chronicle"))
-        }
+        "chat" => Ok(crate::recall::search_chat(session, text_of("text"))),
+        "rules" => crate::codex::rules_topic(text_of("topic")),
+        other => Err(format!(
+            "неизвестный запрос «{other}»: sheet, spells, card, notes, chronicle, chat, rules"
+        )),
     }
 }
 
@@ -1107,7 +1101,7 @@ pub fn update_request(
 - cast: {{"cmd":"cast","character":"id","spell":"id заклинания","slot":N}}; ячейка без заклинания: {{"cmd":"slot","character":"id","level":1,"spend":true}}
 - item: {{"cmd":"item","character":"id","add":"Название","quantity":1}} / "remove" / "move","to"
 - treasury: {{"cmd":"treasury","asset":"gp","location":"id места","quantity":-80,"reason":"..."}}; transfer: {{"cmd":"transfer","asset":"gp","quantity":N,"from":"id","to":"id","reason":"..."}}
-- scene: {{"cmd":"scene","time":"вечер","location":"..."}} ("day" — только вперёд, если рассказ прямо говорит о новом дне); move: {{"cmd":"move","character":"id","location":"..."}}
+- scene: {{"cmd":"scene","time":"вечер","location":"..."}} ("day" — только вперёд, если рассказ прямо говорит о новом дне); move: {{"cmd":"move","character":"id","location":"...","task":"поручение спутника, если он ушёл с заданием"}} (задание выполнено — "done":true)
 - rest: {{"cmd":"rest","kind":"short"|"long"}} — только если в рассказе отряд отдыхает по заявке игрока.
 - note: {{"cmd":"note","layer":"player","title":"...","text":"...","card":"id"}} — что герой узнал или решил; "layer":"master" — только скрытая от героя правда: "kind" secret (тайна), plan (план NPC), timer (событие на день, с "due_day").
 - chronicle: {{"cmd":"chronicle","day":N,"text":"5–10 предложений о дне"}}
@@ -1264,6 +1258,27 @@ mod tests {
     }
 
     #[test]
+    fn queries_chat_and_rules_and_tasks_in_scene() {
+        let mut s = session();
+        s.set_chat_archive(vec![dnd_engine::ChatLine {
+            id: 186,
+            author: "player".into(),
+            text: "Гюнтер, отправляйся в ратушу за капитаном стражи".into(),
+        }]);
+        let chat =
+            answer_query(&s, &json!({"cmd":"query","what":"chat","text":"Гюнтер ратуша"})).unwrap();
+        assert!(chat.contains("[сообщение 186]"), "{chat}");
+        let rules =
+            answer_query(&s, &json!({"cmd":"query","what":"rules","topic":"recruit"})).unwrap();
+        assert!(rules.contains("\"cmd\":\"recruit\""));
+        s.move_character("npc.gunther", "ратуша").unwrap();
+        s.set_task("npc.gunther", "найти капитана стражи").unwrap();
+        let request = master_request(&mut s, "Что с Гюнтером?", "", false, false);
+        assert!(request.turn.contains("поручения спутников: "), "{}", request.turn);
+        assert!(request.turn.contains("найти капитана стражи"));
+    }
+
+    #[test]
     fn system_text_is_stable_within_a_scene() {
         let mut s = session();
         let first = master_request(&mut s, "Осматриваюсь", "", false, false);
@@ -1284,7 +1299,7 @@ mod tests {
         let mut s = session();
         let first = master_request(&mut s, "Осматриваюсь", "", false, false);
         assert_eq!(first.system_parts.len(), 2);
-        assert!(first.system_parts[0].contains("ШПАРГАЛКА КОМАНД"));
+        assert!(first.system_parts[0].contains("КОМАНДЫ ДВИЖКА"));
         assert!(!first.turn.contains("[ШПАРГАЛКА]"));
         assert!(first.turn.contains("[СЦЕНА]\n- День "), "{}", first.turn);
         assert!(first.turn.contains("[ПУЛ КУБОВ]\nd20: "), "{}", first.turn);

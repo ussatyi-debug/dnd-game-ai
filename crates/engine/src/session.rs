@@ -142,6 +142,8 @@ pub struct PartyMember {
     pub in_scene: bool,
     /// Ресурсы для значков на карточке (не больше трёх).
     pub key_resources: Vec<ResourcePool>,
+    /// Поручение спутника (зачем он ушёл из сцены).
+    pub task: Option<String>,
 }
 
 /// Окно «Отряд»: сцена, участники, итог казны.
@@ -178,6 +180,12 @@ pub struct SaveState {
     pub combat: Option<crate::combat::Combat>,
     /// Очередь инициативы текущего боя.
     pub initiative: Vec<crate::combat::InitiativeEntry>,
+    /// Поручения спутников.
+    pub tasks: Vec<crate::tasks::CompanionTask>,
+    /// Снимок сцены мастера: после загрузки «изменения с начала сцены» те же, что до неё.
+    pub master_memo: Option<MasterMemo>,
+    /// Отдыхов за игру (часть ключа сцены снимка).
+    pub rests: u64,
 }
 
 /// Состояние сессии.
@@ -207,7 +215,7 @@ pub struct Session {
     pub(crate) undo: Option<Box<UndoPoint>>,
     /// Своя кампания; `None` — «Дом Стрэндж».
     pub(crate) campaign: Option<Campaign>,
-    /// Снимок сцены для мастера (в сохранение не попадает, после загрузки собирается заново).
+    /// Снимок сцены для мастера (идёт в сохранение с 0.10.2).
     pub(crate) master_memo: Option<MasterMemo>,
     /// Отдыхов за игру: отдых начинает новую сцену для снимка.
     pub(crate) rests: u64,
@@ -259,6 +267,21 @@ pub struct Session {
     pub(crate) combat_reports: Vec<String>,
     /// Опыт за противников последнего закрытого боя по бестиарию.
     pub(crate) combat_xp_hint: u32,
+    /// Поручения спутников (0.10.2).
+    pub(crate) tasks: Vec<crate::tasks::CompanionTask>,
+    /// Старый чат вне окна истории мастера — для поиска `query chat`. Не сохраняется: интерфейс
+    /// присылает его перед ходом мастера.
+    pub(crate) chat_archive: Vec<ChatLine>,
+}
+
+/// Сообщение старого чата для поиска мастером.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ChatLine {
+    pub id: u64,
+    /// «player» или «master».
+    pub author: String,
+    pub text: String,
 }
 
 /// Кубы пула хода: d20, d12, d10, d8, d6, d4.
@@ -326,6 +349,8 @@ impl DiceRng for PoolRng<'_> {
 
 /// Снимок сцены, который мастер получает неизменным до смены сцены, и состояние на момент
 /// снимка — для списка изменений за ход. Формат содержимого задаёт крейт мастера.
+/// Идёт в сохранение (0.10.2).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MasterMemo {
     /// Ключ сцены: день, место, кто в сцене, отдыхи.
@@ -382,6 +407,8 @@ impl Session {
             turn_out_of_game: false,
             combat_reports: Vec::new(),
             combat_xp_hint: 0,
+            tasks: Vec::new(),
+            chat_archive: Vec::new(),
         }
     }
 
@@ -393,6 +420,21 @@ impl Session {
     /// Запомнить снимок сцены мастера.
     pub fn set_master_memo(&mut self, memo: MasterMemo) {
         self.master_memo = Some(memo);
+    }
+
+    /// Старый чат вне окна истории мастера (интерфейс присылает его перед ходом).
+    pub fn set_chat_archive(&mut self, lines: Vec<ChatLine>) {
+        self.chat_archive = lines
+            .into_iter()
+            .filter(|l| {
+                matches!(l.author.as_str(), "player" | "master") && !l.text.trim().is_empty()
+            })
+            .collect();
+    }
+
+    /// Старый чат для поиска `query chat`.
+    pub fn chat_archive(&self) -> &[ChatLine] {
+        &self.chat_archive
     }
 
     /// Сколько раз отряд отдыхал за игру.
@@ -701,6 +743,7 @@ impl Session {
                 location: c.location.clone(),
                 in_scene: c.location == self.scene.location,
                 key_resources: c.resources().iter().take(3).cloned().collect(),
+                task: self.task_of(&c.id).map(|t| t.text.clone()),
             })
             .collect();
         PartyView {
@@ -878,6 +921,9 @@ impl Session {
             level_up_open: self.level_up_open.clone(),
             combat: self.combat.clone(),
             initiative: self.initiative_entries(),
+            tasks: self.tasks.clone(),
+            master_memo: self.master_memo.clone(),
+            rests: self.rests,
         }
     }
 }

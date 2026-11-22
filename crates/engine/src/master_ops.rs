@@ -54,6 +54,7 @@ pub struct Checkpoint {
     xp_log: Vec<crate::experience::XpNote>,
     level_up_open: Vec<String>,
     combat: Option<crate::combat::Combat>,
+    tasks: Vec<crate::tasks::CompanionTask>,
 }
 
 /// Отменяемый ход мастера.
@@ -127,6 +128,7 @@ impl Session {
             xp_log: self.xp_log.clone(),
             level_up_open: self.level_up_open.clone(),
             combat: self.combat.clone(),
+            tasks: self.tasks.clone(),
         }
     }
 
@@ -145,10 +147,19 @@ impl Session {
         self.xp_log = c.xp_log;
         self.level_up_open = c.level_up_open;
         self.combat = c.combat;
+        self.tasks = c.tasks;
     }
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
+        // Ответ вне игры («((…))»): время, счётчики, таймеры и бой стоят.
+        if self.turn_out_of_game {
+            self.tick_combat();
+            self.initiative_noted = false;
+            let after = self.checkpoint();
+            self.undo = (after != before).then(|| Box::new(UndoPoint { before, after, actions }));
+            return;
+        }
         self.turns_since_time += 1;
         self.tick_combat();
         self.cool_down_battle();
@@ -758,6 +769,7 @@ impl Session {
         c.location = location.to_string();
         let name = c.name.clone();
         self.log(format!("{name} → {location}"));
+        self.close_task_if_back(id);
         Ok(())
     }
 
