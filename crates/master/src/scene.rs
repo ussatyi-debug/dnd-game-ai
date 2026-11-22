@@ -738,10 +738,13 @@ fn turn_message(
                 .to_string(),
         );
     }
+    if let Some(reminder) = crate::timeline::summary_time_reminder(session) {
+        reminders.push(reminder);
+    }
     if session.turns_since_time() >= TIME_REMINDER_TURNS {
         reminders.push(format!(
             "время сцены не менялось {} ходов — если события заняли время (дорога, бой, обыск, разговоры), \
-обнови его командой scene; наступила ночь или новое утро — обнови и день",
+сдвинь его командой {{\"cmd\":\"scene\",\"advance\":\"30 мин\"}}; наступила ночь или новое утро — обнови и день",
             session.turns_since_time()
         ));
     }
@@ -856,9 +859,12 @@ combat set. Бой кончился — combat end с исходом.\n\n",
         out.push('\n');
     }
     // Живая сводка — у самого конца запроса: модель держит в голове последнее лучше всего.
+    // Первую строку — день, часы, время суток и место — пишет движок: время знает только он.
+    out.push_str(&format!("[СЕЙЧАС]\n{}\n", crate::timeline::scene_clock_line(session)));
     if !session.scene().now.trim().is_empty() {
-        out.push_str(&format!("[СЕЙЧАС]\n{}\n\n", session.scene().now.trim()));
+        out.push_str(&format!("{}\n", session.scene().now.trim()));
     }
+    out.push('\n');
     if let Some(rule) = narration_rule(narration) {
         out.push_str(&format!("[ДЛИНА РАССКАЗА]\n{rule}\n\n"));
     }

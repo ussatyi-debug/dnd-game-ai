@@ -32,6 +32,8 @@ pub enum HpChange {
 pub struct SceneChange {
     pub day: Option<u32>,
     pub time: Option<String>,
+    /// Сколько минут прошло: движок сам прибавляет к часам сцены (после полуночи — новый день).
+    pub advance: Option<i64>,
     pub location: Option<String>,
     pub situation: Option<String>,
     pub mood: Option<Mood>,
@@ -152,6 +154,13 @@ impl Session {
 
     /// Завершает ход мастера: если состояние изменилось, ход можно будет отменить.
     pub fn commit_master_turn(&mut self, before: Checkpoint, actions: Vec<String>) {
+        // Сцена сменилась (новое место, день, сон, скачок времени), а сводку «СЕЙЧАС» в этом ходу
+        // мастер не прислал или движок её не узнал — старая сводка тянула бы мастера в прошлое.
+        let turn = self.master_turn;
+        self.master_turn += 1;
+        if self.scene_jump_turn == Some(turn) && self.now_turn != Some(turn) {
+            self.scene.now.clear();
+        }
         // Ответ вне игры («((…))»): время, счётчики, таймеры и бой стоят.
         if self.turn_out_of_game {
             self.tick_combat();
@@ -455,6 +464,7 @@ impl Session {
     /// Живая сводка «что сейчас»: мастер обновляет её каждый ход, игрок может поправить руками.
     /// Пустой текст очищает сводку.
     pub fn set_scene_now(&mut self, text: &str) {
+        self.now_turn = Some(self.master_turn);
         let text = text.trim();
         let short: Vec<&str> =
             text.lines().map(str::trim).filter(|l| !l.is_empty()).take(6).collect();
@@ -652,11 +662,45 @@ impl Session {
 
     // ───────────────────────────── сцена ─────────────────────────────
 
+    /// Отказ команды сцены — в журнал движка.
+    fn scene_refusal(&mut self, e: EngineError) -> EngineError {
+        self.log(format!("Отказ (сцена): {e}"));
+        e
+    }
+
     /// Меняет день, время, место или обстановку сцены. Перемещение сцены переносит туда и
     /// персонажа игрока.
-    pub fn change_scene(&mut self, change: SceneChange) -> Result<Scene, EngineError> {
+    pub fn change_scene(&mut self, mut change: SceneChange) -> Result<Scene, EngineError> {
         if change == SceneChange::default() {
             return Err(EngineError::ZeroAmount);
+        }
+        // «Прошло 30 минут»: часы считает движок, а не модель.
+        if let Some(advance) = change.advance.take() {
+            let clock_now = self.scene.time.as_deref().and_then(crate::clock::minutes);
+            let now = match (&change.time, clock_now) {
+                (Some(_), _) => {
+                    return Err(self.scene_refusal(EngineError::SceneAdvance(
+                        "пришли либо «time», либо «advance»".into(),
+                    )))
+                }
+                (None, None) => {
+                    let shown = self.scene.time.clone().unwrap_or_else(|| "не указано".into());
+                    return Err(self.scene_refusal(EngineError::SceneAdvance(format!(
+                        "время сцены «{shown}» — не часы ЧЧ:ММ: пришли «time»"
+                    ))));
+                }
+                (None, Some(now)) => now,
+            };
+            if advance <= 0 {
+                return Err(self
+                    .scene_refusal(EngineError::SceneAdvance("время идёт только вперёд".into())));
+            }
+            let total = now + advance;
+            let days = u32::try_from(total / crate::clock::DAY_MINUTES).unwrap_or(0);
+            change.time = Some(crate::clock::hhmm(total));
+            if days > 0 {
+                change.day = Some(change.day.unwrap_or(self.scene.day) + days);
+            }
         }
         let moved = change.location.is_some() || change.day.is_some();
         let (day_before, time_before, place_before) =
@@ -664,8 +708,7 @@ impl Session {
         if let Some(day) = change.day {
             if day < self.scene.day {
                 let e = EngineError::DayInPast { current: self.scene.day, requested: day };
-                self.log(format!("Отказ (сцена): {e}"));
-                return Err(e);
+                return Err(self.scene_refusal(e));
             }
             if day != self.scene.day {
                 self.turns_since_time = 0;
@@ -702,6 +745,9 @@ impl Session {
         if stale && !situation_given {
             self.scene.situation.clear();
         }
+        if stale {
+            self.scene_jump_turn = Some(self.master_turn);
+        }
         // Явный признак конца боя: новое место, новый день, время ушло больше чем на час,
         // мастер сменил настроение с боя на другое.
         if self.combat.is_some() {
@@ -732,7 +778,8 @@ impl Session {
             Mood::Calm => String::new(),
             m => format!(" ({})", m.label()),
         };
-        self.log(format!("Сцена: День {}{time} — {}{mood}", s.day, s.location));
+        let place = self.card_title(&s.location);
+        self.log(format!("Сцена: День {}{time} — {place}{mood}", s.day));
         Ok(self.scene.clone())
     }
 
@@ -786,6 +833,10 @@ impl Session {
     /// Отдых отряда с записью в журнал.
     pub fn master_rest(&mut self, kind: RestKind) -> Vec<String> {
         self.close_combat_if("отдых");
+        if kind == RestKind::Long {
+            // После сна прежняя сводка «СЕЙЧАС» устарела (если мастер не прислал новую).
+            self.scene_jump_turn = Some(self.master_turn);
+        }
         if self.scene.mood == Mood::Battle {
             self.scene.mood = Mood::Calm;
         }
@@ -973,6 +1024,51 @@ mod tests {
         assert!(s.change_scene(SceneChange { day: Some(10), ..SceneChange::default() }).is_err());
         s.move_character("npc.valeria", "Серебряный Шпиль").unwrap();
         assert!(s.party_view().members.iter().find(|m| m.id == "npc.valeria").unwrap().in_scene);
+    }
+
+    #[test]
+    fn scene_advance_counts_minutes_and_days() {
+        let mut s = session();
+        let at = |time: &str| SceneChange { time: Some(time.into()), ..SceneChange::default() };
+        let go = |m: i64| SceneChange { advance: Some(m), ..SceneChange::default() };
+        s.change_scene(at("18:10")).unwrap();
+        let day = s.scene().day;
+        s.change_scene(go(25)).unwrap();
+        assert_eq!(s.scene().time.as_deref(), Some("18:35"));
+        s.change_scene(go(6 * 60)).unwrap();
+        assert_eq!(s.scene().time.as_deref(), Some("00:35"));
+        assert_eq!(s.scene().day, day + 1);
+        assert!(s.change_scene(SceneChange { advance: Some(10), ..at("01:00") }).is_err());
+        s.change_scene(at("утро")).unwrap();
+        assert!(s.change_scene(go(30)).is_err());
+    }
+
+    #[test]
+    fn stale_summary_clears_after_jump_without_new_one() {
+        let mut s = session();
+        let at = |time: &str| SceneChange { time: Some(time.into()), ..SceneChange::default() };
+        s.change_scene(at("19:00")).unwrap();
+        // Ход 1: мастер пишет сводку.
+        let before = s.checkpoint();
+        s.set_scene_now("Малый зал, ужин");
+        s.commit_master_turn(before, Vec::new());
+        // Ход 2: полчаса без новой сводки — прежняя остаётся.
+        let before = s.checkpoint();
+        s.change_scene(at("19:30")).unwrap();
+        s.commit_master_turn(before, Vec::new());
+        assert_eq!(s.scene().now, "Малый зал, ужин");
+        // Ход 3: длительный отдых, сводки нет — прежняя снимается.
+        let before = s.checkpoint();
+        s.master_rest(crate::resource::RestKind::Long);
+        s.commit_master_turn(before, Vec::new());
+        assert!(s.scene().now.is_empty());
+        // Ход 4: новое утро и сводка того же хода (двухшаговый ход пишет сводку раньше команд).
+        let before = s.checkpoint();
+        s.set_scene_now("Апартаменты, утро");
+        let next = s.scene().day + 1;
+        s.change_scene(SceneChange { day: Some(next), ..at("06:30") }).unwrap();
+        s.commit_master_turn(before, Vec::new());
+        assert_eq!(s.scene().now, "Апартаменты, утро");
     }
 
     #[test]

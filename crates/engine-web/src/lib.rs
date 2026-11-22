@@ -253,6 +253,14 @@ pub enum Request {
     MasterRepair {
         text: String,
     },
+    /// Проверка рассказа: рассказчик сменил время суток, а сцена — нет (просьба мастеру или null).
+    MasterTimeCheck {
+        text: String,
+    },
+    /// Ответ мастера на проверку времени: команды и, если ход переписан, новый текст.
+    MasterApplyTimeCheck {
+        text: String,
+    },
     /// Старый чат вне окна истории мастера — для поиска `query chat`.
     ChatArchive {
         lines: Vec<dnd_engine::ChatLine>,
@@ -325,21 +333,30 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             ))
         }
         Request::MasterNarration { text } => {
-            // Ответ вне игры «((…))»: мир стоит — без сводки и второго шага.
+            // Ответ вне игры «((…))»: мир стоит — без сводки и второго шага; учёт («начисли
+            // опыт») движок выполняет сразу.
             let out_of_game = dnd_master::out_of_game_reply(&text);
+            if out_of_game {
+                let turn = dnd_master::apply_directives(session, &text);
+                return Ok(json!({
+                    "text": turn.text,
+                    "written": "",
+                    "no_changes": true,
+                    "out_of_game": true,
+                    "actions": turn.actions,
+                }));
+            }
             let now = dnd_master::scene_now(&text);
-            if !now.is_empty() && !out_of_game {
+            if !now.is_empty() {
                 session.set_scene_now(&now);
             }
             let (text, written, no_changes) = dnd_master::narration_parts(&text);
-            if !out_of_game {
-                session.note_met_in_narration(&text);
-            }
+            session.note_met_in_narration(&text);
             Ok(json!({
                 "text": text,
-                "written": if out_of_game { String::new() } else { written },
-                "no_changes": no_changes || out_of_game,
-                "out_of_game": out_of_game,
+                "written": written,
+                "no_changes": no_changes,
+                "out_of_game": false,
             }))
         }
         Request::MasterUpdateRequest { player, narration, written } => {
@@ -495,6 +512,10 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(dnd_master::resolve_pool(session, &text, apply))
         }
         Request::MasterRepair { text } => to_value(dnd_master::apply_repair(session, &text)),
+        Request::MasterTimeCheck { text } => to_value(dnd_master::time_check(session, &text)),
+        Request::MasterApplyTimeCheck { text } => {
+            to_value(dnd_master::apply_time_check(session, &text))
+        }
         Request::ChatArchive { lines } => {
             session.set_chat_archive(lines);
             to_value(true)

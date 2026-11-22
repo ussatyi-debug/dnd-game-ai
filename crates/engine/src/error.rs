@@ -77,6 +77,8 @@ pub enum EngineError {
     NoCardOverride(String),
     /// Таймеру нужен день срабатывания.
     TimerWithoutDay,
+    /// Команда `scene` с `advance` не может сдвинуть время.
+    SceneAdvance(String),
     /// Карточку из файлов базы нельзя изменить или удалить.
     NotCustomCard(String),
     /// Неизвестный слой или раздел базы.
@@ -260,6 +262,7 @@ impl fmt::Display for EngineError {
                 write!(f, "У карточки «{title}» и так статус из базы знаний")
             }
             Self::TimerWithoutDay => write!(f, "Таймеру нужен день срабатывания («due_day»)"),
+            Self::SceneAdvance(why) => write!(f, "Время сцены не сдвинуть: {why}"),
             Self::NotCustomCard(id) => write!(
                 f,
                 "Карточку «{id}» нельзя изменить: менять и удалять можно только карточки, созданные по ходу игры (статус — командой card)"

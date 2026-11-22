@@ -63,6 +63,8 @@ import {
   masterPool,
   masterRolls,
   repairRequest,
+  masterTimeCheck,
+  masterApplyTimeCheck,
   partyView,
   restartDemo,
   setKbCards,
@@ -850,6 +852,7 @@ export default function App() {
         if (twoStep) return { narration: await masterNarration(full), turn: null };
         // Команды движка из ответа (ячейки, заклинания) выполняет движок, в чате остаётся текст.
         const turn = await masterApply(`${full}\n${carried}`, rolled.flatMap((r) => [...r.dice, r.total]), playerMessage.text);
+        const baseLen = history.length;
         // Отказы движка: один повтор — мастер присылает исправленные команды.
         const request = repairRequest(turn.actions);
         if (request) {
@@ -861,6 +864,22 @@ export default function App() {
             turn.actions.push(...fixed.map((a) => ({ ...a, summary: `исправлено: ${a.summary}` })));
           } catch (e) {
             devLog.add("error", "Повтор команд не удался", errorText(e));
+          }
+        }
+        // Рассказчик сменил время суток, а сцена — нет: до показа мастер присылает время или
+        // переписывает ход (время двигает только мастер).
+        const check = await masterTimeCheck(turn.text);
+        if (check) {
+          history.length = baseLen;
+          history.push({ role: "master", text }, { role: "player", text: check });
+          try {
+            const fix = await gen(system, history, () => undefined, controller.signal);
+            raw.push(fix);
+            const fixed = await masterApplyTimeCheck(fix);
+            if (fixed.text) turn.text = fixed.text;
+            turn.actions.push(...fixed.actions.map((a) => ({ ...a, summary: `время: ${a.summary}` })));
+          } catch (e) {
+            devLog.add("error", "Проверка времени не удалась", errorText(e));
           }
         }
         return { narration: null, turn };

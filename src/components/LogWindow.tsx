@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { devLog, LOG_KIND_LABEL, type LogEntry, type LogKind } from "../lib/devlog";
+import { saveTextFile } from "../lib/sheetExport";
 import CopyButton from "./CopyButton";
 import Modal from "./Modal";
 
@@ -19,11 +20,22 @@ function time(iso: string): string {
   return `${d.toLocaleDateString("ru-RU")} ${d.toLocaleTimeString("ru-RU")}`;
 }
 
+/** Журнал в файл: имя по дате и времени, итог — строкой под кнопками. */
+async function saveLog(text: string, done: (message: string) => void) {
+  const stamp = new Date().toISOString().slice(0, 16).replace("T", "-").replace(":", "-");
+  try {
+    done(await saveTextFile(`dnd-log-${stamp}.txt`, text, "text/plain"));
+  } catch (e) {
+    done(`Файл не сохранён: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 export default function LogWindow({ onClose }: { onClose: () => void }) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [kind, setKind] = useState<LogKind | "">("");
   const [problems, setProblems] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
+  const [saved, setSaved] = useState("");
   useEffect(() => devLog.subscribe(setEntries), []);
 
   const shown = useMemo(
@@ -59,6 +71,15 @@ export default function LogWindow({ onClose }: { onClose: () => void }) {
           <CopyButton text={devLog.text(shown.slice().reverse())} label="📋 Копировать" />
           <button
             type="button"
+            onClick={() => void saveLog(devLog.text(shown.slice().reverse()), setSaved)}
+            disabled={shown.length === 0}
+            title="Журнал целиком в файл .txt — вставка в чат обрезает длинный текст"
+            className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-gold disabled:opacity-40"
+          >
+            💾 В файл
+          </button>
+          <button
+            type="button"
             onClick={() => devLog.clear()}
             disabled={entries.length === 0}
             className="rounded-md border border-edge px-2 py-1 text-xs text-muted hover:border-fumble disabled:opacity-40"
@@ -69,8 +90,9 @@ export default function LogWindow({ onClose }: { onClose: () => void }) {
       </div>
       <p className="px-3 pt-2 text-xs text-muted">
         Ответы мастера как есть, команды движка и отказы, броски (включая тайные), сбои связи. Скопируйте нужные записи
-        и пришлите их для разбора.
+        или сохраните журнал в файл и пришлите для разбора.
       </p>
+      {saved && <p className="px-3 pt-1 text-xs text-gold">{saved}</p>}
       <ol className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {shown.length === 0 ? (
           <li className="p-4 text-center text-sm text-muted">Записей нет</li>

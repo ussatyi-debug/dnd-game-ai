@@ -15,6 +15,7 @@ mod directives;
 mod recall;
 mod rolls;
 mod scene;
+mod timeline;
 
 pub use directives::{
     apply_directives, apply_repair, narration_parts, out_of_game_reply, repair_request, scene_now,
@@ -29,6 +30,7 @@ pub use scene::{
     update_request, MasterRequest, CHRONICLE_REMINDER_TURNS, HISTORY_TURNS_DEFAULT,
     HISTORY_TURNS_MAX, HISTORY_TURNS_MIN,
 };
+pub use timeline::{apply_time_check, time_check, TimeFix};
 
 use dnd_engine::{Character, MasterNote, Proficiency, Session, SpellbookView, KB_STATUSES};
 use serde_json::{json, Value};

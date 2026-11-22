@@ -181,11 +181,75 @@ pub(crate) fn clean_reply(text: &str) -> String {
     text.lines()
         .filter(|l| !l.trim_start().starts_with("[ДВИЖОК]"))
         .filter(|l| !is_service_line(l))
-        .map(|l| l.chars().filter(|c| !is_cjk(*c)).collect::<String>())
+        .map(|l| cyrillic_words(&l.chars().filter(|c| !is_cjk(*c)).collect::<String>()))
         .collect::<Vec<_>>()
         .join("\n")
         .trim()
         .to_string()
+}
+
+/// Слово, где модель смешала алфавиты («interesует»), — целиком кириллицей («интересует»).
+/// Слова только латиницей (имена, термины) не трогаются.
+fn cyrillic_words(line: &str) -> String {
+    let is_cyr = |c: char| matches!(c, 'а'..='я' | 'А'..='Я' | 'ё' | 'Ё');
+    let mut out = String::with_capacity(line.len());
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        let mixed = word.chars().any(is_cyr) && word.chars().any(|c| c.is_ascii_alphabetic());
+        if mixed {
+            for c in word.chars() {
+                out.push_str(&latin_to_cyrillic(c));
+            }
+        } else {
+            out.push_str(word);
+        }
+        word.clear();
+    };
+    for c in line.chars() {
+        if c.is_alphabetic() {
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
+}
+
+/// Латинская буква — кириллицей по звучанию; остальные символы — как есть.
+fn latin_to_cyrillic(c: char) -> String {
+    let lower = match c.to_ascii_lowercase() {
+        'a' => "а",
+        'b' => "б",
+        'c' | 'k' | 'q' => "к",
+        'd' => "д",
+        'e' => "е",
+        'f' => "ф",
+        'g' => "г",
+        'h' => "х",
+        'i' => "и",
+        'j' => "й",
+        'l' => "л",
+        'm' => "м",
+        'n' => "н",
+        'o' => "о",
+        'p' => "п",
+        'r' => "р",
+        's' => "с",
+        't' => "т",
+        'u' => "у",
+        'v' | 'w' => "в",
+        'x' => "кс",
+        'y' => "ы",
+        'z' => "з",
+        _ => return c.to_string(),
+    };
+    if c.is_ascii_uppercase() {
+        lower.to_uppercase()
+    } else {
+        lower.to_string()
+    }
 }
 
 /// Служебная строка: мастер рассуждает вслух и показывает игроку внутренние имена движка
@@ -216,16 +280,15 @@ pub fn strip_directives(text: &str) -> String {
 /// Отделяет живую сводку «СЕЙЧАС» от рассказа: мастер пишет её в конце ответа, игрок видит
 /// сводку в «Обстановке», а не в чате. Возвращает (рассказ, сводка).
 pub(crate) fn split_now(text: &str) -> (String, String) {
-    let is_header = |line: &str| {
-        let line = line.trim().trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
-        line == "сейчас"
-    };
     let mut prose: Vec<&str> = Vec::new();
     let mut now: Vec<&str> = Vec::new();
     let mut in_now = false;
     for line in text.lines() {
-        if is_header(line) {
+        if let Some(rest) = now_header(line) {
             in_now = true;
+            if !rest.is_empty() {
+                now.push(rest);
+            }
             continue;
         }
         if in_now {
@@ -240,6 +303,31 @@ pub(crate) fn split_now(text: &str) -> (String, String) {
         .filter(|l| !l.is_empty() && !is_now_noise(l))
         .collect();
     (prose.join("\n").trim().to_string(), now.join("\n"))
+}
+
+/// Заголовок сводки: «СЕЙЧАС» отдельной строкой (как угодно оформленный) или «СЕЙЧАС: текст»
+/// в одну строку (лог 22.11: Haiku перешла на такой вид, и сводка застыла). Текст на строке
+/// заголовка — только после заглавного «СЕЙЧАС», чтобы не спутать с «Сейчас, князь…» в рассказе.
+/// Возвращает текст после заголовка (пустой — заголовок без текста).
+fn now_header(line: &str) -> Option<&str> {
+    let bare = line.trim().trim_matches(|c: char| !c.is_alphanumeric());
+    if bare.to_lowercase() == "сейчас" {
+        return Some("");
+    }
+    let rest = line.trim_start().trim_start_matches(|c: char| !c.is_alphanumeric());
+    let rest = rest.strip_prefix("СЕЙЧАС")?;
+    if rest.starts_with(char::is_alphanumeric) {
+        return None;
+    }
+    let rest = rest.trim_start_matches([' ', ':', '—', '–', '-', '*', '»', '"', '.', ')', '_']);
+    // Без двоеточия или тире после «СЕЙЧАС» и с текстом — это строчка рассказа заглавными.
+    let marked = line.contains("СЕЙЧАС:")
+        || line.contains("СЕЙЧАС —")
+        || line.contains("СЕЙЧАС –")
+        || line.contains("СЕЙЧАС -")
+        || line.contains("СЕЙЧАС**")
+        || line.contains("СЕЙЧАС»");
+    marked.then_some(rest.trim())
 }
 
 /// Служебная строка в сводке «СЕЙЧАС»: внутренние имена («loc.mole_hole») или слова о движке
@@ -459,9 +547,25 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
                 Some(d) => Some(u32::try_from(d).map_err(|_| format!("неверный день {d}"))?),
                 None => None,
             };
+            // «advance»: сколько прошло — числом минут или словами («30 мин», «1 ч 15 мин»).
+            let advance = match cmd.get("advance") {
+                None | Some(Value::Null) => None,
+                Some(Value::Number(n)) => Some(
+                    n.as_i64()
+                        .filter(|m| *m > 0)
+                        .ok_or_else(|| format!("неверное «advance» {n} — минуты больше нуля"))?,
+                ),
+                Some(Value::String(text)) => {
+                    Some(dnd_engine::clock::duration(text).ok_or_else(|| {
+                        format!("не понял «advance»: «{text}» — пиши «30 мин», «2 ч», «1 ч 15 мин»")
+                    })?)
+                }
+                Some(other) => return Err(format!("неверное «advance» {other}")),
+            };
             let change = SceneChange {
                 day,
                 time: opt_text(cmd, "time").map(Into::into),
+                advance,
                 location: opt_text(cmd, "location").map(Into::into),
                 situation: opt_text(cmd, "situation").map(Into::into),
                 mood: match opt_text(cmd, "mood") {
@@ -822,16 +926,19 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     let out_of_game = is_out_of_game(&text);
     session.set_turn_out_of_game(out_of_game);
     if out_of_game {
-        let skipped = blocks.iter().flat_map(|b| commands(b)).count();
-        if skipped > 0 {
-            session.log(format!("Ответ вне игры: команды не выполнены ({skipped})"));
+        // Учёт по просьбе игрока («начисли опыт», «запиши») вне игры выполняется; действия в
+        // мире — только игровым ходом (лог 22.11: опыт «записан», а команды выброшены).
+        let (allowed, skipped) = bookkeeping_only(&blocks);
+        if !skipped.is_empty() {
+            session.log(format!(
+                "Ответ вне игры: не выполнено — {} (действия в мире — только игровым ходом)",
+                skipped.join(", ")
+            ));
         }
-        session.commit_master_turn(before, Vec::new());
-        return MasterTurn {
-            text: clean_reply(&text),
-            actions: Vec::new(),
-            fabricated: Vec::new(),
-        };
+        let actions = run_blocks(session, &allowed, false);
+        let summaries = actions.iter().filter(|a| a.ok).map(|a| a.summary.clone()).collect();
+        session.commit_master_turn(before, summaries);
+        return MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() };
     }
     if !now.is_empty() {
         session.set_scene_now(&now);
@@ -850,6 +957,32 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
 }
 
+/// Команды учёта, которые выполняются и в ответе вне игры: опыт, база знаний, хроника.
+const BOOKKEEPING: &[&str] =
+    &["xp", "xp_note", "note", "new_card", "edit_card", "card", "goal", "chronicle"];
+
+/// Делит команды ответа вне игры: учёт (одним блоком) и названия остальных — для журнала.
+/// Броски и запросы движок уже обслужил до итога хода — их не считаем.
+fn bookkeeping_only(blocks: &[String]) -> (Vec<String>, Vec<String>) {
+    let mut allowed = Vec::new();
+    let mut skipped = Vec::new();
+    for cmd in blocks.iter().flat_map(|b| commands(b)) {
+        match cmd {
+            Ok(value) => {
+                let name = value.get("cmd").and_then(Value::as_str).unwrap_or("?").to_string();
+                if BOOKKEEPING.contains(&name.as_str()) {
+                    allowed.push(value.to_string());
+                } else if !matches!(name.as_str(), "roll" | "query") {
+                    skipped.push(name);
+                }
+            }
+            Err(_) => skipped.push("неразобранная команда".into()),
+        }
+    }
+    let block = if allowed.is_empty() { Vec::new() } else { vec![allowed.join("\n")] };
+    (block, skipped)
+}
+
 /// Рассказ (без блоков команд и «СЕЙЧАС») целиком в двойных скобках «((…))».
 fn is_out_of_game(prose: &str) -> bool {
     let t = prose.trim();
@@ -857,7 +990,7 @@ fn is_out_of_game(prose: &str) -> bool {
 }
 
 /// Ответ мастера вне игры: весь рассказ в двойных скобках «((…))» (решение 22.11.2026).
-/// По нему движок не двигает время, сводку «СЕЙЧАС», бой и не выполняет команды.
+/// По нему движок не двигает время, сводку «СЕЙЧАС» и бой; из команд — только учёт.
 pub fn out_of_game_reply(reply: &str) -> bool {
     let (text, _) = split(reply);
     let (text, _) = split_now(&text);
@@ -1077,6 +1210,79 @@ mod tests {
         assert_eq!(s.character("npc.gunther").unwrap().hit_points.current, hp);
         assert_eq!(s.scene().now, "Склад, Гюнтер у лестницы");
         assert!(!out_of_game_reply("Гюнтер (молча) кивает."));
+    }
+
+    #[test]
+    fn out_of_game_runs_bookkeeping_only() {
+        let mut s = session();
+        let time = s.scene().time.clone();
+        let reply = concat!(
+            "((Опыт за день начисляю. Это по вопросу вне игры. Если вопросов больше нет — продолжаем?))\n",
+            "```engine\n",
+            "{\"cmd\":\"xp\",\"each\":140,\"reason\":\"День 98: допрос\"}\n",
+            "{\"cmd\":\"scene\",\"advance\":\"2 ч\"}\n",
+            "```"
+        );
+        let turn = apply_directives(&mut s, reply);
+        assert_eq!(turn.actions.len(), 1, "{:?}", turn.actions);
+        assert!(
+            turn.actions[0].ok && turn.actions[0].summary.contains("140"),
+            "{:?}",
+            turn.actions
+        );
+        assert_eq!(s.scene().time, time);
+        assert!(
+            s.engine_log().iter().any(|l| l.contains("не выполнено — scene")),
+            "{:?}",
+            s.engine_log()
+        );
+    }
+
+    #[test]
+    fn inline_now_summary_is_recognised() {
+        for (text, now) in [
+            (
+                "Ужин подан.\n\nСЕЙЧАС: Малый зал, 19:20. Ужин подан.",
+                "Малый зал, 19:20. Ужин подан.",
+            ),
+            ("Двор.\n**СЕЙЧАС:** Двор, вечер.\n- Корвус у ворот", "Двор, вечер.\nКорвус у ворот"),
+            ("Двор.\n«СЕЙЧАС»\nДвор, утро", "Двор, утро"),
+            ("Двор.\nСЕЙЧАС — Двор, утро", "Двор, утро"),
+        ] {
+            let (prose, got) = split_now(text);
+            assert_eq!(got, now, "{text}");
+            assert!(!prose.contains("СЕЙЧАС"), "{prose}");
+        }
+        // Обычное «Сейчас» в рассказе и строка заглавными без двоеточия — не сводка.
+        let (prose, now) = split_now("Сейчас, князь, вы всё поймёте.\nСЕЙЧАС ВСЁ РЕШИТСЯ!");
+        assert!(now.is_empty());
+        assert!(prose.contains("СЕЙЧАС ВСЁ РЕШИТСЯ!"));
+    }
+
+    #[test]
+    fn scene_advance_in_words() {
+        let mut s = session();
+        apply_directives(&mut s, "```engine\n{\"cmd\":\"scene\",\"time\":\"18:10\"}\n```");
+        let turn = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"scene\",\"advance\":\"1 ч 15 мин\"}\n```",
+        );
+        assert!(turn.actions[0].ok, "{:?}", turn.actions);
+        assert_eq!(s.scene().time.as_deref(), Some("19:25"));
+        let turn = apply_directives(&mut s, "```engine\n{\"cmd\":\"scene\",\"advance\":30}\n```");
+        assert!(turn.actions[0].ok, "{:?}", turn.actions);
+        assert_eq!(s.scene().time.as_deref(), Some("19:55"));
+        let turn = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"scene\",\"advance\":\"чуть позже\"}\n```",
+        );
+        assert!(!turn.actions[0].ok);
+    }
+
+    #[test]
+    fn mixed_alphabet_words_become_cyrillic() {
+        assert_eq!(clean_reply("Меня interesует не это."), "Меня интересует не это.");
+        assert_eq!(clean_reply("Капитан взял iPhone и XP."), "Капитан взял iPhone и XP.");
     }
 
     #[test]

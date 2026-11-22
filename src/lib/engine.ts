@@ -447,6 +447,22 @@ export interface RollRound {
   carried: string;
 }
 
+/** Ответ мастера на проверку времени: новый текст хода (если переписан) и команды. */
+export interface TimeFix {
+  text: string | null;
+  actions: MasterAction[];
+}
+
+/** Рассказчик сменил время суток, а сцена — нет: просьба к мастеру или `null` (веб-версия). */
+export function masterTimeCheck(text: string): Promise<string | null> {
+  return call<string | null>("master_time_check", { text });
+}
+
+/** Выполняет ответ мастера на проверку времени (веб-версия). */
+export function masterApplyTimeCheck(text: string): Promise<TimeFix> {
+  return call<TimeFix>("master_apply_time_check", { text });
+}
+
 /** Исправленные мастером команды после отказов движка (веб-версия). */
 export function masterRepair(text: string): Promise<MasterAction[]> {
   return call<MasterAction[]>("master_repair", { text });

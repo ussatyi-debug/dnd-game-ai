@@ -303,13 +303,7 @@ fn fold(text: &str) -> String {
 }
 
 /// «08:30» → минуты.
-fn minutes(time: &str) -> Option<i64> {
-    let t = time.trim();
-    let digits: String = t.chars().filter(|c| c.is_ascii_digit() || *c == ':').collect();
-    let (h, m) = digits.split_once(':')?;
-    let (h, m) = (h.parse::<i64>().ok()?, m.parse::<i64>().ok()?);
-    (h < 24 && m < 60).then_some(h * 60 + m)
-}
+use crate::clock::minutes;
 
 /// Время сцены ушло вперёд больше чем на час (или сменилось словом: «утро» → «вечер»).
 pub(crate) fn time_jump(before: Option<&str>, after: Option<&str>) -> bool {

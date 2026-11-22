@@ -24,6 +24,7 @@
 
 pub mod character;
 pub mod check;
+pub mod clock;
 pub mod combat;
 pub mod creation;
 pub mod error;

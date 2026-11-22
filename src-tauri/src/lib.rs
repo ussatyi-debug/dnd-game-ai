@@ -531,8 +531,9 @@ fn export_save(app: tauri::AppHandle, name: String, json: String) -> Result<Stri
         .trim_start_matches('.')
         .to_string();
     let safe = if safe.is_empty() { "sheet.json".to_string() } else { safe };
-    // Сохранения и листы — .json; лист для Word — .doc (HTML), для печати — .html; PDF — текстовый (ASCII).
-    let known = [".json", ".doc", ".html", ".pdf"].iter().any(|ext| safe.ends_with(ext));
+    // Сохранения и листы — .json; лист для Word — .doc (HTML), для печати — .html; PDF — текстовый
+    // (ASCII); журнал «Логирования» — .txt.
+    let known = [".json", ".doc", ".html", ".pdf", ".txt"].iter().any(|ext| safe.ends_with(ext));
     let safe = if known { safe } else { format!("{safe}.json") };
     let dir = export_dir(&app)?;
     std::fs::create_dir_all(&dir)
@@ -1032,8 +1033,11 @@ async fn ai_chat(
         }
         let (text, written, no_changes) = dnd_master::narration_parts(&full);
         if out_of_game {
+            // Вне игры второго шага нет: учёт («начисли опыт») движок выполняет сразу.
+            let turn = dnd_master::apply_directives(&mut *lock(&session)?, &full);
             reply.fabricated = Vec::new();
-            reply.text = text;
+            reply.text = turn.text;
+            reply.actions = turn.actions;
             reply.written_commands = String::new();
             reply.no_changes = true;
             reply.pending_update = false;
@@ -1050,6 +1054,7 @@ async fn ai_chat(
     full.push('\n');
     full.push_str(&carried);
     let mut turn = dnd_master::apply_directives(&mut *lock(&session)?, &full);
+    let base_history = history.len();
     // Отказы движка: один повтор — мастер присылает исправленные команды, они входят в тот же ход.
     if let Some(request) = dnd_master::repair_request(&turn.actions) {
         history.push(ai::ChatMessage { role: ai::Role::Master, text: reply.text.clone() });
@@ -1061,6 +1066,27 @@ async fn ai_chat(
             let fixed = dnd_master::apply_repair(&mut *lock(&session)?, &fix.text);
             turn.actions.extend(fixed.into_iter().map(|mut a| {
                 a.summary = format!("исправлено: {}", a.summary);
+                a
+            }));
+        }
+    }
+    // Рассказчик сменил время суток, а сцена — нет: до показа игроку мастер либо присылает
+    // время, либо переписывает ход (решение 23.11.2026: время двигает только мастер).
+    let check = dnd_master::time_check(&*lock(&session)?, &turn.text);
+    if let Some(request) = check {
+        history.truncate(base_history);
+        history.push(ai::ChatMessage { role: ai::Role::Master, text: reply.text.clone() });
+        history.push(ai::ChatMessage { role: ai::Role::Player, text: request });
+        if let Ok(fix) = ai::chat(&ai.client, &settings, &system, &history, false, cache_upto).await
+        {
+            add_usage(&mut reply, &fix);
+            reply.raw.push(fix.text.clone());
+            let fixed = dnd_master::apply_time_check(&mut *lock(&session)?, &fix.text);
+            if let Some(text) = fixed.text {
+                turn.text = text;
+            }
+            turn.actions.extend(fixed.actions.into_iter().map(|mut a| {
+                a.summary = format!("время: {}", a.summary);
                 a
             }));
         }

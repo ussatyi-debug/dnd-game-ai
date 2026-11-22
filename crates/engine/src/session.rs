@@ -226,6 +226,12 @@ pub struct Session {
     /// Сколько ходов подряд не менялись время суток и день: мастеру запрещено перематывать
     /// время, и он иногда держит сцену в одном «утре» всю игру.
     pub(crate) turns_since_time: u32,
+    /// Номер хода мастера (растёт при каждом завершённом ходе; в сохранение не попадает).
+    pub(crate) master_turn: u64,
+    /// В каком ходу мастера записана сводка «СЕЙЧАС» (`None` — до загрузки или от игрока раньше).
+    pub(crate) now_turn: Option<u64>,
+    /// В каком ходу сцена «перескочила»: новое место, день, сон, скачок времени больше часа.
+    pub(crate) scene_jump_turn: Option<u64>,
     /// Предложения мастера принять персонажа в отряд (ждут листа; в сохранение не попадают).
     pub(crate) recruits: Vec<crate::recruit::RecruitRequest>,
     pub(crate) next_recruit_id: u64,
@@ -387,6 +393,9 @@ impl Session {
             chronicle_from: day,
             turns_since_chronicle: 0,
             turns_since_time: 0,
+            master_turn: 0,
+            now_turn: None,
+            scene_jump_turn: None,
             recruits: Vec::new(),
             next_recruit_id: 0,
             xp_log: Vec::new(),
