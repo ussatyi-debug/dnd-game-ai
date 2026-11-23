@@ -444,6 +444,11 @@ impl Session {
                 if prev.classes.first().map(|c| &c.id) != spec.classes.first().map(|c| &c.id) {
                     return Err(EngineError::Experience("класс при повышении не меняется".into()));
                 }
+                if let Some(feat) = lost_feat(&prev, &spec) {
+                    return Err(EngineError::Experience(format!(
+                        "прежний талант «{feat}» при повышении не меняется"
+                    )));
+                }
                 spec.kind = prev.kind;
                 spec.xp = xp;
                 spec.portrait =
@@ -482,6 +487,19 @@ impl Session {
             || "повышение уровня".into(),
         )
     }
+}
+
+/// Талант прежнего листа, которого нет в новом (повышение уровня, решение 23.11.2026): выбор
+/// прошлых уровней не перевыбирается. Исключение — боевой стиль воина: по правилам 2024 года
+/// его можно заменить на каждом уровне воина.
+fn lost_feat(prev: &HeroSpec, next: &HeroSpec) -> Option<String> {
+    let fighter = prev.classes.first().is_some_and(|c| c.id == "fighter");
+    prev.features
+        .iter()
+        .filter(|f| f.source.starts_with("Талант:"))
+        .filter(|f| !(fighter && f.source == "Талант: Боевой стиль"))
+        .find(|f| !next.features.iter().any(|n| n.source == f.source && n.name == f.name))
+        .map(|f| f.name.clone())
 }
 
 #[cfg(test)]
@@ -565,6 +583,33 @@ mod tests {
         assert_eq!(hero.profile.xp, Some(next_threshold(3).unwrap()));
         assert_eq!(s.save_state().campaign.unwrap().heroes[0].classes[0].level, 4);
         assert!(!s.xp_status().members[0].open);
+    }
+
+    #[test]
+    fn earlier_feats_stay_on_level_up() {
+        use crate::creation::tests::wizard_spec;
+        use crate::profile::Feature;
+        let feat = |name: &str, slot: &str| Feature {
+            name: name.into(),
+            source: format!("Талант: {slot}"),
+            text: String::new(),
+            resource_id: None,
+        };
+        let mut prev = wizard_spec();
+        prev.features.push(feat("Бдительный", "Разносторонность (человек)"));
+        prev.features.push(feat("Оборона", "Боевой стиль"));
+        let mut next = prev.clone();
+        next.features.push(feat("Удачливый", "Улучшение характеристик (4 ур.)"));
+        assert_eq!(lost_feat(&prev, &next), None);
+        next.features.retain(|f| f.name != "Бдительный");
+        next.features.push(feat("Крепкий", "Разносторонность (человек)"));
+        assert_eq!(lost_feat(&prev, &next).as_deref(), Some("Бдительный"));
+        // Боевой стиль меняет только воин.
+        let mut styled = prev.clone();
+        styled.features.retain(|f| f.name != "Оборона");
+        styled.features.push(feat("Дуэлянт", "Боевой стиль"));
+        let fighter = prev.classes.first().is_some_and(|c| c.id == "fighter");
+        assert_eq!(lost_feat(&prev, &styled).is_none(), fighter);
     }
 
     #[test]

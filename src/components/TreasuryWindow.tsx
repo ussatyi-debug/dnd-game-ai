@@ -9,6 +9,7 @@ import {
   type TreasuryView,
 } from "../lib/engine";
 import Modal from "./Modal";
+import { dayPart } from "../lib/dayParts.ts";
 
 const sourceLabel: Record<EntrySource, string> = {
   opening: "начальный остаток",
@@ -157,7 +158,7 @@ export default function TreasuryWindow({ onClose, onChanged }: TreasuryWindowPro
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="text-xs text-muted">
                         День {e.day}
-                        {e.time ? `, ${e.time}` : ""} · {sourceLabel[e.source]}
+                        {e.time ? `, ${dayPart(e.time)}` : ""} · {sourceLabel[e.source]}
                       </span>
                       <span className={`font-mono ${e.quantity < 0 ? "text-fumble" : "text-crit"}`}>
                         {e.quantity > 0 ? "+" : "−"}

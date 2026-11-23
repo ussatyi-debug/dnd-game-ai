@@ -677,6 +677,42 @@ impl Session {
         e
     }
 
+    /// Время из команды `scene` в часах «ЧЧ:ММ» (решение владельца 23.11.2026: мастер видит часть
+    /// суток и пишет время словом). Слово своей же части суток часы не трогает; слово о части,
+    /// которая в этот день уже прошла, — отказ: время назад словом не идёт.
+    fn scene_time_of(&mut self, time: &str, day: Option<u32>) -> Result<String, EngineError> {
+        let time = time.trim();
+        if time.is_empty() {
+            return Ok(String::new());
+        }
+        if let Some(m) = crate::clock::minutes(time) {
+            return Ok(crate::clock::hhmm(m));
+        }
+        let Some((part, reference)) = crate::clock::day_part_word(time) else {
+            return Err(self.scene_refusal(EngineError::SceneAdvance(format!(
+                "«{time}» — не часть суток: пиши «утро», «позднее утро», «полдень», «вечер», \
+«ночь» или промежуток в «advance»"
+            ))));
+        };
+        let same_day = day.is_none_or(|d| d == self.scene.day);
+        let now = self.scene.time.as_deref().and_then(crate::clock::minutes);
+        match now {
+            Some(now) if same_day && crate::clock::day_part(now).name == part.name => {
+                Ok(crate::clock::hhmm(now))
+            }
+            Some(now) if same_day && reference < now => {
+                let current = crate::clock::day_part(now).name;
+                Err(self.scene_refusal(EngineError::SceneAdvance(format!(
+                    "«{time}» в День {} уже прошло, сейчас {current}: настал следующий день — \
+добавь \"day\":{}; прошло время — \"advance\"",
+                    self.scene.day,
+                    self.scene.day + 1
+                ))))
+            }
+            _ => Ok(crate::clock::hhmm(reference)),
+        }
+    }
+
     /// Меняет день, время, место или обстановку сцены. Перемещение сцены переносит туда и
     /// персонажа игрока.
     pub fn change_scene(&mut self, mut change: SceneChange) -> Result<Scene, EngineError> {
@@ -684,6 +720,7 @@ impl Session {
             return Err(EngineError::ZeroAmount);
         }
         // «Прошло 30 минут»: часы считает движок, а не модель.
+        let advanced = change.advance;
         if let Some(advance) = change.advance.take() {
             let clock_now = self.scene.time.as_deref().and_then(crate::clock::minutes);
             let now = match (&change.time, clock_now) {
@@ -693,10 +730,10 @@ impl Session {
                     )))
                 }
                 (None, None) => {
-                    let shown = self.scene.time.clone().unwrap_or_else(|| "не указано".into());
-                    return Err(self.scene_refusal(EngineError::SceneAdvance(format!(
-                        "время сцены «{shown}» — не часы ЧЧ:ММ: пришли «time»"
-                    ))));
+                    return Err(self.scene_refusal(EngineError::SceneAdvance(
+                        "время сцены не указано: пришли «time» — часть суток («утро», «вечер»)"
+                            .into(),
+                    )))
                 }
                 (None, Some(now)) => now,
             };
@@ -710,6 +747,9 @@ impl Session {
             if days > 0 {
                 change.day = Some(change.day.unwrap_or(self.scene.day) + days);
             }
+        }
+        if let Some(time) = change.time.take() {
+            change.time = Some(self.scene_time_of(&time, change.day)?);
         }
         let moved = change.location.is_some() || change.day.is_some();
         let (day_before, time_before, place_before) =
@@ -782,7 +822,14 @@ impl Session {
             None => {}
         }
         let s = &self.scene;
-        let time = s.time.as_deref().map(|t| format!(", {t}")).unwrap_or_default();
+        let time = match s.time.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+            Some(t) => format!(", {}", crate::clock::shown(Some(t))),
+            None => String::new(),
+        };
+        let time = match advanced {
+            Some(m) => format!(", +{}{time}", crate::clock::duration_label(m)),
+            None => time,
+        };
         let mood = match s.mood {
             Mood::Calm => String::new(),
             m => format!(" ({})", m.label()),
@@ -1028,7 +1075,7 @@ mod tests {
                 ..SceneChange::default()
             })
             .unwrap();
-        assert_eq!(scene.time.as_deref(), Some("полдень"));
+        assert_eq!(scene.time.as_deref(), Some("12:00"));
         assert_eq!(s.character("pc.nikis").unwrap().location, "Серебряный Шпиль");
         assert!(s.change_scene(SceneChange { day: Some(10), ..SceneChange::default() }).is_err());
         s.move_character("npc.valeria", "Серебряный Шпиль").unwrap();
@@ -1048,8 +1095,24 @@ mod tests {
         assert_eq!(s.scene().time.as_deref(), Some("00:35"));
         assert_eq!(s.scene().day, day + 1);
         assert!(s.change_scene(SceneChange { advance: Some(10), ..at("01:00") }).is_err());
+        // Слово — опорный час части суток; та же часть — часы не меняются.
         s.change_scene(at("утро")).unwrap();
-        assert!(s.change_scene(go(30)).is_err());
+        assert_eq!(s.scene().time.as_deref(), Some("07:00"));
+        s.change_scene(go(30)).unwrap();
+        s.change_scene(at("утро")).unwrap();
+        assert_eq!(s.scene().time.as_deref(), Some("07:30"));
+        s.change_scene(at("вечер")).unwrap();
+        assert_eq!(s.scene().time.as_deref(), Some("19:00"));
+        assert!(s.engine_log().last().unwrap().contains("вечер"));
+        // Утро этого дня уже прошло — без «day» отказ, с новым днём — опорный час.
+        assert!(s.change_scene(at("утро")).is_err());
+        assert_eq!(s.scene().time.as_deref(), Some("19:00"));
+        let day = s.scene().day;
+        s.change_scene(SceneChange { day: Some(day + 1), ..at("утро") }).unwrap();
+        assert_eq!(s.scene().time.as_deref(), Some("07:00"));
+        assert!(s.change_scene(at("когда-нибудь")).is_err());
+        s.change_scene(go(20)).unwrap();
+        assert!(s.engine_log().last().unwrap().contains("+20 мин, утро"));
     }
 
     #[test]

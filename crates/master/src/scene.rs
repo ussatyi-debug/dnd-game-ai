@@ -114,7 +114,7 @@ fn scene_key(session: &Session) -> String {
 fn state_lines(session: &Session) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let scene = session.scene();
-    out.push(("сцена|время".to_string(), scene.time.clone().unwrap_or_default()));
+    out.push(("сцена|время".to_string(), scene.time_shown()));
     out.push(("сцена|ситуация".to_string(), scene.situation.clone()));
     for c in session.party() {
         let id = &c.id;
@@ -609,12 +609,8 @@ pub const POOL_PER_DIE: usize = 8;
 /// потому не входит в кэшируемый снимок.
 fn scene_now_lines(session: &Session) -> Vec<String> {
     let scene = session.scene();
-    let mut out = vec![format!(
-        "День {}, {}; место — {}",
-        scene.day,
-        scene.time.as_deref().filter(|t| !t.trim().is_empty()).unwrap_or("время не указано"),
-        scene.location
-    )];
+    let mut out =
+        vec![format!("День {}, {}; место — {}", scene.day, scene.time_shown(), scene.location)];
     let party: Vec<String> = session
         .party()
         .iter()
@@ -1012,8 +1008,23 @@ pub fn answer_query(session: &Session, cmd: &Value) -> Result<String, String> {
         }
         "chat" => Ok(crate::recall::search_chat(session, text_of("text"))),
         "rules" => crate::codex::rules_topic(text_of("topic")),
+        // Точные часы (решение 23.11.2026): мастер видит часть суток, а часы называет, только
+        // когда герой может их узнать.
+        "time" => {
+            let scene = session.scene();
+            Ok(match scene.time.as_deref().and_then(dnd_engine::clock::minutes) {
+                Some(m) => format!(
+                    "Точное время: День {}, {} ({}). Называй его, только если герой может его \
+узнать: часы, колокол, солнце, звёзды.",
+                    scene.day,
+                    dnd_engine::clock::hhmm(m),
+                    scene.time_shown()
+                ),
+                None => format!("Время сцены не указано: День {}.", scene.day),
+            })
+        }
         other => Err(format!(
-            "неизвестный запрос «{other}»: sheet, spells, card, notes, chronicle, chat, rules"
+            "неизвестный запрос «{other}»: sheet, spells, card, notes, chronicle, chat, rules, time"
         )),
     }
 }
@@ -1136,7 +1147,7 @@ pub fn update_request(
 Журнал движка: {}
 {}"#,
         scene.day,
-        scene.time.clone().unwrap_or_default(),
+        scene.time_shown(),
         scene.location,
         party.join("\n"),
         places.join("\n"),
@@ -1456,6 +1467,10 @@ mod tests {
         let sheet = answer_query(&s, &json!({"cmd":"query","what":"sheet","id":id})).unwrap();
         assert!(sheet.contains("лист"));
         assert!(answer_query(&s, &json!({"cmd":"query","what":"card","id":"нет.такой"})).is_err());
+        // Часы — только по запросу; в сцене мастер видит часть суток.
+        let time = answer_query(&s, &json!({"cmd":"query","what":"time"})).unwrap();
+        assert!(time.contains("08:00 (утро)"), "{time}");
+        assert!(!scene_now_lines(&s)[0].contains("08:00"), "{:?}", scene_now_lines(&s));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatGold, type PartyView, type RecruitInfo, type RecruitRequest, type XpStatus } from "../lib/engine";
+import { dayPart } from "../lib/dayParts.ts";
 
 interface PartyPanelProps {
   party: PartyView | null;
@@ -103,7 +104,7 @@ export default function PartyPanel({
         <h2 className="font-serif text-lg text-gold">Отряд</h2>
         <p className="text-sm">
           День {party.scene.day}
-          {party.scene.time ? `, ${party.scene.time}` : ""}
+          {party.scene.time ? `, ${dayPart(party.scene.time)}` : ""}
         </p>
         <p className="text-xs text-muted">{party.place}</p>
         {(party.scene.now || party.scene.situation) && (

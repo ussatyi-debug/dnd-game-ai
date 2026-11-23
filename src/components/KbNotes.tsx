@@ -13,6 +13,7 @@ import {
   type NoteKind,
   type NoteLayer,
 } from "../lib/engine";
+import { dayPart } from "../lib/dayParts.ts";
 
 /** Название карточки по ID: из файлов базы или созданной по ходу игры. */
 export type CardTitle = (id: string) => string | null;
@@ -246,7 +247,7 @@ function NoteItem({
         <span className="flex shrink-0 items-center gap-1">
           <span className="text-[11px] text-muted">
             День {note.day}
-            {note.time ? `, ${note.time}` : ""}
+            {note.time ? `, ${dayPart(note.time)}` : ""}
           </span>
           <button
             type="button"

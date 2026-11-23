@@ -6,7 +6,7 @@ import worldMap from "../../assets/world-map.webp";
 import { portraitUrl } from "../../data/rules/portraits.ts";
 import { CLASSES } from "../../data/rules/classes/index.ts";
 import { SPECIES } from "../../data/rules/species.ts";
-import { averageHitDie, buildSpec, levelUpDraft, newDraft, portraitKey, resolve, STEPS, stepIssues, TIERS, type Draft, type StepId } from "../../lib/creation.ts";
+import { averageHitDie, buildSpec, levelUpDraft, lockIssues, newDraft, portraitKey, resolve, STEPS, stepIssues, TIERS, type Draft, type StepId } from "../../lib/creation.ts";
 import { QUICK_HEROES, quickDraft, type QuickHero } from "../../lib/quickstart.ts";
 import { validateHero, type RecruitRequest } from "../../lib/engine";
 import { parseSheetFile } from "../../lib/sheetExport";
@@ -101,8 +101,9 @@ export default function CreationWizard({ onClose, onConfirm, companion, levelUp 
   const issues = useMemo(() => {
     const list = stepIssues(draft, step);
     if (levelUp && step === "sheet" && draft.classId !== levelUp.classes[0]?.id) list.push("При повышении уровня класс не меняется");
+    if (levelStart && step === "sheet") list.push(...lockIssues(draft, levelStart.locks));
     return list;
-  }, [draft, step, levelUp]);
+  }, [draft, step, levelUp, levelStart]);
   const spec = useMemo(() => {
     if (step !== "sheet") return null;
     const built = buildSpec(draft, levelUp ? levelUp.kind : companion ? "companion" : "player");
@@ -274,10 +275,11 @@ export default function CreationWizard({ onClose, onConfirm, companion, levelUp 
               draft={draft}
               update={update}
               levelUp={levelStart && !levelStart.fromSheet ? { subclassChosen: Boolean(levelStart.draft.picks["class.subclass"]?.length) && draft.level - 1 >= (resolve(draft).cls?.subclassLevel ?? 99) } : undefined}
+              locks={levelStart?.locks}
             />
           )}
-          {!quick && step === "feats" && <StepFeats draft={draft} update={update} />}
-          {!quick && step === "spells" && <StepSpells draft={draft} update={update} />}
+          {!quick && step === "feats" && <StepFeats draft={draft} update={update} locks={levelStart?.locks} />}
+          {!quick && step === "spells" && <StepSpells draft={draft} update={update} locks={levelStart?.locks} />}
           {!quick && step === "abilities" && <StepAbilities draft={draft} update={update} />}
           {!quick && step === "details" && <StepDetails draft={draft} update={update} />}
           {!quick && step === "sheet" && spec && <HeroSheet draft={draft} spec={spec} />}
@@ -340,8 +342,8 @@ function LevelUpIntro({
     <section className="space-y-2 rounded-lg border border-gold/60 bg-gold/5 p-3 text-sm">
       <p>
         {fromSheet
-          ? "Лист героя создан до версии 0.9.8, и прежние выборы в нём не сохранены: пройдите шаги заново (класс тот же). Снаряжение, золото и всё, что менялось в игре, останутся как есть."
-          : "Выберите то, что даёт новый уровень: подкласс, увеличение характеристик или талант, новые заклинания и умения. Прежние выборы сохранены; снаряжение и состояние героя не меняются."}
+          ? "Лист героя создан до версии 0.9.8, и черновик выборов в нём не сохранён: то, что лист называет прямо (подкласс, таланты, навыки класса, воззвания и другие варианты умений), восстановлено и закрыто, остальное пройдите заново (класс тот же). Снаряжение, золото и всё, что менялось в игре, останутся как есть."
+          : "Выберите то, что даёт новый уровень: подкласс, увеличение характеристик или талант, новые заклинания и умения. Выборы прошлых уровней закрыты — заменить можно только то, что разрешают правила (боевой стиль воина, одно воззвание, один заговор…); снаряжение и состояние героя не меняются."}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-gold">Хиты {draft.level} уровня (d{die}):</span>

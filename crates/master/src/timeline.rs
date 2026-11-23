@@ -1,25 +1,18 @@
 //! Время и место глазами мастера (решения владельца 23.11.2026): их двигает только мастер
 //! командой `scene`, движок помогает ему не ошибиться — сам пишет первую строку «СЕЙЧАС»
-//! (день, часы, время суток, место), напоминает, когда сводка мастера разошлась со сценой, и до
-//! показа игроку проверяет ход: не сменил ли рассказчик время суток без команды и не ушёл ли
-//! герой (по сводке) из места сцены.
+//! (день, часть суток, место; точные часы — только по запросу `query time`), напоминает, когда
+//! сводка мастера разошлась со сценой, и до показа игроку проверяет ход: не сменил ли рассказчик
+//! время суток без команды и не ушёл ли герой (по сводке) из места сцены.
 
 use dnd_engine::{clock, Session};
 use serde::Serialize;
 
 use crate::directives::{apply_repair, clean_reply, split, split_now, MasterAction};
 
-/// Первая строка блока «[СЕЙЧАС]»: день, часы, время суток и место — из сцены движка.
+/// Первая строка блока «[СЕЙЧАС]»: день, часть суток и место — из сцены движка.
 pub(crate) fn scene_clock_line(session: &Session) -> String {
     let scene = session.scene();
-    let when = match scene.time.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
-        Some(t) => match clock::minutes(t) {
-            Some(m) => format!("{} ({})", clock::hhmm(m), clock::part_of_day(m)),
-            None => t.to_string(),
-        },
-        None => "время не указано".to_string(),
-    };
-    format!("День {}, {when} — {}", scene.day, session.card_title(&scene.location))
+    format!("День {}, {} — {}", scene.day, scene.time_shown(), session.card_title(&scene.location))
 }
 
 /// Разница двух часов по кругу суток, в минутах.
@@ -44,12 +37,7 @@ pub(crate) fn summary_time_reminder(session: &Session) -> Option<String> {
     if now.is_empty() {
         return None;
     }
-    let shown = scene
-        .time
-        .as_deref()
-        .map(str::trim)
-        .filter(|t| !t.is_empty())
-        .unwrap_or("время не указано");
+    let shown = scene.time_shown();
     let clock_off = scene.time.as_deref().and_then(clock::minutes).and_then(|s| {
         clock::clock_times(now).into_iter().find(|t| clock_gap(*t, s) >= 30).map(clock::hhmm)
     });
@@ -72,7 +60,7 @@ struct Phase {
     phrases: &'static [&'static str],
     /// Слово и глагол смены в одном предложении («ночь на город уже опускается»).
     noun_verb: Option<(&'static [&'static str], &'static [&'static str])>,
-    /// Время суток, при котором так сказать можно.
+    /// Части суток, при которых так сказать можно.
     parts: &'static [&'static str],
 }
 
@@ -103,13 +91,13 @@ const PHASES: &[Phase] = &[
         label: "ночь прошла",
         phrases: &["ночь проходит", "ночь прошла", "ночь минула", "ночь миновала"],
         noun_verb: None,
-        parts: &["ночь", "утро"],
+        parts: &["глубокая ночь", "рассвет", "утро", "позднее утро"],
     },
     Phase {
         label: "наступает ночь или вечер",
+        // «темнеет» — не здесь: «ниже насыпи темнеет бочаг» — «виднеется тёмным» (лог 23.11).
         phrases: &[
             "стемнело",
-            "темнеет",
             "солнце садится",
             "солнце село",
             "солнце уже село",
@@ -119,7 +107,7 @@ const PHASES: &[Phase] = &[
             "на закате",
         ],
         noun_verb: Some((NIGHT_NOUNS, FALL_VERBS)),
-        parts: &["вечер", "ночь"],
+        parts: &["предвечерье", "вечер", "поздний вечер", "ночь", "глубокая ночь"],
     },
     Phase {
         label: "рассвет",
@@ -136,16 +124,19 @@ const PHASES: &[Phase] = &[
             "наступает утро",
         ],
         noun_verb: None,
-        parts: &["ночь", "утро"],
+        parts: &["глубокая ночь", "рассвет", "утро", "позднее утро"],
     },
     Phase {
         label: "полдень",
         phrases: &["полдень", "солнце в зените"],
         noun_verb: None,
-        parts: &["утро", "день"],
+        parts: &["позднее утро", "полдень", "день"],
     },
     Phase {
-        label: "полночь", phrases: &["полночь"], noun_verb: None, parts: &["вечер", "ночь"]
+        label: "полночь",
+        phrases: &["полночь"],
+        noun_verb: None,
+        parts: &["поздний вечер", "ночь", "глубокая ночь"],
     },
 ];
 
@@ -214,7 +205,7 @@ fn narrator_sentences(text: &str) -> Vec<String> {
 
 /// Что в рассказе не сходится со временем сцены: (предложение, подпись).
 fn phase_mismatch(session: &Session, text: &str) -> Option<(String, &'static str)> {
-    let part = session.scene().time.as_deref().and_then(clock::part_of_day_of)?;
+    let part = session.scene().time.as_deref().and_then(clock::day_part_of)?.name;
     for sentence in narrator_sentences(text) {
         let lower = format!(" {} ", sentence.to_lowercase().replace('ё', "е"));
         if NOT_NOW.iter().any(|m| lower.contains(m)) {
@@ -298,11 +289,10 @@ pub fn turn_check(session: &Session, text: &str) -> Option<String> {
     let scene = session.scene();
     let mut out = String::from("[ПРОВЕРКА ХОДА]\n");
     if let Some((sentence, label)) = time {
-        let time = scene.time.as_deref().unwrap_or("время не указано");
-        let part = scene.time.as_deref().and_then(clock::part_of_day_of).unwrap_or("?");
         out.push_str(&format!(
-            "Время: в рассказе «{sentence}» — {label}, а в сцене День {}, {time} ({part}).\n",
-            scene.day
+            "Время: в рассказе «{sentence}» — {label}, а в сцене День {}, {}.\n",
+            scene.day,
+            scene.time_shown()
         ));
     }
     if let Some((line, title)) = place {
@@ -359,8 +349,9 @@ mod tests {
     fn clock_line_names_part_of_day() {
         let s = at("07:30");
         let line = scene_clock_line(&s);
-        assert!(line.contains("07:30 (утро)"), "{line}");
-        assert!(line.starts_with(&format!("День {}", s.scene().day)), "{line}");
+        assert!(line.starts_with(&format!("День {}, утро — ", s.scene().day)), "{line}");
+        assert!(!line.contains("07:30"), "{line}");
+        assert!(scene_clock_line(&at("10:15")).contains(", позднее утро — "));
     }
 
     #[test]
@@ -402,6 +393,10 @@ mod tests {
         let late = at("22:40");
         assert!(phase_mismatch(&late, "Ночь опускается на город.").is_none());
         assert!(phase_mismatch(&late, "Светает, и город просыпается.").is_some());
+        // Лог 23.11: «темнеет» — «виднеется тёмным», а не вечер.
+        assert!(phase_mismatch(&at("09:00"), "Ниже насыпи темнеет бочаг.").is_none());
+        let check = turn_check(&s, text).unwrap();
+        assert!(check.contains(", утро.") && !check.contains("07:30"), "{check}");
     }
 
     #[test]

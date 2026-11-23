@@ -173,6 +173,46 @@ fn hero_refusal(name: &str) -> String {
     )
 }
 
+/// Мастер просит игрока бросить («Бросьте 2d20…», «ваш бросок»): бросок d20 без подписи в
+/// таком ответе — бросок героя (лог 23.11.2026: Opus попросил инициативу у игрока и тут же
+/// бросил её сам, без подписи, — движок счёл бросок своим).
+fn asks_player_roll(text: &str) -> bool {
+    // Реплики NPC («> — [стражник, м] Бросьте оружие!») — не просьба к игроку.
+    let t: String = text
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('>'))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .to_lowercase()
+        .replace('ё', "е");
+    [
+        "бросьте",
+        "бросайте",
+        "брось ",
+        "бросай ",
+        "киньте",
+        "кинь ",
+        "ваш бросок",
+        "твой бросок",
+        "пришлите число",
+        "пришлите результат",
+        "пришли число",
+        "сделайте бросок",
+        "сделай бросок",
+        "сделайте проверку",
+        "сделайте спасбросок",
+        "жду броск",
+        "вашего броск",
+        "твоего броск",
+    ]
+    .iter()
+    .any(|p| t.contains(p))
+}
+
+const UNLABELED_HERO_ROLL: &str = "бросок без подписи там, где ты просишь игрока бросить, — \
+бросок героя: жди его числа и на этом закончи ответ; бросок противника или спутника подпиши: \
+[[1d20+2 | инициатива: Стражник]]";
+
 /// Подпись броска: «атака: Вор → Оттокар, преимущество».
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Label {
@@ -437,6 +477,7 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
     let mut rolls = Vec::new();
     let mut commands = Vec::new();
     let mut refused = Vec::new();
+    let asks_player = asks_player_roll(text);
     let mut rest = text;
     while let Some(start) = rest.find("[[") {
         let Some(len) = rest[start + 2..].find("]]") else { break };
@@ -474,6 +515,17 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
             }
         }
         let parsed = label.map(parse_label);
+        if label.is_none()
+            && asks_player
+            && !hidden
+            && expression.to_lowercase().contains("d20")
+            && expression.parse::<i64>().is_err()
+        {
+            session.log(format!("Отказ (бросок мастера): {UNLABELED_HERO_ROLL}"));
+            out.push_str("(бросок за игроком)");
+            refused.push(UNLABELED_HERO_ROLL.to_string());
+            continue;
+        }
         // Бросок героя делает игрок: кубы за героя движок не бросает, мастеру — отказ.
         let hero_actor = parsed
             .as_ref()
@@ -937,6 +989,23 @@ mod tests {
             fabricated_rolls("Урон: допустим, выпало средне ~10-12", &[], ""),
             vec!["результат предположен, а не брошен".to_string()]
         );
+    }
+
+    #[test]
+    fn unlabeled_roll_after_asking_the_player_is_refused() {
+        let mut s = session();
+        s.deal_dice_pool(8);
+        // Лог 23.11.2026: просьба бросить и тут же свой бросок без подписи.
+        let text = "((Бросьте 2d20 и возьмите больший.)) Инициатива: [[1d20+3]]. Яссек: [[1d20+1 | инициатива: Яссек]].";
+        let turn = resolve_pool(&mut s, text, true);
+        assert_eq!(turn.refused.len(), 1, "{:?}", turn);
+        assert!(turn.text.contains("Инициатива: (бросок за игроком)"), "{}", turn.text);
+        assert!(!turn.text.contains("[[1d20+1"), "{}", turn.text);
+        // Без просьбы бросить — бросок мастера, как раньше.
+        let turn = resolve_pool(&mut s, "Ветер: [[1d20]].", true);
+        assert!(turn.refused.is_empty(), "{:?}", turn);
+        assert!(!asks_player_roll("Брокк бросает взгляд на дверь"));
+        assert!(!asks_player_roll("> — [стражник, м] Бросьте оружие!"));
     }
 
     #[test]

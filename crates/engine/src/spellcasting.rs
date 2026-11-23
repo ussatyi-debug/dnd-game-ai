@@ -1297,6 +1297,30 @@ impl Character {
         Ok(pool)
     }
 
+    /// Ячейка, которую возвращает заряд предмета-восстановителя, если мастер списал заряд общей
+    /// тратой ресурса вместо `restore` (жезл договора, лог 23.11.2026): у договорного предмета —
+    /// ячейка договора, у прочих — высший потраченный круг в пределах предмета. `None` — ресурс
+    /// не восстановитель.
+    pub fn restorer_slot(&self, item_resource_id: &str) -> Option<SlotRef> {
+        let sc = self.spellcasting.as_ref()?;
+        let restorer = sc.restorers.iter().find(|r| r.resource_id == item_resource_id)?;
+        if restorer.pact_only {
+            return Some(SlotRef::Pact);
+        }
+        let spent = |slot: SlotRef| {
+            self.resource(&slot_ref_id(slot)).is_some_and(|p| p.current() < p.max())
+        };
+        let pact = sc.pact_level();
+        let pact_fits = pact > 0 && pact <= restorer.max_level;
+        (1..=restorer.max_level)
+            .rev()
+            .map(SlotRef::Level)
+            .find(|slot| spent(*slot))
+            .or_else(|| (pact_fits && spent(SlotRef::Pact)).then_some(SlotRef::Pact))
+            // Всё свободно: restore откажет «и так свободны», заряд не тратится.
+            .or(Some(if pact_fits { SlotRef::Pact } else { SlotRef::Level(1) }))
+    }
+
     /// Восстановление ячейки предметом (Жезл хранителя договора, Жемчужина силы).
     pub fn restore_slot_with(
         &mut self,

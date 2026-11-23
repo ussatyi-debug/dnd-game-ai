@@ -1145,7 +1145,7 @@ export default function App() {
         return;
       }
       case "campaign":
-        switchCampaign(STRANGE_ID, true);
+        switchCampaign(STRANGE_ID, "ask");
         return;
       case "new":
         setCreating(true);
@@ -1168,9 +1168,10 @@ export default function App() {
 
   /**
    * Переход к другой кампании: сохранения и база знаний переключаются, игра продолжается
-   * с последнего автосохранения кампании. `ask` — показать окно сохранений «Дома Стрэндж».
+   * с последнего автосохранения кампании. `then`: "ask" — показать окно сохранений «Дома Стрэндж»,
+   * "stay" — остаться в главном меню (игра загрузится по «Продолжить»).
    */
-  function switchCampaign(id: string, ask = false) {
+  function switchCampaign(id: string, then: "load" | "ask" | "stay" = "load") {
     const same = id === campaignId;
     applyCampaign(id);
     setCurrentCampaignId(id);
@@ -1180,7 +1181,8 @@ export default function App() {
     listAutosaves()
       .then(async (list) => {
         setAutosaves(list);
-        if (ask) {
+        if (then === "stay") return;
+        if (then === "ask") {
           setOpenWindow("continue");
           return;
         }
@@ -1202,7 +1204,17 @@ export default function App() {
       }
       await removeCampaign(id);
       setCampaigns((prev) => prev.filter((c) => c.id !== id));
-      if (id === campaignId) switchCampaign(STRANGE_ID);
+      if (id === campaignId) {
+        // Удалена кампания, в которой играли: игрок остаётся в главном меню, текущей становится
+        // «Дом Стрэндж» — без загрузки (раньше сразу открывалась её игра с музыкой, 23.11.2026).
+        await restartDemo();
+        nextId.current = 1;
+        setMessages([]);
+        setRolls([]);
+        setActiveId(STRANGE_PLAYER);
+        switchCampaign(STRANGE_ID, "stay");
+        await refresh();
+      }
     } catch (e) {
       setAutosaveCampaign(campaignId);
       addMessage("system", errorText(e));

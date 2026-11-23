@@ -1,6 +1,7 @@
 // Общие элементы мастера создания: карточки выбора, группы вариантов, заголовки.
 
 import { useState, type ReactNode } from "react";
+import { lockAllows, type PickLock } from "../../lib/creation.ts";
 
 export function Section({ title, hint, children }: { title: string; hint?: ReactNode; children: ReactNode }) {
   return (
@@ -71,6 +72,7 @@ export function ChoiceGroup({
   value,
   onChange,
   columns = false,
+  lock,
 }: {
   label: string;
   source?: string;
@@ -79,15 +81,21 @@ export function ChoiceGroup({
   value: string[];
   onChange: (next: string[]) => void;
   columns?: boolean;
+  /** Повышение уровня: выбор прошлых уровней и сколько из него можно заменить. */
+  lock?: PickLock;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const need = Math.min(count, options.length);
   const done = value.length === need;
   function toggle(id: string) {
-    if (value.includes(id)) onChange(value.filter((v) => v !== id));
-    else if (count === 1) onChange([id]);
-    else if (value.length < count) onChange([...value, id]);
+    let next: string[] | null = null;
+    if (value.includes(id)) next = value.filter((v) => v !== id);
+    else if (count === 1) next = [id];
+    else if (value.length < count) next = [...value, id];
+    if (next && lockAllows(lock, next)) onChange(next);
   }
+  const earlier = (id: string) => (lock?.values.includes(id) ? "выбрано раньше" : undefined);
+  const noteOf = (o: GroupOption) => [o.note, earlier(o.id)].filter(Boolean).join(" · ") || undefined;
   const withText = options.some((o) => o.text);
   return (
     <div className="rounded-lg border border-edge/70 bg-ink/40 p-3">
@@ -95,6 +103,11 @@ export function ChoiceGroup({
         <span className="text-sm font-medium">
           {label}
           {source && <span className="ml-1 text-xs text-muted">· {source}</span>}
+          {lock && (
+            <span className="ml-1 text-xs text-muted">
+              · {lock.swaps > 0 ? `прежний выбор: заменить можно ${lock.swaps}` : "прежний выбор не меняется"}
+            </span>
+          )}
         </span>
         <span className={`text-xs ${done ? "text-gold" : "text-fumble"}`}>
           {value.length}/{need}
@@ -114,7 +127,7 @@ export function ChoiceGroup({
                     className="flex-1 text-left text-sm disabled:opacity-40"
                   >
                     <span className={on ? "text-gold" : ""}>{on ? "◆ " : "◇ "}{o.name}</span>
-                    {o.note && <span className="ml-1 text-[11px] text-muted">{o.note}</span>}
+                    {noteOf(o) && <span className="ml-1 text-[11px] text-muted">{noteOf(o)}</span>}
                   </button>
                   {o.text && (
                     <button
@@ -145,7 +158,7 @@ export function ChoiceGroup({
                 className={`rounded-full border px-3 py-1 text-sm disabled:opacity-40 ${on ? "border-gold bg-gold/15 text-gold" : "border-edge hover:border-gold/60"}`}
               >
                 {o.name}
-                {o.note && <span className="ml-1 text-[10px] text-muted">{o.note}</span>}
+                {noteOf(o) && <span className="ml-1 text-[10px] text-muted">{noteOf(o)}</span>}
               </button>
             );
           })}

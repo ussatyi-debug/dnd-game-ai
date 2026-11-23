@@ -25,10 +25,10 @@ pub struct CompanionTask {
 }
 
 impl CompanionTask {
-    /// «с 18:14, День 98».
+    /// «с Дня 98, позднее утро» — часть суток, без часов.
     pub fn since(&self) -> String {
         match self.time.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
-            Some(time) => format!("с {time}, День {}", self.day),
+            Some(time) => format!("с Дня {}, {}", self.day, crate::clock::shown(Some(time))),
             None => format!("с Дня {}", self.day),
         }
     }
@@ -93,7 +93,7 @@ impl Session {
         }
     }
 
-    /// Строки поручений для мастера: «Гюнтер (ратуша) — найти капитана… (с 18:14, День 98)».
+    /// Строки поручений для мастера: «Гюнтер (ратуша) — найти капитана… (с Дня 98, вечер)».
     pub fn task_lines(&self) -> Vec<String> {
         self.tasks
             .iter()

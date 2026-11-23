@@ -3,6 +3,7 @@
 // Веб-версия внутри Claude музыку не получает (нет файлов) — плеер просто молчит.
 
 import { ttsPlayer } from "./tts";
+import { isNight } from "./dayParts.ts";
 
 export type MusicMood = "menu" | "calm" | "travel_day" | "travel_night" | "battle";
 
@@ -54,12 +55,11 @@ export function saveMusicSettings(settings: MusicSettings) {
   }
 }
 
-const NIGHT = /ноч|полноч|вечер|сумер|закат|темн|тёмн|рассвет до/i;
 
 /** Настроение музыки по настроению сцены и времени суток. */
 export function moodForScene(mood: "calm" | "travel" | "battle", time: string | null): MusicMood {
   if (mood === "battle") return "battle";
-  if (mood === "travel") return time && NIGHT.test(time) ? "travel_night" : "travel_day";
+  if (mood === "travel") return isNight(time) ? "travel_night" : "travel_day";
   return "calm";
 }
 
@@ -81,6 +81,8 @@ class MusicPlayer {
   private listeners = new Set<Listener>();
   private state: MusicState = { available: false, track: null, mood: null };
   private fades = new Map<HTMLAudioElement, number>();
+  /** Все запущенные треки: «опоздавший» не должен играть мимо плеера (две музыки сразу, 23.11.2026). */
+  private live = new Set<HTMLAudioElement>();
   /**
    * Звук через Web Audio: усиление трека может быть больше 1 (тихие треки поднимаются до общей
    * громкости), пики срезает ограничитель. Нет Web Audio — громкость элемента, не выше 1.
@@ -190,6 +192,7 @@ class MusicPlayer {
     this.stopCurrent();
     const el = new Audio(`${BASE}${track.file}`);
     el.volume = 0;
+    this.live.add(el);
     if (this.audio) {
       try {
         const source = this.audio.ctx.createMediaElementSource(el);
@@ -232,26 +235,45 @@ class MusicPlayer {
     this.current = { el, track };
     this.emit({ track });
     void el.play().then(
-      () => this.fadeTo(el, this.target(), FADE_MS),
+      () => {
+        // Пока трек загружался, настроение сменилось: громкость поднимается только у текущего,
+        // «опоздавший» останавливается сразу.
+        if (this.current?.el === el) this.fadeTo(el, this.target(), FADE_MS);
+        else this.release(el);
+      },
       () => {
         // Воспроизведение не разрешено или файла нет — молчим без ошибок.
-        if (this.current?.el === el) this.current = null;
-        this.emit({ track: null });
+        if (this.current?.el === el) {
+          this.current = null;
+          this.emit({ track: null });
+        }
+        this.release(el);
       },
     );
   }
 
+  /** Гасит все прежние треки, а не только текущий. */
   private stopCurrent() {
-    const cur = this.current;
-    if (!cur) return;
-    this.current = null;
-    this.emit({ track: null });
-    this.fadeTo(cur.el, 0, FADE_MS, () => {
-      cur.el.pause();
-      cur.el.src = "";
-      this.gains.get(cur.el)?.disconnect();
-      this.gains.delete(cur.el);
-    });
+    if (this.current) {
+      this.current = null;
+      this.emit({ track: null });
+    }
+    for (const el of this.live) this.fadeTo(el, 0, FADE_MS, () => this.release(el));
+  }
+
+  /** Останавливает трек и освобождает его. */
+  private release(el: HTMLAudioElement) {
+    const fade = this.fades.get(el);
+    if (fade !== undefined) {
+      window.clearInterval(fade);
+      window.clearTimeout(fade);
+      this.fades.delete(el);
+    }
+    el.pause();
+    el.src = "";
+    this.gains.get(el)?.disconnect();
+    this.gains.delete(el);
+    this.live.delete(el);
   }
 
   private fadeTo(el: HTMLAudioElement, volume: number, ms: number, done?: () => void) {

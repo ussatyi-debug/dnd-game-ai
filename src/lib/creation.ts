@@ -1776,7 +1776,107 @@ export { ABILITY_SHORT, CLASSES };
 
 /** Черновик повышения уровня: выборы героя сохранены, уровень +1, хиты прошлых уровней закреплены.
  *  `fromSheet` — черновика в листе нет (герой создан до 0.9.8): выборы делаются заново. */
-export function levelUpDraft(spec: HeroSpec): { draft: Draft; fromSheet: boolean } {
+/**
+ * Выборы прошлых уровней (решение 23.11.2026): при повышении уровня они закрыты, кроме замен,
+ * которые разрешают правила 2024 года (см. [`swapsAllowed`]). Ключ — ключ выбора черновика.
+ */
+export type LevelLocks = Record<string, string[]>;
+
+/** Непустые выборы черновика. */
+function picksOf(d: Draft): LevelLocks {
+  return Object.fromEntries(Object.entries(d.picks).filter(([, v]) => v.length > 0).map(([k, v]) => [k, [...v]]));
+}
+
+/**
+ * Сколько прежних значений выбора можно заменить при повышении уровня (правила 2024 года):
+ * боевой стиль воина, воззвание, метамагия, заговор, арканум, заклинание «известного» списка,
+ * заклинание «Посвящённого в магию» — по одному; вид мастерства оружия — один (после
+ * длительного отдыха); добыча и тактика охотника, местность круга земли и подготовленные
+ * заклинания меняются после отдыха без ограничений. Остальное — не меняется.
+ */
+export function swapsAllowed(key: string, d: Draft): number {
+  if (["fighter.style", "warlock.invocations", "sorcerer.metamagic", "weapon_mastery", "spells.cantrips"].includes(key)) return 1;
+  if (key.startsWith("spells.arcanum.") || key.endsWith(":mi.cantrips") || key.endsWith(":mi.spell")) return 1;
+  if (["hunter.prey", "hunter.defense", "land.terrain"].includes(key)) return Infinity;
+  if (key === "spells.list") return castingOf(resolve(d))?.preparation === "known" ? 1 : Infinity;
+  return 0;
+}
+
+/** Замок выбора при повышении: прежние значения и сколько из них можно заменить. */
+export interface PickLock {
+  values: string[];
+  swaps: number;
+}
+
+export function pickLock(locks: LevelLocks | undefined, key: string, d: Draft): PickLock | undefined {
+  const values = locks?.[key] ?? [];
+  if (values.length === 0) return undefined;
+  const swaps = swapsAllowed(key, d);
+  return Number.isFinite(swaps) ? { values, swaps } : undefined;
+}
+
+/** Можно ли так изменить выбор: заменено не больше прежних значений, чем разрешено. */
+export function lockAllows(lock: PickLock | undefined, next: string[]): boolean {
+  if (!lock) return true;
+  return lock.values.filter((v) => !next.includes(v)).length <= lock.swaps;
+}
+
+/** Нарушенные замки (страховка: интерфейс не даёт их снять). */
+export function lockIssues(d: Draft, locks: LevelLocks | undefined): string[] {
+  if (!locks) return [];
+  const labels = new Map<string, string>([
+    ...featSlots(d).map((s) => [s.key, s.label] as [string, string]),
+    ...choiceSlots(d).map((c) => [c.key, c.label] as [string, string]),
+    ...spellChoices(d).map((c) => [c.key, c.label] as [string, string]),
+  ]);
+  return Object.keys(locks)
+    .filter((key) => !lockAllows(pickLock(locks, key, d), pick(d, key)))
+    .map((key) => `${labels.get(key) ?? key}: выбор прошлых уровней не меняется`);
+}
+
+/**
+ * Выборы по листу героя без сохранённого черновика (листы до 0.10.0, спутники): подкласс,
+ * таланты, навыки класса и варианты умений — то, что лист называет прямо.
+ */
+function picksFromSheet(d: Draft, spec: HeroSpec, level: number): void {
+  const old: Draft = { ...d, level, picks: d.picks };
+  const cls = d.classId ? CLASS_BY_ID.get(d.classId) : undefined;
+  if (!cls) return;
+  const sub = spec.classes[0]?.subclass;
+  const subclass = sub ? cls.subclasses.find((x) => x.id === sub || x.name === sub) : undefined;
+  if (subclass && level >= cls.subclassLevel) d.picks["class.subclass"] = [subclass.id];
+  // Таланты: «Талант: <слот>» в листе.
+  for (const slot of featSlots(old)) {
+    if (slot.fixed) continue;
+    const line = spec.features.find((f) => f.source === `Талант: ${slot.label}`);
+    const feat = line ? FEATS.find((f) => f.name === line.name) : undefined;
+    if (feat) d.picks[slot.key] = [feat.id];
+  }
+  // Навыки класса: владения листа с источником-классом — если их ровно столько, сколько даёт
+  // класс (иначе источник не понять, выбор остаётся игроку).
+  const fromClass = spec.skills.filter((s) => s.proficiency !== "none" && s.source === cls.name).map((s) => s.skill as string);
+  const classSkills = choiceSlots(old).find((c) => c.key === "class.skills");
+  if (classSkills) {
+    const ids = classSkills.options.map((o) => o.id).filter((id) => fromClass.includes(id));
+    if (ids.length === classSkills.count) d.picks["class.skills"] = ids;
+  }
+  // Варианты умений класса и подкласса (воззвания, метамагия, порядок): строки листа с умением
+  // в источнике или «Выбрано: …» в тексте умения.
+  const features = [...cls.features, ...(subclass?.features ?? [])].filter((f) => f.level <= level);
+  for (const f of features) {
+    for (const c of f.choices ?? []) {
+      if (c.kind !== "option" || !c.options) continue;
+      const own = spec.features.filter((x) => x.source === f.name).map((x) => x.name);
+      const listed = spec.features
+        .filter((x) => x.name === f.name)
+        .flatMap((x) => /Выбрано: ([^\n]+?)\.(?:\n|$)/.exec(x.text)?.[1]?.split(", ") ?? []);
+      const ids = c.options.filter((o) => own.includes(o.name) || listed.includes(o.name)).map((o) => o.id);
+      if (ids.length > 0) d.picks[c.id] = ids;
+    }
+  }
+}
+
+export function levelUpDraft(spec: HeroSpec): { draft: Draft; fromSheet: boolean; locks: LevelLocks } {
   const level = spec.classes.reduce((sum, c) => sum + c.level, 0) || 1;
   let saved: Draft | null = null;
   try {
@@ -1793,7 +1893,7 @@ export function levelUpDraft(spec: HeroSpec): { draft: Draft; fromSheet: boolean
     d.kitLevel = saved.kitLevel ?? saved.level;
     d.level = level + 1;
     d.hpRolls.push(averageHitDie(die));
-    return { draft: d, fromSheet: false };
+    return { draft: d, fromSheet: false, locks: picksOf(saved) };
   }
   const d = newDraft();
   const byName = (list: { id: string; name: string }[], v: string) => list.find((x) => x.id === v || x.name === v)?.id ?? null;
@@ -1807,5 +1907,6 @@ export function levelUpDraft(spec: HeroSpec): { draft: Draft; fromSheet: boolean
   d.alignment = spec.alignment;
   d.appearance = spec.appearance;
   d.gender = spec.portrait.endsWith("-f") || spec.portrait.endsWith("_f") ? "f" : "m";
-  return { draft: d, fromSheet: true };
+  picksFromSheet(d, spec, level);
+  return { draft: d, fromSheet: true, locks: picksOf(d) };
 }

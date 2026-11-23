@@ -46,8 +46,12 @@ import {
   slotFeat,
   spellChoices,
   castingOf,
+  lockAllows,
+  pickLock,
   TIERS,
   type Draft,
+  type LevelLocks,
+  type PickLock,
   type StepId,
 } from "../../lib/creation.ts";
 import { ChoiceGroup, PickCard, Section, Segmented } from "./parts.tsx";
@@ -57,6 +61,8 @@ export type Update = (mutate: (d: Draft) => void) => void;
 interface StepProps {
   draft: Draft;
   update: Update;
+  /** Повышение уровня: выборы прошлых уровней (закрыты, кроме разрешённых замен). */
+  locks?: LevelLocks;
 }
 
 const setPick = (update: Update, key: string) => (values: string[]) =>
@@ -65,7 +71,7 @@ const setPick = (update: Update, key: string) => (values: string[]) =>
   });
 
 /** Выборы правил на шаге (навыки, варианты, инструменты, языки). */
-function RuleChoices({ draft, update, step }: StepProps & { step: StepId }) {
+function RuleChoices({ draft, update, step, locks }: StepProps & { step: StepId }) {
   const slots = choiceSlots(draft).filter((c) => c.step === step);
   if (slots.length === 0) return null;
   return (
@@ -80,6 +86,7 @@ function RuleChoices({ draft, update, step }: StepProps & { step: StepId }) {
           value={pick(draft, c.key)}
           onChange={setPick(update, c.key)}
           columns
+          lock={pickLock(locks, c.key, draft)}
         />
       ))}
     </div>
@@ -269,7 +276,7 @@ export function StepBackground({ draft, update }: StepProps) {
 
 // ───────────────────────────── 3. Класс ─────────────────────────────
 
-export function StepClass({ draft, update, levelUp }: StepProps & { levelUp?: { subclassChosen: boolean } }) {
+export function StepClass({ draft, update, levelUp, locks }: StepProps & { levelUp?: { subclassChosen: boolean } }) {
   const r = resolve(draft);
   const tier = TIERS.find((t) => t.id === draft.tier) ?? TIERS[0];
   const kit = pick(draft, "equip.class")[0] ?? "kit";
@@ -358,7 +365,9 @@ export function StepClass({ draft, update, levelUp }: StepProps & { levelUp?: { 
                 selected={pick(draft, "class.subclass")[0] === s.id}
                 title={s.name}
                 summary={s.summary}
-                onClick={() => setPick(update, "class.subclass")([s.id])}
+                onClick={() => {
+                  if (lockAllows(pickLock(locks, "class.subclass", draft), [s.id])) setPick(update, "class.subclass")([s.id]);
+                }}
               >
                 <ul className="space-y-1 text-xs">
                   {s.features
@@ -381,7 +390,7 @@ export function StepClass({ draft, update, levelUp }: StepProps & { levelUp?: { 
       {r.cls && (
         <>
           <Section title="3.2 Навыки, экспертиза и мастерство">
-            <RuleChoices draft={draft} update={update} step="class" />
+            <RuleChoices draft={draft} update={update} step="class" locks={locks} />
           </Section>
           {!levelUp && (
           <Section title="Снаряжение класса">
@@ -438,7 +447,7 @@ function ClassLevels({ draft }: { draft: Draft }) {
 
 // ───────────────────────────── 4. Таланты ─────────────────────────────
 
-export function StepFeats({ draft, update }: StepProps) {
+export function StepFeats({ draft, update, locks }: StepProps) {
   const slots = featSlots(draft).filter((s) => !s.fixed);
   return (
     <div className="space-y-4">
@@ -469,6 +478,7 @@ export function StepFeats({ draft, update }: StepProps) {
                 })
               }
               columns
+              lock={pickLock(locks, slot.key, draft)}
             />
             {feat?.abilityIncrease && feat.abilityIncrease.length > 1 && (
               <ChoiceGroup
@@ -477,9 +487,10 @@ export function StepFeats({ draft, update }: StepProps) {
                 options={feat.abilityIncrease.map((a) => ({ id: a, name: ABILITY_NAME[a] }))}
                 value={pick(draft, `${slot.key}:abilities`)}
                 onChange={setPick(update, `${slot.key}:abilities`)}
+                lock={pickLock(locks, `${slot.key}:abilities`, draft)}
               />
             )}
-            {feat?.id === "ability_score_improvement" && (
+            {feat?.id === "ability_score_improvement" && !pickLock(locks, `${slot.key}:abilities`, draft) && (
               <button
                 type="button"
                 className="text-xs text-gold underline"
@@ -496,7 +507,7 @@ export function StepFeats({ draft, update }: StepProps) {
           </Section>
         );
       })}
-      <RuleChoices draft={draft} update={update} step="feats" />
+      <RuleChoices draft={draft} update={update} step="feats" locks={locks} />
     </div>
   );
 }
@@ -509,12 +520,15 @@ function SpellPicker({
   options,
   value,
   onChange,
+  lock,
 }: {
   label: string;
   count: number;
   options: SpellData[];
   value: string[];
   onChange: (v: string[]) => void;
+  /** Повышение уровня: заклинания прошлых уровней и сколько из них можно заменить. */
+  lock?: PickLock;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>(null);
@@ -524,14 +538,23 @@ function SpellPicker({
     return !q || s.name.toLowerCase().includes(q) || s.nameEn.toLowerCase().includes(q);
   });
   const toggle = (id: string) => {
-    if (value.includes(id)) onChange(value.filter((v) => v !== id));
-    else if (count === 1) onChange([id]);
-    else if (value.length < count) onChange([...value, id]);
+    let next: string[] | null = null;
+    if (value.includes(id)) next = value.filter((v) => v !== id);
+    else if (count === 1) next = [id];
+    else if (value.length < count) next = [...value, id];
+    if (next && lockAllows(lock, next)) onChange(next);
   };
   return (
     <div className="rounded-lg border border-edge/70 bg-ink/40 p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium">{label}</span>
+        <span className="text-sm font-medium">
+          {label}
+          {lock && (
+            <span className="ml-1 text-xs font-normal text-muted">
+              · {lock.swaps > 0 ? `прежние: заменить можно ${lock.swaps}` : "прежние не меняются"}
+            </span>
+          )}
+        </span>
         <span className={`text-xs ${value.length === need ? "text-gold" : "text-fumble"}`}>
           {value.length}/{need}
         </span>
@@ -552,6 +575,7 @@ function SpellPicker({
               <div className="flex items-center gap-2 px-2 py-1.5">
                 <button type="button" onClick={() => toggle(s.id)} className="flex-1 text-left text-sm">
                   <span className={on ? "text-gold" : ""}>{on ? "◆ " : "◇ "}{s.name}</span>
+                  {lock?.values.includes(s.id) && <span className="ml-1 text-[11px] text-muted">выбрано раньше</span>}
                   <span className="ml-1 text-[11px] text-muted">
                     {levelLabel(s.level)} · {s.school}
                     {s.concentration ? " · К" : ""}
@@ -584,7 +608,7 @@ function SpellPicker({
   );
 }
 
-export function StepSpells({ draft, update }: StepProps) {
+export function StepSpells({ draft, update, locks }: StepProps) {
   const choices = spellChoices(draft);
   const r = resolve(draft);
   const casting = castingOf(r);
@@ -608,7 +632,7 @@ export function StepSpells({ draft, update }: StepProps) {
           Заклинания подкласса и класса, которые всегда подготовлены, добавятся сами.
         </p>
       )}
-      <RuleChoices draft={draft} update={update} step="spells" />
+      <RuleChoices draft={draft} update={update} step="spells" locks={locks} />
       {miSlots.map((slot) => (
         <ChoiceGroup
           key={slot.key}
@@ -617,6 +641,7 @@ export function StepSpells({ draft, update }: StepProps) {
           options={(["intelligence", "wisdom", "charisma"] as AbilityId[]).map((a) => ({ id: a, name: ABILITY_NAME[a] }))}
           value={pick(draft, `${slot.key}:mi.ability`)}
           onChange={setPick(update, `${slot.key}:mi.ability`)}
+          lock={pickLock(locks, `${slot.key}:mi.ability`, draft)}
         />
       ))}
       {choices.map((c) => (
@@ -627,6 +652,7 @@ export function StepSpells({ draft, update }: StepProps) {
           options={c.options}
           value={pick(draft, c.key)}
           onChange={setPick(update, c.key)}
+          lock={pickLock(locks, c.key, draft)}
         />
       ))}
     </div>

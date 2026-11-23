@@ -93,6 +93,21 @@ pub struct Scene {
     pub mood: Mood,
 }
 
+impl Scene {
+    /// Время сцены в часах «ЧЧ:ММ»: слово («утро») — опорный час части суток, непонятная
+    /// запись — без времени.
+    pub fn normalize_time(&mut self) {
+        if let Some(time) = self.time.take() {
+            self.time = crate::clock::normalize(&time);
+        }
+    }
+
+    /// Время для игрока и мастера: часть суток («позднее утро»).
+    pub fn time_shown(&self) -> String {
+        crate::clock::shown(self.time.as_deref())
+    }
+}
+
 /// Второй куб d20 чертой «Везунчик» (правила 2024 года — преимущество: из двух кубов берётся
 /// больший; сравнивает интерфейс, у которого есть первый бросок).
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -374,7 +389,13 @@ pub struct MasterMemo {
 }
 
 impl Session {
-    pub fn new(rng: Xoshiro256, scene: Scene, party: Vec<Character>, treasury: Treasury) -> Self {
+    pub fn new(
+        rng: Xoshiro256,
+        mut scene: Scene,
+        party: Vec<Character>,
+        treasury: Treasury,
+    ) -> Self {
+        scene.normalize_time();
         let day = scene.day;
         Self {
             rng,
@@ -682,6 +703,11 @@ impl Session {
             || format!("ячейка, {name}"),
         )?;
         self.spellbook(id)
+    }
+
+    /// Ячейка, которую вернёт заряд предмета-восстановителя (см. [`Character::restorer_slot`]).
+    pub fn restorer_slot(&self, id: &str, item_resource_id: &str) -> Option<SlotRef> {
+        self.character(id).ok()?.restorer_slot(item_resource_id)
     }
 
     /// Восстановление ячейки предметом.

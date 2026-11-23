@@ -527,6 +527,8 @@ impl Session {
         let next_note_id = notes.last().map_or(1, |n| n.id + 1);
 
         self.scene = save.scene;
+        // Время словом («утро», до 0.10.6) — опорный час части суток: внутри движок считает минуты.
+        self.scene.normalize_time();
         self.party = party;
         self.treasury = treasury;
         self.engine_log = save.engine_log;

@@ -887,7 +887,18 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
         "resource" => {
             let delta = int_field(cmd, "delta").ok_or("нет поля «delta»")?;
             let delta = i32::try_from(delta).map_err(|_| format!("неверное «delta» {delta}"))?;
-            engine(session.adjust_resource(&character, text_field(cmd, "resource")?, delta))?;
+            let resource = text_field(cmd, "resource")?;
+            // Заряд предмета-восстановителя (жезл договора) списан тратой ресурса вместо
+            // restore: заряд без ячейки пропадал (лог 23.11.2026) — движок делает restore.
+            if delta == -1 {
+                if let Some(slot) = session.restorer_slot(&character, resource) {
+                    return session
+                        .restore_slot_with(&character, resource, slot)
+                        .map(|o| o.summary)
+                        .map_err(|e| e.to_string());
+                }
+            }
+            engine(session.adjust_resource(&character, resource, delta))?;
             Ok(last_log(session))
         }
         "condition" => {
@@ -1098,6 +1109,7 @@ fn command_name(cmd: &Value) -> String {
 /// (исправление отказов: мастер часто присылает весь ход заново, и движок выполнял его дважды).
 fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> Vec<MasterAction> {
     let mut actions = Vec::new();
+    let mut deferred: Vec<(usize, Value)> = Vec::new();
     for block in blocks {
         for cmd in commands(block) {
             if skip_repeats {
@@ -1117,10 +1129,18 @@ fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> V
             }
             let key = cmd.as_ref().ok().map(command_key);
             let name = cmd.as_ref().ok().map(command_name);
+            let value = cmd.as_ref().ok().cloned();
             let result = cmd.and_then(|cmd| run(session, &cmd));
             if result.is_ok() {
                 if let Some(key) = key {
                     session.record_turn_command(key);
+                }
+            }
+            // Ячейку вернули раньше, чем потратили (заявка «накладываю и восстанавливаю»):
+            // восстановление повторяется в конце команд хода.
+            if let (Err(reason), Some(value)) = (&result, value) {
+                if slots_full(reason) && restores_slot(&value) {
+                    deferred.push((actions.len(), value));
                 }
             }
             actions.push(match result {
@@ -1147,7 +1167,27 @@ fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> V
             });
         }
     }
+    for (index, value) in deferred {
+        if let Ok(summary) = run(session, &value) {
+            session.record_turn_command(command_key(&value));
+            actions[index] = MasterAction { ok: true, summary, sample: None };
+        }
+    }
     actions
+}
+
+/// Отказ «все ячейки и так свободны».
+fn slots_full(reason: &str) -> bool {
+    reason.contains("и так свободны")
+}
+
+/// Команда возвращает ячейку предметом: restore или трата заряда восстановителя.
+fn restores_slot(cmd: &Value) -> bool {
+    match cmd.get("cmd").and_then(Value::as_str) {
+        Some("restore") => true,
+        Some("resource") => cmd.get("delta").and_then(Value::as_i64) == Some(-1),
+        _ => false,
+    }
 }
 
 /// Сообщение мастеру об отказах движка: просьба прислать исправленные команды.
@@ -1537,6 +1577,55 @@ mod tests {
     }
 
     #[test]
+    fn rod_charge_spent_as_resource_restores_the_slot() {
+        let rod = |s: &Session| {
+            s.character("pc.nikis").unwrap().resource("item.pact_rod.slot").unwrap().current()
+        };
+        let pact = |s: &Session| {
+            s.character("pc.nikis").unwrap().resource("pact.slots").unwrap().current()
+        };
+        // Лог 23.11.2026: ячейка потрачена, заряд жезла списан тратой ресурса — ячейка вернулась.
+        let mut s = session();
+        let (charges, slots) = (rod(&s), pact(&s));
+        let turn = apply_directives(
+            &mut s,
+            concat!(
+                "```engine\n",
+                "{\"cmd\":\"cast\",\"character\":\"pc.nikis\",\"spell\":\"armor-of-agathys\",\"slot\":\"pact\"}\n",
+                "{\"cmd\":\"resource\",\"character\":\"pc.nikis\",\"resource\":\"item.pact_rod.slot\",\"delta\":-1}\n",
+                "```"
+            ),
+        );
+        assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
+        assert_eq!((rod(&s), pact(&s)), (charges - 1, slots));
+        // Восстановление раньше траты: повтор в конце хода.
+        let mut s = session();
+        let turn = apply_directives(
+            &mut s,
+            concat!(
+                "```engine\n",
+                "{\"cmd\":\"restore\",\"character\":\"pc.nikis\",\"item\":\"item.pact_rod.slot\",\"level\":\"pact\"}\n",
+                "{\"cmd\":\"cast\",\"character\":\"pc.nikis\",\"spell\":\"armor-of-agathys\",\"slot\":\"pact\"}\n",
+                "```"
+            ),
+        );
+        assert!(
+            turn.actions[0].ok && !turn.actions[0].summary.contains("ничего"),
+            "{:?}",
+            turn.actions
+        );
+        assert_eq!((rod(&s), pact(&s)), (charges - 1, slots));
+        // Ячейки полны — заряд не тратится.
+        let mut s = session();
+        let turn = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"resource\",\"character\":\"pc.nikis\",\"resource\":\"item.pact_rod.slot\",\"delta\":-1}\n```",
+        );
+        assert!(turn.actions[0].summary.contains("ничего не изменилось"), "{:?}", turn.actions);
+        assert_eq!(rod(&s), charges);
+    }
+
+    #[test]
     fn state_commands_and_undo() {
         let mut s = session();
         let reply = concat!(
@@ -1566,7 +1655,7 @@ mod tests {
         let nikis = s.character("pc.nikis").unwrap();
         assert_eq!(nikis.hit_points.current, 58);
         assert_eq!(nikis.hit_points.temporary, 0);
-        assert_eq!(s.scene().time.as_deref(), Some("полдень"));
+        assert_eq!(s.scene().time.as_deref(), Some("12:00"));
         assert_eq!(s.notes().len(), 1);
         let info = s.master_undo_info().unwrap();
         assert_eq!(info.actions.len(), 9);

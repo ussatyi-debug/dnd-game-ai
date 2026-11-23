@@ -15,7 +15,10 @@ import {
   featOptions,
   featSlots,
   levelUpDraft,
+  lockAllows,
+  lockIssues,
   maxHp,
+  pickLock,
   newDraft,
   pointsSpent,
   slotFeat,
@@ -177,6 +180,31 @@ for (const h of QUICK_HEROES) {
   const upSpec = buildSpec(up.draft);
   assert.ok(upSpec.hp.rolls.slice(0, h.level - 1).every((v, i) => v === spec.hp.rolls[i]), `${label}: хиты прошлых уровней`);
   console.log(`${label}: повышение до ${h.level + 1} — хиты ${maxHp(up.draft)}, требует выбора: ${STEPS.flatMap((s) => (s.id === "sheet" ? [] : stepIssues(up.draft, s.id))).join("; ") || "ничего"}`);
+
+  // Выборы прошлых уровней закрыты (23.11.2026): таланты и навыки не перевыбираются.
+  assert.deepEqual(lockIssues(up.draft, up.locks), [], `${label}: прежние выборы на месте`);
+  for (const slot of featSlots(up.draft).filter((x) => !x.fixed && up.locks[x.key])) {
+    const lock = pickLock(up.locks, slot.key, up.draft);
+    const other = featOptions(up.draft, slot).find((f) => f.id !== up.locks[slot.key]![0]);
+    if (!other) continue;
+    const swap = lockAllows(lock, [other.id]);
+    assert.equal(swap, slot.key === "fighter.style", `${label}: замена таланта «${slot.label}»`);
+    const changed = structuredClone(up.draft);
+    changed.picks[slot.key] = [other.id];
+    assert.equal(lockIssues(changed, up.locks).length === 0, swap, `${label}: проверка замены «${slot.label}»`);
+  }
+  if (up.locks["class.skills"]) {
+    assert.equal(lockAllows(pickLock(up.locks, "class.skills", up.draft), []), false, `${label}: навыки класса закрыты`);
+  }
+  // Лист без черновика: таланты и навыки класса восстанавливаются по листу и тоже закрыты.
+  const old = levelUpDraft({ ...spec, draft: undefined });
+  assert.equal(old.fromSheet, true, `${label}: лист без черновика`);
+  for (const slot of featSlots(d).filter((x) => !x.fixed)) {
+    const feat = slotFeat(d, slot);
+    if (feat) assert.deepEqual(old.locks[slot.key], [feat.id], `${label}: талант «${slot.label}» по листу`);
+  }
+  assert.deepEqual(old.locks["class.skills"]?.slice().sort(), d.picks["class.skills"]?.slice().sort(), `${label}: навыки класса по листу`);
+  if (d.picks["class.subclass"]) assert.deepEqual(old.locks["class.subclass"], d.picks["class.subclass"], `${label}: подкласс по листу`);
   built++;
 }
 
