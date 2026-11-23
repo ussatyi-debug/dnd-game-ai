@@ -253,12 +253,13 @@ pub enum Request {
     MasterRepair {
         text: String,
     },
-    /// Проверка рассказа: рассказчик сменил время суток, а сцена — нет (просьба мастеру или null).
-    MasterTimeCheck {
+    /// Проверка хода: время суток в рассказе или место в сводке не те, что в сцене (просьба
+    /// мастеру или null).
+    MasterTurnCheck {
         text: String,
     },
-    /// Ответ мастера на проверку времени: команды и, если ход переписан, новый текст.
-    MasterApplyTimeCheck {
+    /// Ответ мастера на проверку хода: команды и, если ход переписан, новый текст.
+    MasterApplyTurnCheck {
         text: String,
     },
     /// Старый чат вне окна истории мастера — для поиска `query chat`.
@@ -512,9 +513,9 @@ fn dispatch(session: &mut Session, request: Request) -> Result<Value, String> {
             to_value(dnd_master::resolve_pool(session, &text, apply))
         }
         Request::MasterRepair { text } => to_value(dnd_master::apply_repair(session, &text)),
-        Request::MasterTimeCheck { text } => to_value(dnd_master::time_check(session, &text)),
-        Request::MasterApplyTimeCheck { text } => {
-            to_value(dnd_master::apply_time_check(session, &text))
+        Request::MasterTurnCheck { text } => to_value(dnd_master::turn_check(session, &text)),
+        Request::MasterApplyTurnCheck { text } => {
+            to_value(dnd_master::apply_turn_check(session, &text))
         }
         Request::ChatArchive { lines } => {
             session.set_chat_archive(lines);

@@ -127,7 +127,16 @@ impl Session {
         c.profile.xp.unwrap_or_else(|| threshold(c.level()))
     }
 
+    /// Кто копит опыт и повышает уровень: член отряда с классом. Фамильяр — нет (у него
+    /// уровень 0, и порог «1 уровня» — 0 очков: ему открывалось повышение на любом отдыхе).
+    pub(crate) fn earns_xp(c: &Character) -> bool {
+        c.kind != crate::character::CharacterKind::Familiar && c.level() >= 1
+    }
+
     fn level_up_block(&self, c: &Character) -> String {
+        if !Self::earns_xp(c) {
+            return "фамильяр не повышает уровень".into();
+        }
         if c.level() >= MAX_LEVEL {
             return "20 уровень — наибольший".into();
         }
@@ -283,6 +292,7 @@ impl Session {
         let members = self
             .party
             .iter()
+            .filter(|c| Self::earns_xp(c))
             .map(|c| {
                 let level = c.level();
                 let xp = Self::xp_of(c);
@@ -351,7 +361,7 @@ impl Session {
                 )));
             }
             let mut ready = Vec::new();
-            for c in &mut self.party {
+            for c in self.party.iter_mut().filter(|c| Self::earns_xp(c)) {
                 let xp = Self::xp_of(c).saturating_add(each);
                 c.profile.xp = Some(xp);
                 c.profile.xp_next = next_threshold(c.level());
@@ -396,6 +406,7 @@ impl Session {
         let ready: Vec<(String, String)> = self
             .party
             .iter()
+            .filter(|c| Self::earns_xp(c))
             .filter(|c| next_threshold(c.level()).is_some_and(|t| Self::xp_of(c) >= t))
             .filter(|c| !self.level_up_open.contains(&c.id))
             .map(|c| (c.id.clone(), c.name.clone()))
@@ -496,6 +507,19 @@ mod tests {
             assert!(m.can_level && !m.wizard);
         }
         assert!(s.award_xp(0, "").is_err());
+    }
+
+    #[test]
+    fn familiar_earns_no_xp_and_never_levels() {
+        let mut s = Session::demo(Xoshiro256::from_seed(1));
+        s.award_xp(140, "День 98").unwrap();
+        let yussach = s.party().iter().find(|c| c.id == "npc.yussach").unwrap();
+        assert_eq!(yussach.profile.xp, None);
+        assert!(s.xp_status().members.iter().all(|m| m.id != "npc.yussach"));
+        // Порог «1 уровня» — 0 очков: раньше фамильяру открывалось повышение на любом отдыхе.
+        s.master_rest(RestKind::Long);
+        assert!(!s.level_up_open.contains(&"npc.yussach".to_string()));
+        assert!(s.level_up_ready("npc.yussach").is_err());
     }
 
     #[test]

@@ -380,7 +380,7 @@ fn snapshot(session: &Session, short: bool) -> Value {
         "казна": session.treasury_view().locations.iter().filter(|l| !l.lines.is_empty()).map(|l| json!({
             "место": l.name,
             "id": l.id,
-            "состав": l.lines.iter().map(|h| format!("{} [{}] ×{}", h.name, h.asset_id, h.quantity)).collect::<Vec<_>>(),
+            "состав": l.lines.iter().map(holding_line).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "карточки_базы": kb_index(session),
         "цели_активные": session.active_goals().into_iter().map(goal_json).collect::<Vec<_>>(),
@@ -1243,6 +1243,21 @@ pub fn update_commands(reply: &str) -> String {
         }
         None => reply.to_string(),
     }
+}
+
+/// Строка казны в снимке: у ценностей (векселя, самоцветы, слитки) — цена за штуку, иначе мастер
+/// не знает номинала («векселя ×1», лог 22.11).
+fn holding_line(h: &dnd_engine::treasury::HoldingLine) -> String {
+    let base = format!("{} [{}] ×{}", h.name, h.asset_id, h.quantity);
+    if h.kind == dnd_engine::AssetKind::Coin || h.unit_value <= 0 {
+        return base;
+    }
+    let price = if h.unit_value % 100 == 0 {
+        format!("{} зм", h.unit_value / 100)
+    } else {
+        format!("{} мм", h.unit_value)
+    };
+    format!("{base}, по {price}")
 }
 
 /// Опыт отряда для снимка сцены: уровень, опыт и порог; пометки журнала опыта.

@@ -158,7 +158,11 @@ impl Session {
         // мастер не прислал или движок её не узнал — старая сводка тянула бы мастера в прошлое.
         let turn = self.master_turn;
         self.master_turn += 1;
-        if self.scene_jump_turn == Some(turn) && self.now_turn != Some(turn) {
+        // Вне игры (исправление места по просьбе игрока) сводку не трогаем: мир стоит.
+        if self.scene_jump_turn == Some(turn)
+            && self.now_turn != Some(turn)
+            && !self.turn_out_of_game
+        {
             self.scene.now.clear();
         }
         // Ответ вне игры («((…))»): время, счётчики, таймеры и бой стоят.
@@ -459,6 +463,11 @@ impl Session {
             || format!("казна, «{asset}»"),
         )
         .map(|(id, _, _)| id)
+    }
+
+    /// Сводку «СЕЙЧАС» мастер прислал в последнем завершённом ходу (её можно сверять со сценой).
+    pub fn scene_now_from_last_turn(&self) -> bool {
+        self.master_turn > 0 && self.now_turn == Some(self.master_turn - 1)
     }
 
     /// Живая сводка «что сейчас»: мастер обновляет её каждый ход, игрок может поправить руками.

@@ -540,7 +540,13 @@ impl Session {
         self.undo = None;
         self.campaign = save.campaign;
         self.xp_log = save.xp_log;
-        let ids: Vec<String> = self.party.iter().map(|c| c.id.clone()).collect();
+        // Фамильяр опыт не копит: старые сейвы (до 0.10.5) давали ему опыт и повышение уровня.
+        for c in self.party.iter_mut().filter(|c| !Session::earns_xp(c)) {
+            c.profile.xp = None;
+            c.profile.xp_next = None;
+        }
+        let ids: Vec<String> =
+            self.party.iter().filter(|c| Session::earns_xp(c)).map(|c| c.id.clone()).collect();
         self.level_up_open = save.level_up_open.into_iter().filter(|id| ids.contains(id)).collect();
         // Снимок сцены из сейва: тот же ключ сцены — мастер видит те же изменения, что до
         // загрузки; старые сейвы без снимка собирают его заново.

@@ -115,6 +115,8 @@ export interface PartyMember {
   hit_points: HitPoints;
   armor_class: number;
   location: string;
+  /** Название места (карточка базы по id места). */
+  location_name: string;
   in_scene: boolean;
   key_resources: ResourcePool[];
   /** Поручение спутника: зачем он ушёл из сцены. */
@@ -123,6 +125,8 @@ export interface PartyMember {
 
 export interface PartyView {
   scene: Scene;
+  /** Название места сцены. */
+  place: string;
   members: PartyMember[];
   treasury_name: string;
   treasury_total: number;
@@ -447,20 +451,20 @@ export interface RollRound {
   carried: string;
 }
 
-/** Ответ мастера на проверку времени: новый текст хода (если переписан) и команды. */
-export interface TimeFix {
+/** Ответ мастера на проверку хода: новый текст хода (если переписан) и команды. */
+export interface TurnFix {
   text: string | null;
   actions: MasterAction[];
 }
 
-/** Рассказчик сменил время суток, а сцена — нет: просьба к мастеру или `null` (веб-версия). */
-export function masterTimeCheck(text: string): Promise<string | null> {
-  return call<string | null>("master_time_check", { text });
+/** Время суток в рассказе или место в сводке не те, что в сцене: просьба к мастеру или `null` (веб-версия). */
+export function masterTurnCheck(text: string): Promise<string | null> {
+  return call<string | null>("master_turn_check", { text });
 }
 
-/** Выполняет ответ мастера на проверку времени (веб-версия). */
-export function masterApplyTimeCheck(text: string): Promise<TimeFix> {
-  return call<TimeFix>("master_apply_time_check", { text });
+/** Выполняет ответ мастера на проверку хода (веб-версия). */
+export function masterApplyTurnCheck(text: string): Promise<TurnFix> {
+  return call<TurnFix>("master_apply_turn_check", { text });
 }
 
 /** Исправленные мастером команды после отказов движка (веб-версия). */

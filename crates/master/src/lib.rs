@@ -30,7 +30,7 @@ pub use scene::{
     update_request, MasterRequest, CHRONICLE_REMINDER_TURNS, HISTORY_TURNS_DEFAULT,
     HISTORY_TURNS_MAX, HISTORY_TURNS_MIN,
 };
-pub use timeline::{apply_time_check, time_check, TimeFix};
+pub use timeline::{apply_turn_check, turn_check, TurnFix};
 
 use dnd_engine::{Character, MasterNote, Proficiency, Session, SpellbookView, KB_STATUSES};
 use serde_json::{json, Value};

@@ -63,8 +63,8 @@ import {
   masterPool,
   masterRolls,
   repairRequest,
-  masterTimeCheck,
-  masterApplyTimeCheck,
+  masterTurnCheck,
+  masterApplyTurnCheck,
   partyView,
   restartDemo,
   setKbCards,
@@ -866,20 +866,20 @@ export default function App() {
             devLog.add("error", "Повтор команд не удался", errorText(e));
           }
         }
-        // Рассказчик сменил время суток, а сцена — нет: до показа мастер присылает время или
-        // переписывает ход (время двигает только мастер).
-        const check = await masterTimeCheck(turn.text);
+        // Рассказчик сменил время суток или герой ушёл, а сцена — нет: до показа мастер присылает
+        // время и место или переписывает ход (время и место двигает только мастер).
+        const check = await masterTurnCheck(turn.text);
         if (check) {
           history.length = baseLen;
           history.push({ role: "master", text }, { role: "player", text: check });
           try {
             const fix = await gen(system, history, () => undefined, controller.signal);
             raw.push(fix);
-            const fixed = await masterApplyTimeCheck(fix);
+            const fixed = await masterApplyTurnCheck(fix);
             if (fixed.text) turn.text = fixed.text;
-            turn.actions.push(...fixed.actions.map((a) => ({ ...a, summary: `время: ${a.summary}` })));
+            turn.actions.push(...fixed.actions.map((a) => ({ ...a, summary: `проверка хода: ${a.summary}` })));
           } catch (e) {
-            devLog.add("error", "Проверка времени не удалась", errorText(e));
+            devLog.add("error", "Проверка хода не удалась", errorText(e));
           }
         }
         return { narration: null, turn };

@@ -540,6 +540,16 @@ impl Session {
             .unwrap_or_else(|| id.to_string())
     }
 
+    /// Родитель места (город для здания): id карточки-родителя, если он указан.
+    pub fn card_parent(&self, id: &str) -> Option<String> {
+        self.custom_cards
+            .iter()
+            .find(|c| c.id == id)
+            .map(|c| c.parent.clone())
+            .or_else(|| self.kb_cards.iter().find(|c| c.id == id).map(|c| c.parent.clone()))
+            .flatten()
+    }
+
     /// Запись мастера в базу знаний.
     pub fn add_note(
         &mut self,

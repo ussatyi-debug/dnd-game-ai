@@ -105,7 +105,7 @@ export default function PartyPanel({
           День {party.scene.day}
           {party.scene.time ? `, ${party.scene.time}` : ""}
         </p>
-        <p className="text-xs text-muted">{party.scene.location}</p>
+        <p className="text-xs text-muted">{party.place}</p>
         {(party.scene.now || party.scene.situation) && (
           <details className="mt-1 text-xs">
             <summary className="cursor-pointer text-gold/80">Обстановка и планы</summary>
@@ -195,7 +195,7 @@ export default function PartyPanel({
                     {exp.ready && !exp.open && exp.can_level && " · повышение на длительном отдыхе"}
                   </div>
                 )}
-                {!m.in_scene && <div className="mt-1 text-[11px] text-gold/80">📍 {m.location}</div>}
+                {!m.in_scene && <div className="mt-1 text-[11px] text-gold/80">📍 {m.location_name}</div>}
                 {m.task && <div className="mt-1 text-[11px] text-parchment/80">📜 {m.task}</div>}
               </button>
               {exp?.open && exp.can_level && (

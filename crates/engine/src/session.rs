@@ -138,6 +138,8 @@ pub struct PartyMember {
     pub hit_points: HitPoints,
     pub armor_class: i32,
     pub location: String,
+    /// Название места для окна «Отряд» (карточка базы по id места, иначе как записано).
+    pub location_name: String,
     /// Находится ли персонаж там же, где персонаж игрока.
     pub in_scene: bool,
     /// Ресурсы для значков на карточке (не больше трёх).
@@ -151,6 +153,8 @@ pub struct PartyMember {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartyView {
     pub scene: Scene,
+    /// Название места сцены (карточка базы по id, иначе как записано).
+    pub place: String,
     pub members: Vec<PartyMember>,
     pub treasury_name: String,
     pub treasury_total: i64,
@@ -750,6 +754,7 @@ impl Session {
                 hit_points: c.hit_points,
                 armor_class: c.armor_class,
                 location: c.location.clone(),
+                location_name: self.card_title(&c.location),
                 in_scene: c.location == self.scene.location,
                 key_resources: c.resources().iter().take(3).cloned().collect(),
                 task: self.task_of(&c.id).map(|t| t.text.clone()),
@@ -757,6 +762,7 @@ impl Session {
             .collect();
         PartyView {
             scene: self.scene.clone(),
+            place: self.card_title(&self.scene.location),
             members,
             treasury_name: self.treasury.name().to_string(),
             treasury_total: self.treasury.view().total,

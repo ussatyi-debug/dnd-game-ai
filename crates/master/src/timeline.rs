@@ -1,7 +1,8 @@
-//! Время глазами мастера (решение владельца 23.11.2026): время двигает только мастер
+//! Время и место глазами мастера (решения владельца 23.11.2026): их двигает только мастер
 //! командой `scene`, движок помогает ему не ошибиться — сам пишет первую строку «СЕЙЧАС»
 //! (день, часы, время суток, место), напоминает, когда сводка мастера разошлась со сценой, и до
-//! показа игроку проверяет, не сменил ли рассказчик время суток без команды.
+//! показа игроку проверяет ход: не сменил ли рассказчик время суток без команды и не ушёл ли
+//! герой (по сводке) из места сцены.
 
 use dnd_engine::{clock, Session};
 use serde::Serialize;
@@ -233,30 +234,93 @@ fn phase_mismatch(session: &Session, text: &str) -> Option<(String, &'static str
     None
 }
 
-/// Проверка рассказа до показа игроку: рассказчик сменил время суток, а сцена — нет. Возвращает
-/// просьбу к мастеру (один запрос) или `None`.
-pub fn time_check(session: &Session, text: &str) -> Option<String> {
+/// Основы слов для сравнения мест: слова от четырёх букв, первые пять букв.
+fn stems(text: &str) -> Vec<String> {
+    text.to_lowercase()
+        .replace('ё', "е")
+        .split(|c: char| !c.is_alphabetic())
+        .filter(|w| w.chars().count() >= 4)
+        .map(|w| w.chars().take(5).collect())
+        .collect()
+}
+
+/// Две основы об одном («пирс» и «пирсе»): одна начинается с другой.
+fn same_stem(a: &str, b: &str) -> bool {
+    a.starts_with(b) || b.starts_with(a)
+}
+
+/// Сводка этого хода говорит о другом месте, чем сцена: (первая строка сводки, название места).
+/// Сверяется первая строка — там мастер пишет, где герой; место — название карточки и её
+/// родителя (город для здания).
+fn place_mismatch(session: &Session) -> Option<(String, String)> {
+    if !session.scene_now_from_last_turn() {
+        return None;
+    }
+    let scene = session.scene();
+    let location = scene.location.trim();
+    let title = session.card_title(location);
+    // Место без названия (id без карточки) сравнить не с чем.
+    let bare_id = title == location && !location.contains(' ') && location.contains('.');
+    if location.is_empty() || bare_id {
+        return None;
+    }
+    let first = scene
+        .now
+        .lines()
+        .map(|l| l.trim().trim_start_matches(['-', '—', '–', '*', '•', ' ']).trim())
+        .find(|l| !l.is_empty())?;
+    let mut names = vec![title.clone()];
+    if let Some(parent) = session.card_parent(location) {
+        names.push(session.card_title(&parent));
+    }
+    let place: Vec<String> = names.iter().flat_map(|n| stems(n)).collect();
+    let line = stems(first);
+    let same = line.iter().any(|w| place.iter().any(|p| same_stem(w, p)));
+    if place.is_empty() || line.is_empty() || same {
+        return None;
+    }
+    Some((first.to_string(), title))
+}
+
+/// Проверка хода до показа игроку (решения 23.11.2026): рассказчик сменил время суток, а сцена —
+/// нет; или сводка хода — о другом месте, чем сцена. Одна просьба к мастеру (один запрос) или
+/// `None`.
+pub fn turn_check(session: &Session, text: &str) -> Option<String> {
     // Ответ вне игры «((…))» — разговор за столом, мир стоит.
     if text.trim_start().starts_with("((") {
         return None;
     }
-    let (sentence, label) = phase_mismatch(session, text)?;
+    let time = phase_mismatch(session, text);
+    let place = place_mismatch(session);
+    if time.is_none() && place.is_none() {
+        return None;
+    }
     let scene = session.scene();
-    let time = scene.time.as_deref().unwrap_or("время не указано");
-    let part = scene.time.as_deref().and_then(clock::part_of_day_of).unwrap_or("?");
-    Some(format!(
-        "[ПРОВЕРКА ВРЕМЕНИ]\nВ твоём рассказе: «{sentence}» — {label}, а в сцене День {}, {time} \
-({part}).\n- Время действительно прошло — пришли ТОЛЬКО команду в блоке ```engine: \
-{{\"cmd\":\"scene\",\"advance\":\"…\"}} (новый день — с \"day\"), без рассказа.\n- Это оговорка — \
-перепиши ответ этого хода целиком с верным временем суток, без блоков команд (они уже \
-выполнены), со строкой «СЕЙЧАС» в конце.",
-        scene.day
-    ))
+    let mut out = String::from("[ПРОВЕРКА ХОДА]\n");
+    if let Some((sentence, label)) = time {
+        let time = scene.time.as_deref().unwrap_or("время не указано");
+        let part = scene.time.as_deref().and_then(clock::part_of_day_of).unwrap_or("?");
+        out.push_str(&format!(
+            "Время: в рассказе «{sentence}» — {label}, а в сцене День {}, {time} ({part}).\n",
+            scene.day
+        ));
+    }
+    if let Some((line, title)) = place {
+        out.push_str(&format!("Место: в твоей сводке «{line}», а место сцены — «{title}».\n"));
+    }
+    out.push_str(
+        "- Время прошло или герой ушёл — пришли ТОЛЬКО команды в блоке ```engine: \
+{\"cmd\":\"scene\",\"advance\":\"…\"} и/или {\"cmd\":\"scene\",\"location\":\"…\"} (место из базы — \
+его id; спутники, что ушли с героем, — move), без рассказа.\n- Ошибка в рассказе (не то время \
+суток) — перепиши ответ этого хода целиком, без блоков команд (они уже выполнены), со строкой \
+«СЕЙЧАС» в конце.\n- Всё верно — ответь одним словом «верно».",
+    );
+    Some(out)
 }
 
-/// Ответ мастера на проверку времени: переписанный ход (текст заменяет прежний) и/или команды.
+/// Ответ мастера на проверку хода: переписанный ход (текст заменяет прежний) и/или команды.
 #[derive(Debug, Clone, Serialize)]
-pub struct TimeFix {
+pub struct TurnFix {
     /// Новый текст хода — если мастер переписал ответ.
     pub text: Option<String>,
     /// Выполненные команды (обычно `scene`).
@@ -266,8 +330,8 @@ pub struct TimeFix {
 /// Короче этого — не переписанный ход, а пометка («время верное»).
 const REWRITE_MIN_CHARS: usize = 200;
 
-/// Выполняет ответ на проверку времени: команды — как исправление хода, рассказ — замена текста.
-pub fn apply_time_check(session: &mut Session, reply: &str) -> TimeFix {
+/// Выполняет ответ на проверку хода: команды — как исправление хода, рассказ — замена текста.
+pub fn apply_turn_check(session: &mut Session, reply: &str) -> TurnFix {
     let (prose, _) = split(reply);
     let (prose, now) = split_now(&prose);
     let prose = clean_reply(&prose);
@@ -277,7 +341,7 @@ pub fn apply_time_check(session: &mut Session, reply: &str) -> TimeFix {
     if rewrite && !now.is_empty() {
         session.set_scene_now(&now);
     }
-    TimeFix { text: rewrite.then_some(prose), actions }
+    TurnFix { text: rewrite.then_some(prose), actions }
 }
 
 #[cfg(test)]
@@ -322,7 +386,7 @@ mod tests {
         let (sentence, label) = phase_mismatch(&s, text).expect("ночь утром");
         assert!(sentence.contains("ночь на Вейденбург"), "{sentence}");
         assert_eq!(label, "наступает ночь или вечер");
-        assert!(time_check(&s, text).unwrap().contains("advance"));
+        assert!(turn_check(&s, text).unwrap().contains("advance"));
         // Реплики, кавычки, прошлое и будущее не считаются.
         for ok in [
             "> — [Изабелла, ж] Спокойной ночи, князь. Ночь опускается быстро.",
@@ -341,10 +405,39 @@ mod tests {
     }
 
     #[test]
-    fn time_fix_rewrites_or_runs_commands() {
+    fn place_check_by_this_turn_summary() {
+        let mut s = at("07:30");
+        let pheasant = "Гранд-отель «Золотой Фазан»";
+        s.change_scene(SceneChange { location: Some(pheasant.into()), ..SceneChange::default() })
+            .unwrap();
+        let turn = |s: &mut Session, now: Option<&str>| {
+            let before = s.checkpoint();
+            if let Some(now) = now {
+                s.set_scene_now(now);
+            }
+            s.commit_master_turn(before, Vec::new());
+        };
+        // Лог 22.11: герой у Бранда, сцена — всё ещё «Фазан».
+        turn(&mut s, Some("Контора Бранда на Третьем пирсе, утро Дня 99.\nБранд колеблется."));
+        let check = turn_check(&s, "Бранд молчит.").expect("место разошлось");
+        assert!(check.contains("Контора Бранда") && check.contains(pheasant), "{check}");
+        // Сводка о том же месте (другой падеж) — без проверки.
+        turn(&mut s, Some("— Двор «Золотого Фазана», утро, конь оседлан."));
+        assert!(turn_check(&s, "Корвус ждёт.").is_none());
+        // Сводки в этом ходу нет — сверять нечего.
+        turn(&mut s, None);
+        assert!(place_mismatch(&s).is_none());
+        // Вне игры не проверяется.
+        turn(&mut s, Some("Контора Бранда на Третьем пирсе."));
+        assert!(turn_check(&s, "((Это по вопросу вне игры.))").is_none());
+        assert!(turn_check(&s, "Бранд молчит.").is_some());
+    }
+
+    #[test]
+    fn turn_fix_rewrites_or_runs_commands() {
         let mut s = at("07:30");
         let fix =
-            apply_time_check(&mut s, "```engine\n{\"cmd\":\"scene\",\"advance\":\"12 ч\"}\n```");
+            apply_turn_check(&mut s, "```engine\n{\"cmd\":\"scene\",\"advance\":\"12 ч\"}\n```");
         assert!(fix.text.is_none());
         assert!(fix.actions.iter().all(|a| a.ok), "{:?}", fix.actions);
         assert_eq!(s.scene().time.as_deref(), Some("19:30"));
@@ -352,7 +445,7 @@ mod tests {
             "{}\n\nСЕЙЧАС: Двор, утро.",
             "Утро только разгорается над Вейденбургом. ".repeat(8)
         );
-        let fix = apply_time_check(&mut s, &rewrite);
+        let fix = apply_turn_check(&mut s, &rewrite);
         assert!(fix.text.as_deref().unwrap().starts_with("Утро только разгорается"));
         assert_eq!(s.scene().now, "Двор, утро.");
     }

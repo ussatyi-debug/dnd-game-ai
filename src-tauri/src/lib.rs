@@ -1070,9 +1070,9 @@ async fn ai_chat(
             }));
         }
     }
-    // Рассказчик сменил время суток, а сцена — нет: до показа игроку мастер либо присылает
-    // время, либо переписывает ход (решение 23.11.2026: время двигает только мастер).
-    let check = dnd_master::time_check(&*lock(&session)?, &turn.text);
+    // Рассказчик сменил время суток или герой (по сводке) ушёл, а сцена — нет: до показа игроку
+    // мастер присылает время и место или переписывает ход (решения 23.11.2026).
+    let check = dnd_master::turn_check(&*lock(&session)?, &turn.text);
     if let Some(request) = check {
         history.truncate(base_history);
         history.push(ai::ChatMessage { role: ai::Role::Master, text: reply.text.clone() });
@@ -1081,12 +1081,12 @@ async fn ai_chat(
         {
             add_usage(&mut reply, &fix);
             reply.raw.push(fix.text.clone());
-            let fixed = dnd_master::apply_time_check(&mut *lock(&session)?, &fix.text);
+            let fixed = dnd_master::apply_turn_check(&mut *lock(&session)?, &fix.text);
             if let Some(text) = fixed.text {
                 turn.text = text;
             }
             turn.actions.extend(fixed.actions.into_iter().map(|mut a| {
-                a.summary = format!("время: {}", a.summary);
+                a.summary = format!("проверка хода: {}", a.summary);
                 a
             }));
         }

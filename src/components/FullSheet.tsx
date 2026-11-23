@@ -229,7 +229,7 @@ export function PartySection({ party, onOpen }: { party: PartyView | null; onOpe
             <div className="text-xs text-muted">{m.summary}</div>
             <p className="mt-1.5 text-sm">
               Хиты {m.hit_points.current}/{m.hit_points.max}
-              {m.hit_points.temporary > 0 ? ` +${m.hit_points.temporary}` : ""} · 📍 {m.location}
+              {m.hit_points.temporary > 0 ? ` +${m.hit_points.temporary}` : ""} · 📍 {m.location_name}
             </p>
             <div className="mt-1 text-xs text-gold">Полный лист →</div>
           </button>

@@ -181,11 +181,63 @@ pub(crate) fn clean_reply(text: &str) -> String {
     text.lines()
         .filter(|l| !l.trim_start().starts_with("[ДВИЖОК]"))
         .filter(|l| !is_service_line(l))
-        .map(|l| cyrillic_words(&l.chars().filter(|c| !is_cjk(*c)).collect::<String>()))
+        .filter(|l| !is_empty_aside(l))
+        .map(|l| {
+            strip_html(&cyrillic_words(&l.chars().filter(|c| !is_cjk(*c)).collect::<String>()))
+        })
         .collect::<Vec<_>>()
         .join("\n")
         .trim()
         .to_string()
+}
+
+/// Пустая пометка вне игры посреди хода: «((Вне игры: нет.))» (лог 22.11, 23:20).
+fn is_empty_aside(line: &str) -> bool {
+    let t = line.trim();
+    let Some(inner) = t.strip_prefix("((").and_then(|r| r.strip_suffix("))")) else {
+        return false;
+    };
+    let inner: String =
+        inner.to_lowercase().chars().filter(|c| c.is_alphabetic() || *c == ' ').collect();
+    let inner = inner.split_whitespace().collect::<Vec<_>>().join(" ");
+    matches!(inner.as_str(), "нет" | "вне игры нет" | "вопросов нет" | "вне игры вопросов нет")
+}
+
+/// HTML в рассказе (лог 22.11: «<br>»): переносы — переводом строки, прочие теги — прочь.
+/// Убираются только знакомые теги, чтобы «a < b» или «<3» остались как есть.
+fn strip_html(line: &str) -> String {
+    const BREAKS: &[&str] = &["br", "p", "div", "hr"];
+    const TAGS: &[&str] = &["b", "i", "u", "em", "strong", "span", "small", "s"];
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(start) = rest.find('<') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let tag = after.find('>').map(|end| &after[..end]).filter(|t| {
+            t.len() <= 40 && t.starts_with(|c: char| c.is_ascii_alphabetic() || c == '/')
+        });
+        let name = tag.map(|t| {
+            t.trim_start_matches('/')
+                .trim()
+                .split(|c: char| !c.is_ascii_alphabetic())
+                .next()
+                .unwrap_or("")
+                .to_ascii_lowercase()
+        });
+        match (tag, name) {
+            (Some(t), Some(n)) if BREAKS.contains(&n.as_str()) => {
+                out.push('\n');
+                rest = &after[t.len() + 1..];
+            }
+            (Some(t), Some(n)) if TAGS.contains(&n.as_str()) => rest = &after[t.len() + 1..],
+            _ => {
+                out.push('<');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Слово, где модель смешала алфавиты («interesует»), — целиком кириллицей («интересует»).
@@ -926,12 +978,13 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     let out_of_game = is_out_of_game(&text);
     session.set_turn_out_of_game(out_of_game);
     if out_of_game {
-        // Учёт по просьбе игрока («начисли опыт», «запиши») вне игры выполняется; действия в
-        // мире — только игровым ходом (лог 22.11: опыт «записан», а команды выброшены).
-        let (allowed, skipped) = bookkeeping_only(&blocks);
+        // Учёт и исправления по просьбе игрока («начисли опыт», «поправь место») вне игры
+        // выполняются; время, отдых, бой, найм и действия — только игровым ходом (логи 22.11).
+        let (allowed, skipped) = out_of_game_commands(&blocks);
         if !skipped.is_empty() {
             session.log(format!(
-                "Ответ вне игры: не выполнено — {} (действия в мире — только игровым ходом)",
+                "Ответ вне игры: не выполнено — {} (время, отдых, бой, найм и действия — только \
+игровым ходом)",
                 skipped.join(", ")
             ));
         }
@@ -957,23 +1010,35 @@ pub fn apply_directives(session: &mut Session, reply: &str) -> MasterTurn {
     MasterTurn { text: clean_reply(&text), actions, fabricated: Vec::new() }
 }
 
-/// Команды учёта, которые выполняются и в ответе вне игры: опыт, база знаний, хроника.
-const BOOKKEEPING: &[&str] =
-    &["xp", "xp_note", "note", "new_card", "edit_card", "card", "goal", "chronicle"];
+/// Команды, которые вне игры двигают мир: отдых, бой, найм, покупка, заклинание, переписывание
+/// свитка. Время (`scene` с `time`, `day`, `advance`) — тоже; остальное — учёт и исправления
+/// (решение владельца 23.11.2026).
+const OUT_OF_GAME_REFUSED: &[&str] = &["rest", "combat", "recruit", "buy", "cast", "copy_spell"];
 
-/// Делит команды ответа вне игры: учёт (одним блоком) и названия остальных — для журнала.
-/// Броски и запросы движок уже обслужил до итога хода — их не считаем.
-fn bookkeeping_only(blocks: &[String]) -> (Vec<String>, Vec<String>) {
+/// Делит команды ответа вне игры: учёт и исправления (одним блоком) и названия остальных — для
+/// журнала. Броски и запросы движок уже обслужил до итога хода — их не считаем.
+fn out_of_game_commands(blocks: &[String]) -> (Vec<String>, Vec<String>) {
     let mut allowed = Vec::new();
     let mut skipped = Vec::new();
     for cmd in blocks.iter().flat_map(|b| commands(b)) {
         match cmd {
             Ok(value) => {
                 let name = value.get("cmd").and_then(Value::as_str).unwrap_or("?").to_string();
-                if BOOKKEEPING.contains(&name.as_str()) {
+                let moves_time = name == "scene"
+                    && ["time", "day", "advance"]
+                        .iter()
+                        .any(|f| value.get(f).is_some_and(|v| !v.is_null()));
+                if matches!(name.as_str(), "roll" | "query") {
+                    continue;
+                }
+                if OUT_OF_GAME_REFUSED.contains(&name.as_str()) || moves_time {
+                    skipped.push(if moves_time {
+                        "scene со временем".into()
+                    } else {
+                        name
+                    });
+                } else {
                     allowed.push(value.to_string());
-                } else if !matches!(name.as_str(), "roll" | "query") {
-                    skipped.push(name);
                 }
             }
             Err(_) => skipped.push("неразобранная команда".into()),
@@ -986,7 +1051,18 @@ fn bookkeeping_only(blocks: &[String]) -> (Vec<String>, Vec<String>) {
 /// Рассказ (без блоков команд и «СЕЙЧАС») целиком в двойных скобках «((…))».
 fn is_out_of_game(prose: &str) -> bool {
     let t = prose.trim();
-    t.starts_with("((") && t.ends_with("))")
+    if !t.starts_with("((") {
+        return false;
+    }
+    if t.ends_with("))") {
+        return true;
+    }
+    // Фраза из кодекса за скобками («Это по вопросу вне игры… продолжаем?») — всё равно ответ вне
+    // игры (лог 22.11, 23:19).
+    t.rfind("))").is_some_and(|end| {
+        let tail = t[end + 2..].trim().to_lowercase();
+        tail.chars().count() <= 160 && (tail.contains("вне игры") || tail.contains("продолжаем"))
+    })
 }
 
 /// Ответ мастера вне игры: весь рассказ в двойных скобках «((…))» (решение 22.11.2026).
@@ -1197,19 +1273,57 @@ mod tests {
     }
 
     #[test]
-    fn out_of_game_reply_runs_no_commands_and_keeps_now() {
+    fn out_of_game_reply_keeps_world_and_now() {
         let mut s = session();
-        let hp = s.character("npc.gunther").unwrap().hit_points.current;
+        let time = s.scene().time.clone();
         s.set_scene_now("Склад, Гюнтер у лестницы");
         let reply = "((Вне игры: бонусное действие у тебя ещё есть. Это по вопросу вне игры. \
-Если вопросов больше нет — продолжаем?))\n```engine\n{\"cmd\":\"hp\",\"character\":\"npc.gunther\",\"damage\":5}\n```\nСЕЙЧАС\n- Лист на ящике";
+Если вопросов больше нет — продолжаем?))\n```engine\n{\"cmd\":\"rest\",\"kind\":\"short\"}\n{\"cmd\":\"scene\",\"time\":\"23:00\"}\n```\nСЕЙЧАС\n- Лист на ящике";
         assert!(out_of_game_reply(reply));
         let turn = apply_directives(&mut s, reply);
         assert!(turn.actions.is_empty());
         assert!(turn.text.starts_with("(("));
-        assert_eq!(s.character("npc.gunther").unwrap().hit_points.current, hp);
+        assert_eq!(s.scene().time, time);
         assert_eq!(s.scene().now, "Склад, Гюнтер у лестницы");
         assert!(!out_of_game_reply("Гюнтер (молча) кивает."));
+        // Фраза из кодекса за скобками — тоже вне игры (лог 22.11, 23:19).
+        assert!(out_of_game_reply(
+            "((Бросок 7 записан.))\n\nЭто по вопросу вне игры. Если вопросов больше нет, продолжаем?"
+        ));
+        assert!(!out_of_game_reply("((Шёпот.)) Стражник поворачивается к вам и долго смотрит."));
+    }
+
+    #[test]
+    fn out_of_game_runs_corrections() {
+        let mut s = session();
+        let hp = s.character("npc.gunther").unwrap().hit_points.current;
+        let time = s.scene().time.clone();
+        let reply = concat!(
+            "((Место исправлено, Гюнтер остаётся в гостинице.))\n",
+            "```engine\n",
+            "{\"cmd\":\"scene\",\"location\":\"Застава «Железные Врата»\"}\n",
+            "{\"cmd\":\"move\",\"character\":\"npc.gunther\",\"location\":\"Гостиница\"}\n",
+            "{\"cmd\":\"hp\",\"character\":\"npc.gunther\",\"damage\":3}\n",
+            "```"
+        );
+        let turn = apply_directives(&mut s, reply);
+        assert!(turn.actions.iter().all(|a| a.ok), "{:?}", turn.actions);
+        assert_eq!(turn.actions.len(), 3);
+        assert_eq!(s.scene().location, "Застава «Железные Врата»");
+        assert_eq!(s.scene().time, time);
+        assert_eq!(s.character("npc.gunther").unwrap().location, "Гостиница");
+        assert_eq!(s.character("npc.gunther").unwrap().hit_points.current, hp - 3);
+    }
+
+    #[test]
+    fn html_and_empty_asides_are_cleaned() {
+        assert_eq!(clean_reply("Корвус ждёт.<br>Ворота близко."), "Корвус ждёт.\nВорота близко.");
+        assert_eq!(clean_reply("Он <b>молчит</b>, a < b и <3."), "Он молчит, a < b и <3.");
+        assert_eq!(clean_reply("Вы выезжаете.\n\n((Вне игры: нет.))"), "Вы выезжаете.");
+        assert_eq!(
+            clean_reply("((Вне игры: у Корвуса 3 хита.))"),
+            "((Вне игры: у Корвуса 3 хита.))"
+        );
     }
 
     #[test]
