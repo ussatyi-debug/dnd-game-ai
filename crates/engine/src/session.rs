@@ -207,6 +207,32 @@ pub struct SaveState {
     pub rests: u64,
 }
 
+/// Заявка игрока этого хода — для проверки ответа мастера (25.11.2026). В сохранение не идёт.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TurnAsk {
+    /// Бросок игрока, итог которого посчитал движок.
+    pub roll: Option<PlayerRoll>,
+    /// Игрок просит описать или продолжить сцену.
+    pub describe: bool,
+    /// Вступление новой игры.
+    pub opening: bool,
+}
+
+/// Бросок игрока: куб из заявки и модификатор по листу героя.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlayerRoll {
+    /// «Внимательность», «спасбросок МДР».
+    pub label: String,
+    pub die: i32,
+    pub modifier: i32,
+}
+
+impl PlayerRoll {
+    pub fn total(&self) -> i32 {
+        self.die + self.modifier
+    }
+}
+
 /// Состояние сессии.
 #[derive(Debug, Clone)]
 pub struct Session {
@@ -261,6 +287,8 @@ pub struct Session {
     /// Команды мастера, уже выполненные в текущем ходу (канонический JSON) — чтобы при
     /// исправлении отказов не выполнить то же самое второй раз. В сохранение не идёт.
     pub(crate) turn_commands: Vec<String>,
+    /// Заявка игрока этого хода (бросок, просьба описать, вступление).
+    pub(crate) turn_ask: TurnAsk,
     /// В этом ходу кому-то нанесли урон — признак, что бой идёт.
     pub(crate) turn_damage: bool,
     /// Сколько ходов подряд в бою никто не получал урона: мастер мог забыть сменить музыку,
@@ -426,6 +454,7 @@ impl Session {
             xp_log: Vec::new(),
             level_up_open: Vec::new(),
             turn_commands: Vec::new(),
+            turn_ask: TurnAsk::default(),
             turn_damage: false,
             quiet_battle_turns: 0,
             battle_seen: false,
@@ -554,6 +583,21 @@ impl Session {
     /// Такая команда уже выполнена в этом ходу.
     pub fn turn_command_done(&self, key: &str) -> bool {
         self.turn_commands.iter().any(|c| c == key)
+    }
+
+    /// Заявка игрока этого хода.
+    pub fn turn_ask(&self) -> &TurnAsk {
+        &self.turn_ask
+    }
+
+    /// Запоминает заявку игрока этого хода.
+    pub fn set_turn_ask(&mut self, ask: TurnAsk) {
+        self.turn_ask = ask;
+    }
+
+    /// Выполненные команды этого хода (JSON по строке).
+    pub fn turn_commands(&self) -> &[String] {
+        &self.turn_commands
     }
 
     /// Запоминает выполненную команду хода.

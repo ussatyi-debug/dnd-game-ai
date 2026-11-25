@@ -277,13 +277,13 @@ fn place_mismatch(session: &Session) -> Option<(String, String)> {
 /// нет; или сводка хода — о другом месте, чем сцена. Одна просьба к мастеру (один запрос) или
 /// `None`.
 pub fn turn_check(session: &Session, text: &str) -> Option<String> {
+    // Заявка игрока: вступление, просьба описать, бросок с итогом (25.11.2026).
+    let asked = crate::ask::check(session, text);
     // Ответ вне игры «((…))» — разговор за столом, мир стоит.
-    if text.trim_start().starts_with("((") {
-        return None;
-    }
-    let time = phase_mismatch(session, text);
-    let place = place_mismatch(session);
-    if time.is_none() && place.is_none() {
+    let aside = text.trim_start().starts_with("((");
+    let time = if aside { None } else { phase_mismatch(session, text) };
+    let place = if aside { None } else { place_mismatch(session) };
+    if time.is_none() && place.is_none() && asked.is_empty() {
         return None;
     }
     let scene = session.scene();
@@ -297,6 +297,9 @@ pub fn turn_check(session: &Session, text: &str) -> Option<String> {
     }
     if let Some((line, title)) = place {
         out.push_str(&format!("Место: в твоей сводке «{line}», а место сцены — «{title}».\n"));
+    }
+    for line in asked {
+        out.push_str(&format!("{line}\n"));
     }
     out.push_str(
         "- Время прошло или герой ушёл — пришли ТОЛЬКО команды в блоке ```engine: \

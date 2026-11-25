@@ -182,6 +182,7 @@ pub(crate) fn clean_reply(text: &str) -> String {
         .filter(|l| !l.trim_start().starts_with("[ДВИЖОК]"))
         .filter(|l| !is_service_line(l))
         .filter(|l| !is_empty_aside(l))
+        .filter_map(protocol_line)
         .map(|l| {
             strip_html(&cyrillic_words(&l.chars().filter(|c| !is_cjk(*c)).collect::<String>()))
         })
@@ -189,6 +190,22 @@ pub(crate) fn clean_reply(text: &str) -> String {
         .join("\n")
         .trim()
         .to_string()
+}
+
+/// Строки протокола в рассказе (Gemma, 25.11.2026): «roll Обнаружение магии (магия)» —
+/// убирается; «roll [[…]]» и «roll (бросок за игроком)» — без слова «roll»; одинокая «***» —
+/// убирается.
+fn protocol_line(line: &str) -> Option<String> {
+    let t = line.trim();
+    if t == "***" || t == "* * *" {
+        return None;
+    }
+    let word = t.get(..4).is_some_and(|w| w.eq_ignore_ascii_case("roll"));
+    let rest = t.get(4..).unwrap_or("");
+    if !word || !(rest.is_empty() || rest.starts_with(' ')) {
+        return Some(line.to_string());
+    }
+    (rest.contains("[[") || rest.contains("(бросок")).then(|| rest.trim().to_string())
 }
 
 /// Пустая пометка вне игры посреди хода: «((Вне игры: нет.))» (лог 22.11, 23:20).
@@ -837,7 +854,24 @@ fn run(session: &mut Session, cmd: &Value) -> Result<String, String> {
                 Some(SlotRef::Level(l)) => request.slot_level = Some(l),
                 None => {}
             }
-            session.cast_spell(&character, &request).map(|o| o.summary).map_err(|e| e.to_string())
+            // Ячейку этого круга мастер уже потратил командой slot в этом ходу (лог 25.11.2026:
+            // slot + исправленный cast — две ячейки за одно заклинание): cast берёт её.
+            let wanted = slot_ref(cmd.get("slot"))?;
+            let spent = wanted.and_then(|slot| spent_slot_this_turn(session, &character, slot));
+            if let (Some(slot), Some(key)) = (wanted, &spent) {
+                session.change_slot(&character, slot, false).map_err(|e| e.to_string())?;
+                session.record_turn_command(format!("refund:{key}"));
+            }
+            let cast = session.cast_spell(&character, &request);
+            if let (Err(_), Some(slot), Some(_)) = (&cast, wanted, &spent) {
+                let _ = session.change_slot(&character, slot, true);
+            }
+            let note = if spent.is_some() {
+                " (ячейка — та, что потрачена командой slot)"
+            } else {
+                ""
+            };
+            cast.map(|o| format!("{}{note}", o.summary)).map_err(|e| e.to_string())
         }
         "copy_spell" => {
             let spell = find_spell(text_field(cmd, "spell")?);
@@ -1174,6 +1208,27 @@ fn run_blocks(session: &mut Session, blocks: &[String], skip_repeats: bool) -> V
         }
     }
     actions
+}
+
+/// Команда slot этого хода, которой потрачена такая ячейка героя и которую ещё не забрал cast.
+fn spent_slot_this_turn(session: &Session, character: &str, slot: SlotRef) -> Option<String> {
+    session
+        .turn_commands()
+        .iter()
+        .filter(|key| !session.turn_command_done(&format!("refund:{key}")))
+        .find(|key| {
+            let Ok(cmd) = serde_json::from_str::<Value>(key) else { return false };
+            cmd.get("cmd").and_then(Value::as_str) == Some("slot")
+                && cmd.get("spend").and_then(Value::as_bool) != Some(false)
+                && slot_ref(cmd.get("level")).ok().flatten() == Some(slot)
+                && cmd
+                    .get("character")
+                    .and_then(Value::as_str)
+                    .and_then(|c| find_character(session, c).ok())
+                    .as_deref()
+                    == Some(character)
+        })
+        .cloned()
 }
 
 /// Отказ «все ячейки и так свободны».
@@ -1574,6 +1629,39 @@ mod tests {
         assert!(turn.actions[0].ok, "{:?}", turn.actions[0]);
         assert!(!turn.actions[1].ok);
         assert!(turn.actions[1].summary.contains("длительного отдыха"));
+    }
+
+    #[test]
+    fn protocol_lines_leave_the_story() {
+        assert_eq!(protocol_line("roll Обнаружение магии (магия)"), None);
+        assert_eq!(protocol_line("***"), None);
+        assert_eq!(
+            protocol_line("roll [[1d20+2 | атака: Волк]]").as_deref(),
+            Some("[[1d20+2 | атака: Волк]]")
+        );
+        assert_eq!(protocol_line("Ролло кивает.").as_deref(), Some("Ролло кивает."));
+        assert_eq!(protocol_line("rollo").as_deref(), Some("rollo"));
+    }
+
+    #[test]
+    fn slot_then_cast_spends_one_slot() {
+        let first = |s: &Session| {
+            s.character("pc.nikis").unwrap().resource("pact.slots").unwrap().current()
+        };
+        let mut s = session();
+        let before = first(&s);
+        // Лог 25.11.2026: slot в ходе, cast — в исправлении того же хода.
+        let turn = apply_directives(
+            &mut s,
+            "```engine\n{\"cmd\":\"slot\",\"character\":\"pc.nikis\",\"level\":\"pact\"}\n```",
+        );
+        assert!(turn.actions[0].ok, "{:?}", turn.actions);
+        let actions = apply_repair(
+            &mut s,
+            "```engine\n{\"cmd\":\"cast\",\"character\":\"pc.nikis\",\"spell\":\"armor-of-agathys\",\"slot\":\"pact\"}\n```",
+        );
+        assert!(actions[0].ok, "{:?}", actions);
+        assert_eq!(first(&s), before - 1);
     }
 
     #[test]

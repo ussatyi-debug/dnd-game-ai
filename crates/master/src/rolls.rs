@@ -143,7 +143,7 @@ fn check_modifier(
 }
 
 /// Герой игрока: id и имя.
-fn hero(session: &Session) -> Option<(String, String)> {
+pub(crate) fn hero(session: &Session) -> Option<(String, String)> {
     session
         .party()
         .iter()
@@ -208,6 +208,10 @@ fn asks_player_roll(text: &str) -> bool {
     .iter()
     .any(|p| t.contains(p))
 }
+
+const POOL_ARITHMETIC: &str = "в [[…]] — только кубы и числа, подпись после «|»: \
+[[1d20+5 | проверка: Стражник]]; счёт («14 + 7 = 21») не пиши — итог считает движок, \
+а число героя присылает игрок";
 
 const UNLABELED_HERO_ROLL: &str = "бросок без подписи там, где ты просишь игрока бросить, — \
 бросок героя: жди его числа и на этом закончи ответ; бросок противника или спутника подпиши: \
@@ -513,6 +517,15 @@ pub fn resolve_pool(session: &mut Session, text: &str, apply_damage: bool) -> Po
                     label = Some(l.trim()).filter(|l| !l.is_empty());
                 }
             }
+        }
+        // «[[14 + Магия 7 = 21]]» — не бросок, а готовый счёт с придуманным числом (Gemma,
+        // 25.11.2026): игрок видел «14», мастер разыграл успех без броска игрока.
+        let arithmetic = label.is_some_and(|l| l.starts_with(['+', '-', '=']));
+        if inner.contains('=') || (arithmetic && expression.parse::<i64>().is_ok()) {
+            session.log(format!("Отказ (бросок мастера): {POOL_ARITHMETIC}"));
+            out.push_str("(бросок не принят)");
+            refused.push(POOL_ARITHMETIC.to_string());
+            continue;
         }
         let parsed = label.map(parse_label);
         if label.is_none()
@@ -989,6 +1002,22 @@ mod tests {
             fabricated_rolls("Урон: допустим, выпало средне ~10-12", &[], ""),
             vec!["результат предположен, а не брошен".to_string()]
         );
+    }
+
+    #[test]
+    fn made_up_arithmetic_in_the_pool_is_refused() {
+        let mut s = session();
+        s.deal_dice_pool(8);
+        let turn =
+            resolve_pool(&mut s, "Ты вспоминаешь. [[14 + Магия 7 = 21]] Туман сгущается.", true);
+        assert_eq!(turn.refused.len(), 1, "{:?}", turn);
+        assert!(
+            turn.text.contains("(бросок не принят)") && !turn.text.contains("14"),
+            "{}",
+            turn.text
+        );
+        let turn = resolve_pool(&mut s, "Волк: [[1d20+4 атака: Волк]].", true);
+        assert!(turn.refused.is_empty(), "{:?}", turn);
     }
 
     #[test]

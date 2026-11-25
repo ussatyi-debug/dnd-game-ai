@@ -79,7 +79,22 @@ export function masterDisplayText(text: string): string {
 }
 
 /** Текст мастера: строки «> — ...» — прямая речь (формат из кодекса кампании). */
+/** Ответ мастера; реплика вне игры перед рассказом (Gemma, 25.11.2026) свёрнута — рассказ виден сразу. */
 function MasterText({ text }: { text: string }) {
+  const aside = /^\s*\(\(([\s\S]*?)\)\)\s*\n([\s\S]*\S[\s\S]*)$/.exec(text);
+  if (!aside) return <MasterLines text={text} />;
+  return (
+    <div className="space-y-2">
+      <details className="text-sm text-muted">
+        <summary className="cursor-pointer select-none">Мастер вне игры ▸</summary>
+        <p className="mt-1 whitespace-pre-wrap">{aside[1]!.trim()}</p>
+      </details>
+      <MasterLines text={aside[2]!} />
+    </div>
+  );
+}
+
+function MasterLines({ text }: { text: string }) {
   const blocks: ReactNode[] = [];
   text.split("\n").forEach((line, i) => {
     const trimmed = line.trim();

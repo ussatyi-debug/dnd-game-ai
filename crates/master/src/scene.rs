@@ -537,6 +537,12 @@ pub fn turn_hint(player_text: &str) -> Vec<&'static str> {
     ]) {
         out.push("проверка: бросок героя — от игрока; противников и тайные — из пула [[…]]");
     }
+    if has(&["который час", "сколько времени", "сколько сейчас времени", "на часы", "часы "])
+    {
+        out.push(
+            "время: точные часы — {\"cmd\":\"query\",\"what\":\"time\"}; по памяти часы не называй",
+        );
+    }
     if has(&["отдых", "ночуем", "сплю", "привал", "ночлег"]) {
         out.push("отдых: rest short или long; при новом дне — chronicle прошедшего дня");
     }
@@ -647,7 +653,9 @@ fn turn_message(
     two_step: bool,
     narration: &str,
 ) -> String {
-    let mut out = String::new();
+    // Служебная часть — не от игрока: локальная модель отвечала на неё вне игры («Благодарю за
+    // детальный технический блок», 25.11.2026).
+    let mut out = String::from("[ДАННЫЕ ДВИЖКА — для тебя, не от игрока; не отвечай на них]\n\n");
     let block = |out: &mut String, title: &str, lines: &[String]| {
         if lines.is_empty() {
             return;
@@ -689,7 +697,9 @@ fn turn_message(
             session.scene().day
         ));
     }
-    let prep = session.start_prep_missing();
+    // Двухшаговый ход: подготовку пишет второй шаг — в первом только сцена (вступление
+    // локальной модели сводилось к двум фразам, 25.11.2026).
+    let prep = if two_step { Vec::new() } else { session.start_prep_missing() };
     if !prep.is_empty() {
         reminders.push(format!(
             "подготовка новой игры не завершена — запиши в этом ходу командами: {}",
@@ -866,6 +876,9 @@ combat set. Бой кончился — combat end с исходом.\n\n",
     }
     out.push_str("[ЗАЯВКА ИГРОКА]\n");
     out.push_str(player_text);
+    out.push_str(
+        "\n\n(Отвечай на заявку игрока; «((…))» — только если игрок сам спросил вне игры.)",
+    );
     out
 }
 
@@ -937,7 +950,11 @@ pub fn master_request_narrated(
     let memo = scene_system(session, short_sheet);
     session.set_turn_out_of_game(out_of_game(player_text));
     session.deal_dice_pool(POOL_PER_DIE);
-    let turn = turn_message(session, &memo, player_text, kb_extra, two_step, narration);
+    // Бросок игрока — итог по листу героя: мастер видит только итог (решение 25.11.2026).
+    let ask = crate::ask::read(session, player_text);
+    let player_text = crate::ask::for_master(player_text, &ask);
+    session.set_turn_ask(ask);
+    let turn = turn_message(session, &memo, &player_text, kb_extra, two_step, narration);
     let fixed = format!("{}{}", codex(session), party_sheets(session, short_sheet));
     MasterRequest::new(vec![fixed, memo.system], turn)
 }

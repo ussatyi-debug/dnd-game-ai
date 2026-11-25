@@ -8,6 +8,7 @@
 
 #[rustfmt::skip]
 #[path = "bestiary.generated.rs"]
+mod ask;
 mod bestiary;
 mod codex;
 mod combat;

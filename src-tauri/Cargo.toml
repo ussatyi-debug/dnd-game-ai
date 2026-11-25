@@ -22,6 +22,10 @@ dnd-engine = { path = "../crates/engine", features = ["serde"] }
 dnd-master = { path = "../crates/master" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
+# Одна копия игры на ПК: повторный запуск выводит вперёд открытое окно (25.11.2026).
+[target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
+tauri-plugin-single-instance = "2"
+
 # Встроенный Silero (озвучка) — только в версии для Windows: libtorch скачивается при сборке.
 [target.'cfg(windows)'.dependencies]
 tch = { version = "0.20", features = ["download-libtorch"] }
