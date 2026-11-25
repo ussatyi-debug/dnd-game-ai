@@ -188,6 +188,7 @@ jobs:
       - name: Браузер для проверки
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.49.1
+          sudo apt-get update -qq > /dev/null
           npx playwright install --with-deps chromium
       - name: Синтез фразы голосами Дима и Ира
         shell: bash
