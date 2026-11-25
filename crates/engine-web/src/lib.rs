@@ -744,7 +744,7 @@ mod tests {
         assert!(system.contains("\"cmd\":\"hp\""));
         let turn = r["ok"]["turn"].as_str().unwrap();
         assert!(turn.contains("[ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ]"));
-        assert!(turn.ends_with("Иду в порт"));
+        assert!(turn.contains("[ЗАЯВКА ИГРОКА]\nИду в порт"));
     }
 
     #[test]

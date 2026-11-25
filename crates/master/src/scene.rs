@@ -1348,7 +1348,7 @@ mod tests {
         assert_eq!(first.system, second.system);
         assert!(second.turn.contains("ИЗМЕНЕНИЯ С НАЧАЛА СЦЕНЫ"));
         assert!(second.turn.contains("хиты"), "{}", second.turn);
-        assert!(second.turn.ends_with("Иду дальше"));
+        assert!(second.turn.contains("[ЗАЯВКА ИГРОКА]\nИду дальше"));
     }
 
     #[test]
