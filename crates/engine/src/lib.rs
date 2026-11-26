@@ -87,9 +87,9 @@ pub use resource::{Recovery, ResourcePool, RestKind};
 pub use rng::{DiceRng, Xoshiro256};
 pub use savegame::{LoadReport, SaveData, SavedCharacter};
 pub use session::{
-    ChatLine, DicePool, LuckyReroll, MasterMemo, Mood, PartyMember, PartyView, PlayerRoll,
-    RestResult, RestedCharacter, SaveState, Scene, Session, TurnAsk, ENGINE_LOG_LIMIT, LUCKY_ID,
-    MIN_SAVE_FORMAT, POOL_SIDES, SAVE_FORMAT_VERSION,
+    ChatLine, DicePool, ExpectedRoll, LuckyReroll, MasterMemo, Mood, PartyMember, PartyView,
+    PlayerRoll, PlayerRollSource, RestResult, RestedCharacter, SaveState, Scene, Session, TurnAsk,
+    ENGINE_LOG_LIMIT, LUCKY_ID, MIN_SAVE_FORMAT, POOL_SIDES, SAVE_FORMAT_VERSION,
 };
 pub use sheet_edits::{SheetEdit, SheetProposal};
 pub use spellcasting::{

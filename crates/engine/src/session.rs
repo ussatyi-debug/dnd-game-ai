@@ -203,6 +203,8 @@ pub struct SaveState {
     pub tasks: Vec<crate::tasks::CompanionTask>,
     /// Снимок сцены мастера: после загрузки «изменения с начала сцены» те же, что до неё.
     pub master_memo: Option<MasterMemo>,
+    /// Бросок игрока, объявленный мастером (0.10.8).
+    pub expected_roll: Option<ExpectedRoll>,
     /// Отдыхов за игру (часть ключа сцены снимка).
     pub rests: u64,
 }
@@ -218,19 +220,61 @@ pub struct TurnAsk {
     pub opening: bool,
 }
 
-/// Бросок игрока: куб из заявки и модификатор по листу героя.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Откуда взялся бросок игрока (0.10.8).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PlayerRollSource {
+    /// Путь A: мастер объявил бросок (`expect_roll`), число — в заявке.
+    #[default]
+    Declared,
+    /// Путь B: в заявке навык рядом с числом.
+    Pair,
+    /// Путь C: мастер попросил итог командой `roll_total`.
+    Total,
+}
+
+/// Бросок игрока: кубы из заявки и модификатор по листу героя.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PlayerRoll {
-    /// «Внимательность», «спасбросок МДР».
+    /// «Внимательность», «спасбросок МДР», «урон: Длинный меч».
     pub label: String,
-    pub die: i32,
+    /// Кубы, которые взял движок: d20 — один выбранный, урон — все кубы (или их сумма).
+    pub dice: Vec<i32>,
     pub modifier: i32,
+    /// Бросок d20 (а не урон).
+    pub d20: bool,
+    /// «с преимуществом (18 и 7)», «с помехой» — пусто без режима.
+    pub mode: String,
+    pub source: PlayerRollSource,
 }
 
 impl PlayerRoll {
     pub fn total(&self) -> i32 {
-        self.die + self.modifier
+        self.dice.iter().sum::<i32>() + self.modifier
     }
+
+    /// Натуральный результат d20.
+    pub fn natural(&self) -> Option<i32> {
+        if self.d20 {
+            self.dice.first().copied()
+        } else {
+            None
+        }
+    }
+}
+
+/// Бросок, объявленный мастером (`expect_roll`, 0.10.8): что бросает игрок. Живёт до
+/// следующей заявки игрока; идёт в сохранение.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExpectedRoll {
+    /// Навык, «спасбросок ЛОВ», характеристика, «атака: …», «урон: …».
+    pub what: String,
+    /// Кубы без модификатора («2d6», «d4»); пусто — d20.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub dice: String,
+    /// "advantage", "disadvantage" или пусто.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub mode: String,
 }
 
 /// Состояние сессии.
@@ -289,6 +333,8 @@ pub struct Session {
     pub(crate) turn_commands: Vec<String>,
     /// Заявка игрока этого хода (бросок, просьба описать, вступление).
     pub(crate) turn_ask: TurnAsk,
+    /// Бросок, объявленный мастером для следующей заявки игрока (идёт в сохранение).
+    pub(crate) expected_roll: Option<ExpectedRoll>,
     /// В этом ходу кому-то нанесли урон — признак, что бой идёт.
     pub(crate) turn_damage: bool,
     /// Сколько ходов подряд в бою никто не получал урона: мастер мог забыть сменить музыку,
@@ -455,6 +501,7 @@ impl Session {
             level_up_open: Vec::new(),
             turn_commands: Vec::new(),
             turn_ask: TurnAsk::default(),
+            expected_roll: None,
             turn_damage: false,
             quiet_battle_turns: 0,
             battle_seen: false,
@@ -593,6 +640,16 @@ impl Session {
     /// Запоминает заявку игрока этого хода.
     pub fn set_turn_ask(&mut self, ask: TurnAsk) {
         self.turn_ask = ask;
+    }
+
+    /// Бросок, который мастер объявил для следующей заявки игрока.
+    pub fn expected_roll(&self) -> Option<&ExpectedRoll> {
+        self.expected_roll.as_ref()
+    }
+
+    /// Объявляет бросок игрока (новый заменяет старый) или снимает его (`None`).
+    pub fn set_expected_roll(&mut self, roll: Option<ExpectedRoll>) {
+        self.expected_roll = roll;
     }
 
     /// Выполненные команды этого хода (JSON по строке).
@@ -1008,6 +1065,7 @@ impl Session {
             initiative: self.initiative_entries(),
             tasks: self.tasks.clone(),
             master_memo: self.master_memo.clone(),
+            expected_roll: self.expected_roll.clone(),
             rests: self.rests,
         }
     }

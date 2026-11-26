@@ -57,7 +57,9 @@ fn text(cmd: &Value, key: &str) -> Option<String> {
 pub fn has_roll_requests(reply: &str) -> bool {
     let (_, blocks) = split(reply);
     blocks.iter().flat_map(|b| commands(b)).any(|c| {
-        c.is_ok_and(|v| matches!(v.get("cmd").and_then(Value::as_str), Some("roll" | "query")))
+        c.is_ok_and(|v| {
+            matches!(v.get("cmd").and_then(Value::as_str), Some("roll" | "query" | "roll_total"))
+        })
     })
 }
 
@@ -140,6 +142,221 @@ fn check_modifier(
             format!("неизвестная проверка «{check}»: initiative, навык, save:dex, attack:название")
         })?;
     Ok((c.name.clone(), skill.total, skill.name.to_lowercase()))
+}
+
+/// Бросок героя по листу (0.10.8): подпись, модификатор, d20 ли это и кубы урона по листу.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SheetRoll {
+    /// «Внимательность», «спасбросок ЛОВ», «Ловкость», «атака: Кинжал», «урон: Кинжал».
+    pub label: String,
+    pub modifier: i32,
+    /// Бросок d20 (проверка, спасбросок, атака, инициатива); `false` — урон.
+    pub d20: bool,
+    /// Кубы урона атаки из листа без модификатора («1d8»); пусто для d20.
+    pub dice: String,
+}
+
+fn fold(text: &str) -> String {
+    text.trim().to_lowercase().replace('ё', "е")
+}
+
+/// Начало слова-навыка: «внимательность» → «внимательнос», «магия» → «маги».
+pub(crate) fn stem(word: &str) -> String {
+    let n = word.chars().count();
+    word.chars().take(n.saturating_sub(2).max(4)).collect()
+}
+
+/// Характеристика по слову: «Ловкость», «ловкости», «ЛОВ», "dex".
+pub(crate) fn ability_word(word: &str) -> Option<dnd_engine::Ability> {
+    use dnd_engine::Ability;
+    let w = fold(word);
+    // «сил» — только короткие формы («сила», «силы», «силой»), не «силуэт».
+    if w.starts_with("сил") && w.chars().count() <= 5 && !w.starts_with("силь") {
+        return Some(Ability::Strength);
+    }
+    const TABLE: [(&[&str], &str, &str, Ability); 6] = [
+        (&["сил", "str"], "сила", "strength", Ability::Strength),
+        (&["лов", "dex"], "ловк", "dexterity", Ability::Dexterity),
+        (&["тел", "con"], "телосл", "constitution", Ability::Constitution),
+        (&["инт", "int"], "интелл", "intelligence", Ability::Intelligence),
+        (&["мдр", "муд", "wis"], "мудр", "wisdom", Ability::Wisdom),
+        (&["хар", "cha"], "хариз", "charisma", Ability::Charisma),
+    ];
+    TABLE
+        .iter()
+        .find(|(short, long, en, _)| short.contains(&w.as_str()) || w.starts_with(long) || w == *en)
+        .map(|t| t.3)
+}
+
+fn ability_name(a: dnd_engine::Ability) -> &'static str {
+    use dnd_engine::Ability;
+    match a {
+        Ability::Strength => "Сила",
+        Ability::Dexterity => "Ловкость",
+        Ability::Constitution => "Телосложение",
+        Ability::Intelligence => "Интеллект",
+        Ability::Wisdom => "Мудрость",
+        Ability::Charisma => "Харизма",
+    }
+}
+
+fn ability_key(a: dnd_engine::Ability) -> &'static str {
+    use dnd_engine::Ability;
+    match a {
+        Ability::Strength => "str",
+        Ability::Dexterity => "dex",
+        Ability::Constitution => "con",
+        Ability::Intelligence => "int",
+        Ability::Wisdom => "wis",
+        Ability::Charisma => "cha",
+    }
+}
+
+/// Навык по словам: полное имя («ловкость рук») или начало слова («внимательности»). Один навык —
+/// иначе `None`.
+pub(crate) fn skill_in(words: &[String]) -> Option<dnd_engine::Skill> {
+    let joined = words.join(" ");
+    let mut found = dnd_engine::Skill::ALL.into_iter().filter(|skill| {
+        let name = fold(skill.name());
+        if name.contains(' ') {
+            return joined.contains(&name);
+        }
+        let stem = stem(&name);
+        words.iter().any(|w| w.starts_with(&stem))
+    });
+    let skill = found.next()?;
+    if found.next().is_some() {
+        // «Ловкость рук» и «ловкость» — один навык с двумя словами, а не два.
+        return None;
+    }
+    Some(skill)
+}
+
+/// Бонус урона атаки из листа: «1d8+3 рубящий» → (1d8, +3).
+fn damage_parts(damage: &str) -> (String, i32) {
+    let head: String =
+        damage.chars().take_while(|c| c.is_ascii_digit() || " +-dDкКдД".contains(*c)).collect();
+    let head = head.trim_end_matches(|c: char| !c.is_ascii_digit());
+    let Ok(expr) = DiceExpr::parse(head) else { return (String::new(), 0) };
+    let mut dice = Vec::new();
+    let mut bonus = 0i64;
+    for term in expr.terms() {
+        match term {
+            dnd_engine::Term::Dice { count, sides, negative: false } => {
+                dice.push(format!("{count}d{sides}"))
+            }
+            dnd_engine::Term::Flat { value } => bonus += value,
+            dnd_engine::Term::Dice { .. } => {}
+        }
+    }
+    (dice.join("+"), i32::try_from(bonus).unwrap_or(0))
+}
+
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+/// Бросок героя по полю `what` команд `expect_roll` и `roll_total` и по заявке игрока: навык,
+/// «спасбросок ЛОВ» ("save:dex"), характеристика, «инициатива», «атака: <оружие/заклинание>»,
+/// «урон: <оружие/заклинание>». Модификатор — из листа героя.
+pub(crate) fn hero_roll(session: &Session, what: &str) -> Result<SheetRoll, String> {
+    const HELP: &str = "what — навык («Внимательность»), «спасбросок ЛОВ», характеристика \
+(«Сила»), «инициатива», «атака: <оружие или заклинание>», «урон: <оружие или заклинание>»";
+    let (id, _) = hero(session).ok_or("в отряде нет героя игрока")?;
+    let w = fold(what);
+    if w.is_empty() {
+        return Err(format!("нет поля «what»: {HELP}"));
+    }
+    let after = |s: &str| -> String {
+        match s.split_once(':') {
+            Some((_, r)) => r.trim().to_string(),
+            None => s
+                .split_once(char::is_whitespace)
+                .map(|(_, r)| r.trim().to_string())
+                .unwrap_or_default(),
+        }
+    };
+    let words: Vec<String> = w
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
+    if w.starts_with("урон") || w.starts_with("damage:") {
+        let name = after(&w);
+        let c = session.character(&id).map_err(|e| e.to_string())?;
+        let attack = c
+            .details()
+            .attacks
+            .into_iter()
+            .find(|a| !name.is_empty() && fold(&a.name).contains(&name))
+            .ok_or_else(|| {
+                format!("у {} нет атаки «{name}»: урон: <оружие или заклинание из листа>", c.name)
+            })?;
+        let (dice, bonus) = damage_parts(&attack.damage);
+        return Ok(SheetRoll {
+            label: format!("урон: {}", attack.name),
+            modifier: bonus,
+            d20: false,
+            dice,
+        });
+    }
+    let check = if w.starts_with("save:") || w.starts_with("attack:") || w == "initiative" {
+        w.clone()
+    } else if w.starts_with("атак") {
+        format!("attack:{}", after(&w))
+    } else if w.starts_with("спас") {
+        let ability = words
+            .iter()
+            .skip(1)
+            .find_map(|x| ability_word(x.as_str()))
+            .ok_or_else(|| format!("неизвестный спасбросок «{what}»: «спасбросок ЛОВ»"))?;
+        format!("save:{}", ability_key(ability))
+    } else if w.starts_with("инициатив") {
+        "initiative".into()
+    } else if let Some(skill) = skill_in(&words).or_else(|| {
+        // id навыка по-английски: "perception", "sleight_of_hand".
+        dnd_engine::Skill::ALL.into_iter().find(|k| {
+            serde_json::to_value(k).ok().as_ref().and_then(Value::as_str) == Some(w.as_str())
+        })
+    }) {
+        // Навык — по листу всегда, даже если в листе перечислены не все навыки.
+        let c = session.character(&id).map_err(|e| e.to_string())?;
+        return Ok(SheetRoll {
+            label: skill.name().to_string(),
+            modifier: c.skill_total(skill),
+            d20: true,
+            dice: String::new(),
+        });
+    } else if let Some(ability) = words
+        .iter()
+        .filter(|x| !x.starts_with("провер"))
+        .find_map(|x| ability_word(x.as_str()))
+        .filter(|_| words.len() <= 2)
+    {
+        let c = session.character(&id).map_err(|e| e.to_string())?;
+        return Ok(SheetRoll {
+            label: ability_name(ability).to_string(),
+            modifier: c.abilities.modifier(ability),
+            d20: true,
+            dice: String::new(),
+        });
+    } else if w.is_ascii() {
+        w.clone()
+    } else {
+        return Err(format!("неизвестный бросок «{what}»: {HELP}"));
+    };
+    let (_, modifier, label) = check_modifier(session, &id, &check)?;
+    // Навык и инициатива — с большой буквы, как в листе; «спасбросок ЛОВ», «атака: …» — как есть.
+    let label = if check.starts_with("save:") || check.starts_with("attack:") {
+        label
+    } else {
+        capitalized(&label)
+    };
+    Ok(SheetRoll { label, modifier, d20: true, dice: String::new() })
 }
 
 /// Герой игрока: id и имя.
@@ -399,6 +616,13 @@ pub fn run_rolls(session: &mut Session, reply: &str) -> Option<RollRound> {
                 match roll_one(session, &v) {
                     Ok(r) => rolls.push(r),
                     Err(e) => errors.push(e),
+                }
+            }
+            // Итог по числам игрока (0.10.8): бросок не был объявлен, мастер понял, что бросали.
+            Ok(v) if v.get("cmd").and_then(Value::as_str) == Some("roll_total") => {
+                match crate::ask::roll_total(session, &v) {
+                    Ok(line) => answers.push(line),
+                    Err(e) => errors.push(format!("roll_total не выполнен: {e}")),
                 }
             }
             Ok(v) if v.get("cmd").and_then(Value::as_str) == Some("query") => {
@@ -1089,5 +1313,48 @@ mod tests {
         assert!(found.contains(&"инициатива 17".to_string()), "{found:?}");
         assert!(found.contains(&"спасбросок 16".to_string()), "{found:?}");
         assert!(!found.iter().any(|f| f.contains("13")), "{found:?}");
+    }
+
+    #[test]
+    fn roll_total_is_answered_in_the_request_round() {
+        let mut s = session();
+        let reply = "Ты замираешь у двери.\n```engine\n{\"cmd\":\"roll_total\",\"what\":\"Внимательность\",\"dice\":[18]}\n```";
+        assert!(has_roll_requests(reply));
+        let round = run_rolls(&mut s, reply).unwrap();
+        assert!(round.rolls.is_empty());
+        assert!(
+            round.feedback.contains("[БРОСОК ИГРОКА] Внимательность — итог"),
+            "{}",
+            round.feedback
+        );
+        assert!(s.turn_ask().roll.is_some());
+        let bad = "```engine\n{\"cmd\":\"roll_total\",\"what\":\"Полёт\",\"dice\":[18]}\n```";
+        let round = run_rolls(&mut s, bad).unwrap();
+        assert!(round.feedback.contains("roll_total не выполнен"), "{}", round.feedback);
+    }
+
+    #[test]
+    fn hero_roll_reads_the_sheet() {
+        let s = session();
+        let (id, _) = hero(&s).unwrap();
+        let c = s.character(&id).unwrap();
+        let perception = hero_roll(&s, "Внимательность").unwrap();
+        assert_eq!(perception.modifier, c.skill_total(dnd_engine::Skill::Perception));
+        assert_eq!(hero_roll(&s, "perception").unwrap().modifier, perception.modifier);
+        let dex = hero_roll(&s, "Ловкость").unwrap();
+        assert_eq!(
+            (dex.label.as_str(), dex.modifier),
+            ("Ловкость", c.abilities.modifier(dnd_engine::Ability::Dexterity))
+        );
+        assert_eq!(hero_roll(&s, "проверка ловкости").unwrap().label, "Ловкость");
+        assert_eq!(hero_roll(&s, "Ловкость рук").unwrap().label, "Ловкость рук");
+        assert_eq!(hero_roll(&s, "спасбросок МДР").unwrap().label, "спасбросок МДР");
+        assert_eq!(hero_roll(&s, "инициатива").unwrap().label, "Инициатива");
+        assert!(hero_roll(&s, "Полёт").is_err());
+        assert_eq!(damage_parts("1d8+3 рубящий"), ("1d8".to_string(), 3));
+        assert_eq!(damage_parts("2к6 + 1 огонь"), ("2d6".to_string(), 1));
+        assert_eq!(damage_parts("8d6 огонь"), ("8d6".to_string(), 0));
+        assert_eq!(ability_word("силуэт"), None);
+        assert_eq!(ability_word("силы"), Some(dnd_engine::Ability::Strength));
     }
 }

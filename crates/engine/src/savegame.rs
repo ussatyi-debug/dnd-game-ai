@@ -124,6 +124,9 @@ pub struct SaveData {
     /// Снимок сцены мастера (0.10.2): после загрузки изменения сцены не теряются.
     #[cfg_attr(feature = "serde", serde(default))]
     pub master_memo: Option<crate::session::MasterMemo>,
+    /// Бросок игрока, объявленный мастером (0.10.8); старые сейвы — без него.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub expected_roll: Option<crate::session::ExpectedRoll>,
     /// Отдыхов за игру — часть ключа сцены снимка.
     #[cfg_attr(feature = "serde", serde(default))]
     pub rests: u64,
@@ -553,6 +556,7 @@ impl Session {
         // Снимок сцены из сейва: тот же ключ сцены — мастер видит те же изменения, что до
         // загрузки; старые сейвы без снимка собирают его заново.
         self.master_memo = save.master_memo;
+        self.expected_roll = save.expected_roll;
         self.rests = save.rests;
         self.tasks = save.tasks.into_iter().filter(|t| ids.contains(&t.character)).collect();
         self.chat_archive.clear();
@@ -644,6 +648,7 @@ mod tests {
             initiative: state.initiative,
             tasks: state.tasks,
             master_memo: state.master_memo,
+            expected_roll: state.expected_roll,
             rests: state.rests,
         }
     }
@@ -1049,5 +1054,24 @@ mod tests {
         assert_eq!(t.master_memo().unwrap().baseline.len(), 1);
         assert_eq!(t.rest_count(), 1);
         assert_eq!(t.task_of(&companion).unwrap().text, "найти капитана стражи");
+    }
+
+    #[test]
+    fn expected_roll_survives_round_trip() {
+        let mut s = session();
+        let roll = crate::session::ExpectedRoll {
+            what: "Внимательность".into(),
+            dice: String::new(),
+            mode: "advantage".into(),
+        };
+        s.set_expected_roll(Some(roll.clone()));
+        let save = round_trip(&s);
+        let mut t = session();
+        t.load(save).unwrap();
+        assert_eq!(t.expected_roll(), Some(&roll));
+        s.set_expected_roll(None);
+        let save = round_trip(&s);
+        t.load(save).unwrap();
+        assert_eq!(t.expected_roll(), None);
     }
 }

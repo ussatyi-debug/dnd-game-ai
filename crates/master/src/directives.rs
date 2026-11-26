@@ -432,7 +432,9 @@ pub fn narration_parts(text: &str) -> (String, String, bool) {
         .iter()
         .flat_map(|b| commands(b))
         .filter_map(Result::ok)
-        .filter(|v| !matches!(v.get("cmd").and_then(Value::as_str), Some("roll" | "query")))
+        .filter(|v| {
+            !matches!(v.get("cmd").and_then(Value::as_str), Some("roll" | "query" | "roll_total"))
+        })
         .map(|v| v.to_string())
         .collect();
     let written = if lines.is_empty() {
@@ -647,7 +649,8 @@ fn run_global(session: &mut Session, name: &str, cmd: &Value) -> Option<Result<S
             engine(session.change_scene(change))?;
             Ok(last_log(session))
         })(),
-        "roll" | "query" => {
+        "expect_roll" => crate::ask::expect_roll(session, cmd),
+        "roll" | "query" | "roll_total" => {
             Err("лимит запросов за ход исчерпан (3) — броски и запросы делай раньше, до итога хода"
                 .into())
         }
@@ -1073,7 +1076,7 @@ fn out_of_game_commands(blocks: &[String]) -> (Vec<String>, Vec<String>) {
                     && ["time", "day", "advance"]
                         .iter()
                         .any(|f| value.get(f).is_some_and(|v| !v.is_null()));
-                if matches!(name.as_str(), "roll" | "query") {
+                if matches!(name.as_str(), "roll" | "query" | "roll_total") {
                     continue;
                 }
                 if OUT_OF_GAME_REFUSED.contains(&name.as_str()) || moves_time {

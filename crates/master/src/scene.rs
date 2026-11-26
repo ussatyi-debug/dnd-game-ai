@@ -950,10 +950,12 @@ pub fn master_request_narrated(
     let memo = scene_system(session, short_sheet);
     session.set_turn_out_of_game(out_of_game(player_text));
     session.deal_dice_pool(POOL_PER_DIE);
-    // Бросок игрока — итог по листу героя: мастер видит только итог (решение 25.11.2026).
-    let ask = crate::ask::read(session, player_text);
-    let player_text = crate::ask::for_master(player_text, &ask);
+    // Бросок игрока — итог по листу героя: мастер видит только итог (решения 25–26.11.2026).
+    let (ask, player_text) = crate::ask::prepare(session, player_text);
     session.set_turn_ask(ask);
+    // Объявленный бросок живёт только до следующей заявки игрока (0.10.8): использован он или
+    // нет — снимается; новый объявит мастер командой expect_roll в этом ходу.
+    session.set_expected_roll(None);
     let turn = turn_message(session, &memo, &player_text, kb_extra, two_step, narration);
     let fixed = format!("{}{}", codex(session), party_sheets(session, short_sheet));
     MasterRequest::new(vec![fixed, memo.system], turn)
@@ -1184,6 +1186,9 @@ pub fn update_request(
         turn.push_str(&format!(
             "\nКоманды, которые мастер написал сам (проверь по рассказу и включи верные):\n{written}\n"
         ));
+        if written.contains("expect_roll") {
+            turn.push_str("expect_roll (объявленный бросок игрока) включи без изменений.\n");
+        }
     }
     turn.push_str("\nОтветь JSON {\"commands\":[...]}.");
     MasterRequest::new(vec![system], turn)
@@ -1259,7 +1264,7 @@ pub fn update_commands(reply: &str) -> String {
                 .filter(|v| {
                     v.get("cmd")
                         .and_then(Value::as_str)
-                        .is_some_and(|c| c != "roll" && c != "query")
+                        .is_some_and(|c| !matches!(c, "roll" | "query" | "roll_total"))
                 })
                 .map(|v| v.to_string())
                 .collect();
@@ -1548,5 +1553,23 @@ mod tests {
         );
         assert!(text.starts_with("```engine"), "{text}");
         assert!(text.contains("\"heal\":2"), "{text}");
+    }
+
+    #[test]
+    fn declared_roll_lives_until_the_next_player_request() {
+        let mut s = session();
+        crate::apply_directives(
+            &mut s,
+            "Прислушайся к двери.\n```engine\n{\"cmd\":\"expect_roll\",\"what\":\"Внимательность\"}\n```",
+        );
+        assert!(s.expected_roll().is_some());
+        let request = master_request(&mut s, "17", "", false, false);
+        assert!(request.turn.contains("[ЗАЯВКА ИГРОКА]\n[БРОСОК ИГРОКА] Внимательность — итог"));
+        assert!(!request.turn.contains("[ЗАЯВКА ИГРОКА]\n17"), "{}", request.turn);
+        assert!(s.expected_roll().is_none());
+        assert!(s.turn_ask().roll.is_some());
+        // Следующая заявка без объявления: «17» — числа без броска, мастеру пометка.
+        let next = master_request(&mut s, "17", "", false, false);
+        assert!(next.turn.contains("[ЧИСЛА В ЗАЯВКЕ: 17 — бросок не определён]"), "{}", next.turn);
     }
 }
