@@ -395,7 +395,8 @@ pub fn prepare(session: &Session, player_text: &str) -> (TurnAsk, String) {
 }
 
 /// Заявка игрока этого хода (без текста для мастера).
-pub fn read(session: &Session, player_text: &str) -> TurnAsk {
+#[cfg(test)]
+fn read(session: &Session, player_text: &str) -> TurnAsk {
     prepare(session, player_text).0
 }
 
